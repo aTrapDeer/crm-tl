@@ -1,0 +1,52 @@
+6. Customer Portal Plan (Client Experience)
+A portal makes TL Corp feel bigger, more organized, and easier to work with. It reduces phone calls,
+missed decisions, and confusion.
+6.1 Portal Objectives
+● Give clients a single place to view status, documents, selections, schedules, invoices, and communication.
+● Reduce friction: fewer texts, fewer repeated questions, fewer missed approvals.
+● Create a premium “we have this handled” experience.
+6.2 Core Client Portal Features (Recommended MVP)
+● Login + role-based access (client / authorized stakeholders).
+● Project dashboard: status, next steps, key dates.
+● Documents: proposal/contract, change orders, warranties, closeout docs.
+● Selections: material selection sheets, approval toggles, allowance tracking.
+● Photos: weekly photo updates or milestone photos.
+● Communication: message thread or “updates log” (even if behind the scenes you still use email).
+● Billing: invoices + payment links (if enabled).
+6.3 Maintenance Request Portal (For Key Accounts)
+● Work order request form with priority level + photo upload.
+● Auto-confirmation + ticket number.
+● Status updates: received → scheduled → in progress → completed.
+● History log (past work orders, notes, and attachments).
+6.4 Platform Options (Pick 1 Approach)
+● Option A — Use your job management software portal (fastest): many CRMs/PM tools offer client
+portals; embed/login from website.
+● Option B — Standalone portal (most custom): separate portal app with SSO; requires more build.
+● Option C — Hybrid: website login routes clients to the software portal while keeping the website clean and
+simple.
+Recommendation: start with Option A or C (lowest risk), then evolve to a standalone portal if/when needed.
+
+TL Corp — Website Redesign & Portal Plan (Handoff Packet) Page 10
+7. Employee Portal Plan (Hiring + Onboarding + Operations)
+The employee portal turns the Master Bible into a daily tool. It also supports recruiting by showing that TL
+Corp is organized and professional.
+7.1 Employee Portal Features (Recommended)
+● New Hire Start Here: digital version of the “start here” packet with required signatures.
+● TL Corp University: role-based training path (Site Lead, PM, Estimator, Field Team, Office).
+● Policies: jobsite rules, safety, vehicles/devices, timekeeping expectations.
+● Forms: incident report, near miss, material request, tool request, PTO request (if you use).
+● Daily field tools: checklists, standards, photo upload instructions, job folder rules.
+● Timekeeping: clock in/out by job + job code (or link to your payroll/time app).
+7.2 The Key: Keep it Simple
+● Employees won’t use 20 apps. One login, one hub.
+● Use QR codes in the printed Bible that route to the correct portal page (optional but powerful).
+● Make the portal mobile-first (field use).
+
+
+Primary Navy #01224F Primary headings, nav, footer, buttons (default).
+Deep Blue #043271 Secondary headings, section backgrounds, gradients.
+Royal Blue #1F4FAA Highlights, links, secondary buttons.
+Mid Blue #0D3E8D Icon accents, hover states.
+Accent Cyan #01B7E7 Call-to-action accent, icons, subtle highlights (use sparingly).
+Soft Teal #7BA8B3 Background tint, dividers, subtle UI.
+Off-White #F7F8FB Page background, sections to reduce glare.

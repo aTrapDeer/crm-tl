@@ -1,26 +1,59 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --tl-navy: #01224f;
+  --tl-deep: #043271;
+  --tl-royal: #1f4faa;
+  --tl-mid: #0d3e8d;
+  --tl-cyan: #01b7e7;
+  --tl-teal: #7ba8b3;
+  --tl-offwhite: #f7f8fb;
+  --tl-sand: #e8edf4;
+  --tl-ink: #0c1c33;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-body);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--tl-offwhite);
+  color: var(--tl-navy);
+  font-family: var(--font-body), "Segoe UI", sans-serif;
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-heading), "Times New Roman", serif;
+}
+
+::selection {
+  background: rgba(1, 183, 231, 0.25);
+}
+
+@keyframes fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes float-slow {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-16px);
+  }
 }

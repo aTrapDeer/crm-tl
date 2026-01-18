@@ -1,0 +1,554 @@
+import { turso } from "./turso";
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string | null;
+  status: "planning" | "in_progress" | "on_hold" | "completed";
+  address: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  budget_amount: number | null;
+  is_funded: boolean;
+  funding_notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectTask {
+  id: string;
+  project_id: string;
+  title: string;
+  description: string | null;
+  is_completed: boolean;
+  sort_order: number;
+  created_by: string | null;
+  completed_by: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectUpdate {
+  id: string;
+  project_id: string;
+  user_id: string | null;
+  title: string;
+  content: string | null;
+  created_at: string;
+  user_name?: string;
+}
+
+export interface ProjectImage {
+  id: string;
+  project_id: string;
+  filename: string;
+  s3_key: string | null;
+  s3_url: string | null;
+  caption: string | null;
+  uploaded_by: string | null;
+  uploader_name?: string;
+  created_at: string;
+}
+
+function mapRowToProject(row: Record<string, unknown>): Project {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    description: row.description as string | null,
+    status: row.status as Project["status"],
+    address: row.address as string | null,
+    start_date: row.start_date as string | null,
+    end_date: row.end_date as string | null,
+    budget_amount: row.budget_amount as number | null,
+    is_funded: Boolean(row.is_funded),
+    funding_notes: row.funding_notes as string | null,
+    created_at: row.created_at as string,
+    updated_at: row.updated_at as string,
+  };
+}
+
+export async function getAllProjects(): Promise<Project[]> {
+  const result = await turso.execute(
+    "SELECT * FROM projects ORDER BY created_at DESC"
+  );
+  return result.rows.map(mapRowToProject);
+}
+
+export async function getProjectsByUserId(userId: string): Promise<Project[]> {
+  const result = await turso.execute({
+    sql: `SELECT p.* FROM projects p 
+          INNER JOIN project_assignments pa ON p.id = pa.project_id 
+          WHERE pa.user_id = ? 
+          ORDER BY p.created_at DESC`,
+    args: [userId],
+  });
+  return result.rows.map(mapRowToProject);
+}
+
+export async function getProjectById(id: string): Promise<Project | null> {
+  const result = await turso.execute({
+    sql: "SELECT * FROM projects WHERE id = ?",
+    args: [id],
+  });
+  if (result.rows.length === 0) return null;
+  return mapRowToProject(result.rows[0]);
+}
+
+export async function createProject(data: {
+  name: string;
+  description?: string;
+  status?: Project["status"];
+  address?: string;
+  start_date?: string;
+  end_date?: string;
+  budget_amount?: number;
+  is_funded?: boolean;
+  funding_notes?: string;
+}): Promise<Project> {
+  const id = crypto.randomUUID().replace(/-/g, "");
+  await turso.execute({
+    sql: `INSERT INTO projects (id, name, description, status, address, start_date, end_date, budget_amount, is_funded, funding_notes) 
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      id,
+      data.name,
+      data.description || null,
+      data.status || "planning",
+      data.address || null,
+      data.start_date || null,
+      data.end_date || null,
+      data.budget_amount || null,
+      data.is_funded ? 1 : 0,
+      data.funding_notes || null,
+    ],
+  });
+  return (await getProjectById(id))!;
+}
+
+export async function updateProject(
+  id: string,
+  data: Partial<Omit<Project, "id" | "created_at">>
+): Promise<Project | null> {
+  const updates: string[] = [];
+  const args: (string | number | null)[] = [];
+
+  if (data.name !== undefined) {
+    updates.push("name = ?");
+    args.push(data.name);
+  }
+  if (data.description !== undefined) {
+    updates.push("description = ?");
+    args.push(data.description);
+  }
+  if (data.status !== undefined) {
+    updates.push("status = ?");
+    args.push(data.status);
+  }
+  if (data.address !== undefined) {
+    updates.push("address = ?");
+    args.push(data.address);
+  }
+  if (data.start_date !== undefined) {
+    updates.push("start_date = ?");
+    args.push(data.start_date);
+  }
+  if (data.end_date !== undefined) {
+    updates.push("end_date = ?");
+    args.push(data.end_date);
+  }
+  if (data.budget_amount !== undefined) {
+    updates.push("budget_amount = ?");
+    args.push(data.budget_amount);
+  }
+  if (data.is_funded !== undefined) {
+    updates.push("is_funded = ?");
+    args.push(data.is_funded ? 1 : 0);
+  }
+  if (data.funding_notes !== undefined) {
+    updates.push("funding_notes = ?");
+    args.push(data.funding_notes);
+  }
+
+  if (updates.length === 0) return getProjectById(id);
+
+  updates.push("updated_at = datetime('now')");
+  args.push(id);
+
+  await turso.execute({
+    sql: `UPDATE projects SET ${updates.join(", ")} WHERE id = ?`,
+    args,
+  });
+
+  return getProjectById(id);
+}
+
+export async function assignUserToProject(
+  projectId: string,
+  userId: string
+): Promise<void> {
+  const id = crypto.randomUUID().replace(/-/g, "");
+  await turso.execute({
+    sql: `INSERT OR IGNORE INTO project_assignments (id, project_id, user_id) VALUES (?, ?, ?)`,
+    args: [id, projectId, userId],
+  });
+}
+
+export async function unassignUserFromProject(
+  projectId: string,
+  userId: string
+): Promise<void> {
+  await turso.execute({
+    sql: `DELETE FROM project_assignments WHERE project_id = ? AND user_id = ?`,
+    args: [projectId, userId],
+  });
+}
+
+export async function getProjectAssignments(
+  projectId: string
+): Promise<{ user_id: string; email: string; first_name: string; last_name: string; role: string }[]> {
+  const result = await turso.execute({
+    sql: `SELECT u.id as user_id, u.email, u.first_name, u.last_name, u.role 
+          FROM users u 
+          INNER JOIN project_assignments pa ON u.id = pa.user_id 
+          WHERE pa.project_id = ?`,
+    args: [projectId],
+  });
+  return result.rows.map((row) => ({
+    user_id: row.user_id as string,
+    email: row.email as string,
+    first_name: row.first_name as string,
+    last_name: row.last_name as string,
+    role: row.role as string,
+  }));
+}
+
+export async function addProjectUpdate(
+  projectId: string,
+  userId: string,
+  title: string,
+  content?: string
+): Promise<ProjectUpdate> {
+  const id = crypto.randomUUID().replace(/-/g, "");
+  await turso.execute({
+    sql: `INSERT INTO project_updates (id, project_id, user_id, title, content) VALUES (?, ?, ?, ?, ?)`,
+    args: [id, projectId, userId, title, content || null],
+  });
+  return {
+    id,
+    project_id: projectId,
+    user_id: userId,
+    title,
+    content: content || null,
+    created_at: new Date().toISOString(),
+  };
+}
+
+export async function getProjectUpdates(projectId: string): Promise<ProjectUpdate[]> {
+  const result = await turso.execute({
+    sql: `SELECT pu.*, u.first_name || ' ' || u.last_name as user_name 
+          FROM project_updates pu 
+          LEFT JOIN users u ON pu.user_id = u.id 
+          WHERE pu.project_id = ? 
+          ORDER BY pu.created_at DESC`,
+    args: [projectId],
+  });
+  return result.rows.map((row) => ({
+    id: row.id as string,
+    project_id: row.project_id as string,
+    user_id: row.user_id as string | null,
+    title: row.title as string,
+    content: row.content as string | null,
+    created_at: row.created_at as string,
+    user_name: row.user_name as string | undefined,
+  }));
+}
+
+export async function getAllUsers(): Promise<{
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+}[]> {
+  const result = await turso.execute(
+    "SELECT id, email, first_name, last_name, role FROM users ORDER BY created_at DESC"
+  );
+  return result.rows.map((row) => ({
+    id: row.id as string,
+    email: row.email as string,
+    first_name: row.first_name as string,
+    last_name: row.last_name as string,
+    role: row.role as string,
+  }));
+}
+
+// ============ TASK FUNCTIONS ============
+
+function mapRowToTask(row: Record<string, unknown>): ProjectTask {
+  return {
+    id: row.id as string,
+    project_id: row.project_id as string,
+    title: row.title as string,
+    description: row.description as string | null,
+    is_completed: Boolean(row.is_completed),
+    sort_order: row.sort_order as number,
+    created_by: row.created_by as string | null,
+    completed_by: row.completed_by as string | null,
+    completed_at: row.completed_at as string | null,
+    created_at: row.created_at as string,
+    updated_at: row.updated_at as string,
+  };
+}
+
+export async function getProjectTasks(projectId: string): Promise<ProjectTask[]> {
+  const result = await turso.execute({
+    sql: `SELECT * FROM project_tasks WHERE project_id = ? ORDER BY sort_order ASC, created_at ASC`,
+    args: [projectId],
+  });
+  return result.rows.map(mapRowToTask);
+}
+
+export async function createProjectTask(data: {
+  project_id: string;
+  title: string;
+  description?: string;
+  created_by?: string;
+}): Promise<ProjectTask> {
+  const id = crypto.randomUUID().replace(/-/g, "");
+  
+  // Get max sort_order for this project
+  const maxResult = await turso.execute({
+    sql: `SELECT MAX(sort_order) as max_order FROM project_tasks WHERE project_id = ?`,
+    args: [data.project_id],
+  });
+  const maxOrder = (maxResult.rows[0]?.max_order as number) || 0;
+  
+  await turso.execute({
+    sql: `INSERT INTO project_tasks (id, project_id, title, description, sort_order, created_by) 
+          VALUES (?, ?, ?, ?, ?, ?)`,
+    args: [
+      id,
+      data.project_id,
+      data.title,
+      data.description || null,
+      maxOrder + 1,
+      data.created_by || null,
+    ],
+  });
+  
+  const result = await turso.execute({
+    sql: `SELECT * FROM project_tasks WHERE id = ?`,
+    args: [id],
+  });
+  return mapRowToTask(result.rows[0]);
+}
+
+export async function updateProjectTask(
+  taskId: string,
+  data: Partial<Pick<ProjectTask, "title" | "description" | "is_completed" | "sort_order">>,
+  completedBy?: string
+): Promise<ProjectTask | null> {
+  const updates: string[] = [];
+  const args: (string | number | null)[] = [];
+
+  if (data.title !== undefined) {
+    updates.push("title = ?");
+    args.push(data.title);
+  }
+  if (data.description !== undefined) {
+    updates.push("description = ?");
+    args.push(data.description);
+  }
+  if (data.sort_order !== undefined) {
+    updates.push("sort_order = ?");
+    args.push(data.sort_order);
+  }
+  if (data.is_completed !== undefined) {
+    updates.push("is_completed = ?");
+    args.push(data.is_completed ? 1 : 0);
+    if (data.is_completed) {
+      updates.push("completed_at = datetime('now')");
+      updates.push("completed_by = ?");
+      args.push(completedBy || null);
+    } else {
+      updates.push("completed_at = NULL");
+      updates.push("completed_by = NULL");
+    }
+  }
+
+  if (updates.length === 0) {
+    const result = await turso.execute({
+      sql: `SELECT * FROM project_tasks WHERE id = ?`,
+      args: [taskId],
+    });
+    return result.rows.length > 0 ? mapRowToTask(result.rows[0]) : null;
+  }
+
+  updates.push("updated_at = datetime('now')");
+  args.push(taskId);
+
+  await turso.execute({
+    sql: `UPDATE project_tasks SET ${updates.join(", ")} WHERE id = ?`,
+    args,
+  });
+
+  const result = await turso.execute({
+    sql: `SELECT * FROM project_tasks WHERE id = ?`,
+    args: [taskId],
+  });
+  return result.rows.length > 0 ? mapRowToTask(result.rows[0]) : null;
+}
+
+export async function deleteProjectTask(taskId: string): Promise<void> {
+  await turso.execute({
+    sql: `DELETE FROM project_tasks WHERE id = ?`,
+    args: [taskId],
+  });
+}
+
+export async function getProjectTaskStats(projectId: string): Promise<{ total: number; completed: number }> {
+  const result = await turso.execute({
+    sql: `SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN is_completed = 1 THEN 1 ELSE 0 END) as completed
+          FROM project_tasks 
+          WHERE project_id = ?`,
+    args: [projectId],
+  });
+  const row = result.rows[0];
+  return {
+    total: (row.total as number) || 0,
+    completed: (row.completed as number) || 0,
+  };
+}
+
+// Get assignments visible to non-admins (excludes admin users)
+export async function getProjectAssignmentsPublic(
+  projectId: string
+): Promise<{ user_id: string; first_name: string; last_name: string; role: string }[]> {
+  const result = await turso.execute({
+    sql: `SELECT u.id as user_id, u.first_name, u.last_name, u.role 
+          FROM users u 
+          INNER JOIN project_assignments pa ON u.id = pa.user_id 
+          WHERE pa.project_id = ? AND u.role != 'admin'`,
+    args: [projectId],
+  });
+  return result.rows.map((row) => ({
+    user_id: row.user_id as string,
+    first_name: row.first_name as string,
+    last_name: row.last_name as string,
+    role: row.role as string,
+  }));
+}
+
+// ============ IMAGE FUNCTIONS ============
+
+function mapRowToImage(row: Record<string, unknown>): ProjectImage {
+  return {
+    id: row.id as string,
+    project_id: row.project_id as string,
+    filename: row.filename as string,
+    s3_key: row.s3_key as string | null,
+    s3_url: row.s3_url as string | null,
+    caption: row.caption as string | null,
+    uploaded_by: row.uploaded_by as string | null,
+    uploader_name: row.uploader_name as string | undefined,
+    created_at: row.created_at as string,
+  };
+}
+
+export async function getProjectImages(projectId: string): Promise<ProjectImage[]> {
+  const result = await turso.execute({
+    sql: `SELECT pi.*, u.first_name || ' ' || u.last_name as uploader_name
+          FROM project_images pi
+          LEFT JOIN users u ON pi.uploaded_by = u.id
+          WHERE pi.project_id = ?
+          ORDER BY pi.created_at DESC`,
+    args: [projectId],
+  });
+  return result.rows.map(mapRowToImage);
+}
+
+export async function addProjectImage(data: {
+  project_id: string;
+  filename: string;
+  s3_key?: string;
+  s3_url?: string;
+  caption?: string;
+  uploaded_by?: string;
+}): Promise<ProjectImage> {
+  const id = crypto.randomUUID().replace(/-/g, "");
+  
+  await turso.execute({
+    sql: `INSERT INTO project_images (id, project_id, filename, s3_key, s3_url, caption, uploaded_by)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      id,
+      data.project_id,
+      data.filename,
+      data.s3_key || null,
+      data.s3_url || null,
+      data.caption || null,
+      data.uploaded_by || null,
+    ],
+  });
+  
+  const result = await turso.execute({
+    sql: `SELECT pi.*, u.first_name || ' ' || u.last_name as uploader_name
+          FROM project_images pi
+          LEFT JOIN users u ON pi.uploaded_by = u.id
+          WHERE pi.id = ?`,
+    args: [id],
+  });
+  return mapRowToImage(result.rows[0]);
+}
+
+export async function updateProjectImage(
+  imageId: string,
+  data: { caption?: string }
+): Promise<ProjectImage | null> {
+  if (data.caption !== undefined) {
+    await turso.execute({
+      sql: `UPDATE project_images SET caption = ? WHERE id = ?`,
+      args: [data.caption, imageId],
+    });
+  }
+  
+  const result = await turso.execute({
+    sql: `SELECT pi.*, u.first_name || ' ' || u.last_name as uploader_name
+          FROM project_images pi
+          LEFT JOIN users u ON pi.uploaded_by = u.id
+          WHERE pi.id = ?`,
+    args: [imageId],
+  });
+  return result.rows.length > 0 ? mapRowToImage(result.rows[0]) : null;
+}
+
+export async function deleteProjectImage(imageId: string): Promise<ProjectImage | null> {
+  // Get the image first so we can return it (for S3 cleanup)
+  const result = await turso.execute({
+    sql: `SELECT * FROM project_images WHERE id = ?`,
+    args: [imageId],
+  });
+  
+  if (result.rows.length === 0) return null;
+  
+  const image = mapRowToImage(result.rows[0]);
+  
+  await turso.execute({
+    sql: `DELETE FROM project_images WHERE id = ?`,
+    args: [imageId],
+  });
+  
+  return image;
+}
+
+export async function getProjectImageCount(projectId: string): Promise<number> {
+  const result = await turso.execute({
+    sql: `SELECT COUNT(*) as count FROM project_images WHERE project_id = ?`,
+    args: [projectId],
+  });
+  return (result.rows[0].count as number) || 0;
+}
+
