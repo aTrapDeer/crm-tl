@@ -83,6 +83,27 @@ export async function PATCH(
     }
 
     const body = await request.json();
+
+    // Validate on_hold status requires a reason
+    if (body.status === "on_hold" && !body.on_hold_reason) {
+      return Response.json(
+        { error: "A reason is required when putting a project on hold" },
+        { status: 400 }
+      );
+    }
+
+    // Clear on_hold fields when status changes from on_hold
+    const currentProject = await getProjectById(id);
+    if (
+      currentProject &&
+      currentProject.status === "on_hold" &&
+      body.status &&
+      body.status !== "on_hold"
+    ) {
+      body.on_hold_reason = null;
+      body.expected_resume_date = null;
+    }
+
     const project = await updateProject(id, body);
 
     if (!project) {

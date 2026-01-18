@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ProjectDetailsModal from "@/app/components/ProjectDetailsModal";
+import AddressAutocomplete from "@/app/components/AddressAutocomplete";
 
 interface Project {
   id: string;
@@ -14,6 +15,8 @@ interface Project {
   budget_amount: number | null;
   is_funded: boolean;
   funding_notes: string | null;
+  on_hold_reason: string | null;
+  expected_resume_date: string | null;
   created_at: string;
 }
 
@@ -163,6 +166,13 @@ export default function AdminDashboard() {
     completed: "bg-green-100 text-green-700",
   };
 
+  const statusCardStyles: Record<string, string> = {
+    planning: "border-l-4 border-l-gray-400",
+    in_progress: "border-l-4 border-l-blue-500",
+    on_hold: "border-l-4 border-l-yellow-500 bg-yellow-50/50",
+    completed: "border-l-4 border-l-green-500 bg-green-50/30",
+  };
+
   function formatCurrency(amount: number) {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -256,6 +266,8 @@ export default function AdminDashboard() {
                 <div
                   key={project.id}
                   className={`p-4 rounded-xl border transition ${
+                    statusCardStyles[project.status] || statusCardStyles.planning
+                  } ${
                     selectedProject?.id === project.id
                       ? "border-[color:var(--tl-cyan)] bg-[color:var(--tl-cyan)]/5"
                       : "border-[color:var(--tl-sand)] hover:border-[color:var(--tl-teal)]"
@@ -284,6 +296,19 @@ export default function AdminDashboard() {
                         {project.status.replace("_", " ")}
                       </span>
                     </div>
+
+                    {/* On Hold Alert */}
+                    {project.status === "on_hold" && project.on_hold_reason && (
+                      <div className="mt-2 p-2 rounded-lg bg-yellow-100 border border-yellow-200">
+                        <div className="flex items-center gap-2 text-xs text-yellow-800">
+                          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                          <span className="line-clamp-1">{project.on_hold_reason}</span>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Budget & Funding Row */}
                     <div className="flex items-center gap-4 mt-3 text-xs">
                       {project.budget_amount ? (
@@ -533,12 +558,12 @@ export default function AdminDashboard() {
                 <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-2">
                   Address
                 </label>
-                <input
-                  type="text"
+                <AddressAutocomplete
                   value={newProject.address}
-                  onChange={(e) =>
-                    setNewProject({ ...newProject, address: e.target.value })
+                  onChange={(value) =>
+                    setNewProject({ ...newProject, address: value })
                   }
+                  placeholder="Start typing an address..."
                   className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
                 />
               </div>

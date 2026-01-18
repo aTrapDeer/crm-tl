@@ -14,7 +14,17 @@ interface Project {
   budget_amount: number | null;
   is_funded: boolean;
   funding_notes: string | null;
+  on_hold_reason: string | null;
+  expected_resume_date: string | null;
   created_at: string;
+}
+
+interface Invitation {
+  id: string;
+  email: string;
+  status: string;
+  created_at: string;
+  inviter_name?: string;
 }
 
 interface Task {
@@ -79,9 +89,28 @@ export default function ProjectDetailsModal({
     funding_notes: project.funding_notes || "",
   });
 
+  // Status change state
+  const [showStatusChange, setShowStatusChange] = useState(false);
+  const [showOnHoldModal, setShowOnHoldModal] = useState(false);
+  const [onHoldForm, setOnHoldForm] = useState({
+    reason: "",
+    expectedResumeDate: "",
+  });
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+
+  // Invite client state
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [sendingInvite, setSendingInvite] = useState(false);
+  const [inviteSuccess, setInviteSuccess] = useState("");
+  const [inviteError, setInviteError] = useState("");
+
   const canManageTasks = userRole === "admin" || userRole === "worker";
   const canManageImages = userRole === "admin" || userRole === "worker";
   const canEditBudget = userRole === "admin";
+  const canChangeStatus = userRole === "admin" || userRole === "worker";
+  const canInviteClients = userRole === "admin" || userRole === "worker";
 
   const fetchData = useCallback(async () => {
     try {
@@ -277,6 +306,113 @@ export default function ProjectDetailsModal({
     }
   }
 
+  async function handleStatusChange(newStatus: string) {
+    if (!canChangeStatus) return;
+
+    // If changing to on_hold, show the on-hold modal first
+    if (newStatus === "on_hold") {
+      setShowOnHoldModal(true);
+      setShowStatusChange(false);
+      return;
+    }
+
+    setUpdatingStatus(true);
+    try {
+      const res = await fetch(`/api/projects/${project.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (onProjectUpdate) {
+          onProjectUpdate(data.project);
+        }
+        setShowStatusChange(false);
+      }
+    } catch (error) {
+      console.error("Failed to update status:", error);
+    } finally {
+      setUpdatingStatus(false);
+    }
+  }
+
+  async function handleOnHoldSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!onHoldForm.reason.trim()) return;
+
+    setUpdatingStatus(true);
+    try {
+      const res = await fetch(`/api/projects/${project.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "on_hold",
+          on_hold_reason: onHoldForm.reason,
+          expected_resume_date: onHoldForm.expectedResumeDate || null,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (onProjectUpdate) {
+          onProjectUpdate(data.project);
+        }
+        setShowOnHoldModal(false);
+        setOnHoldForm({ reason: "", expectedResumeDate: "" });
+      }
+    } catch (error) {
+      console.error("Failed to put project on hold:", error);
+    } finally {
+      setUpdatingStatus(false);
+    }
+  }
+
+  async function fetchInvitations() {
+    try {
+      const res = await fetch(`/api/projects/${project.id}/invitations`);
+      if (res.ok) {
+        const data = await res.json();
+        setInvitations(data.invitations || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch invitations:", error);
+    }
+  }
+
+  async function handleInviteClient(e: React.FormEvent) {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+
+    setSendingInvite(true);
+    setInviteError("");
+    setInviteSuccess("");
+
+    try {
+      const res = await fetch(`/api/projects/${project.id}/invitations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setInviteSuccess(`Invitation sent to ${inviteEmail}`);
+        setInviteEmail("");
+        fetchInvitations();
+      } else {
+        setInviteError(data.error || "Failed to send invitation");
+      }
+    } catch (error) {
+      console.error("Failed to invite client:", error);
+      setInviteError("Failed to send invitation");
+    } finally {
+      setSendingInvite(false);
+    }
+  }
+
   const progressPercent =
     stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
 
@@ -322,13 +458,52 @@ export default function ProjectDetailsModal({
                 <h2 className="text-xl font-semibold text-[color:var(--tl-navy)] truncate">
                   {project.name}
                 </h2>
-                <span
-                  className={`text-xs px-2.5 py-1 rounded-full whitespace-nowrap ${
-                    statusColors[project.status] || statusColors.planning
-                  }`}
-                >
-                  {statusLabels[project.status] || project.status}
-                </span>
+                {canChangeStatus ? (
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowStatusChange(!showStatusChange)}
+                      disabled={updatingStatus}
+                      className={`text-xs px-2.5 py-1 rounded-full whitespace-nowrap flex items-center gap-1 transition hover:ring-2 hover:ring-[color:var(--tl-cyan)]/50 ${
+                        statusColors[project.status] || statusColors.planning
+                      } ${updatingStatus ? "opacity-50" : ""}`}
+                    >
+                      {statusLabels[project.status] || project.status}
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {showStatusChange && (
+                      <div className="absolute top-full left-0 mt-1 bg-white border border-[color:var(--tl-sand)] rounded-xl shadow-lg z-10 py-1 min-w-[140px]">
+                        {Object.entries(statusLabels).map(([value, label]) => (
+                          <button
+                            key={value}
+                            onClick={() => handleStatusChange(value)}
+                            disabled={value === project.status}
+                            className={`w-full px-3 py-2 text-left text-sm hover:bg-[color:var(--tl-offwhite)] transition ${
+                              value === project.status ? "opacity-50 cursor-not-allowed" : ""
+                            }`}
+                          >
+                            <span className={`inline-block w-2 h-2 rounded-full mr-2 ${
+                              value === "planning" ? "bg-gray-400" :
+                              value === "in_progress" ? "bg-blue-500" :
+                              value === "on_hold" ? "bg-yellow-500" :
+                              "bg-green-500"
+                            }`} />
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <span
+                    className={`text-xs px-2.5 py-1 rounded-full whitespace-nowrap ${
+                      statusColors[project.status] || statusColors.planning
+                    }`}
+                  >
+                    {statusLabels[project.status] || project.status}
+                  </span>
+                )}
               </div>
               {project.description && (
                 <p className="text-sm text-[color:var(--tl-mid)]">
@@ -337,6 +512,21 @@ export default function ProjectDetailsModal({
               )}
             </div>
             <div className="flex items-center gap-2 ml-4">
+              {canInviteClients && (
+                <button
+                  onClick={() => {
+                    setShowInviteModal(true);
+                    fetchInvitations();
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-[color:var(--tl-cyan)] text-white hover:bg-[color:var(--tl-royal)] transition"
+                  title="Invite Client"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                  </svg>
+                  Invite Client
+                </button>
+              )}
               <Link
                 href={`/dashboard/projects/${project.id}`}
                 className="p-2 rounded-lg hover:bg-[color:var(--tl-offwhite)] transition"
@@ -386,6 +576,32 @@ export default function ProjectDetailsModal({
             </div>
           ) : (
             <div className="space-y-6">
+              {/* On Hold Alert */}
+              {project.status === "on_hold" && (
+                <div className="p-4 rounded-xl bg-yellow-50 border border-yellow-200">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0">
+                      <svg className="w-5 h-5 text-yellow-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-semibold text-yellow-800">Project On Hold</h4>
+                      {project.on_hold_reason && (
+                        <p className="text-sm text-yellow-700 mt-1">
+                          <span className="font-medium">Reason:</span> {project.on_hold_reason}
+                        </p>
+                      )}
+                      {project.expected_resume_date && (
+                        <p className="text-sm text-yellow-700 mt-1">
+                          <span className="font-medium">Expected to resume:</span> {formatDate(project.expected_resume_date)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Progress Bar */}
               <div className="p-4 rounded-xl bg-[color:var(--tl-offwhite)]">
                 <div className="flex items-center justify-between mb-2">
@@ -1009,6 +1225,170 @@ export default function ProjectDetailsModal({
                 </button>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* On Hold Modal */}
+      {showOnHoldModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
+                <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-[color:var(--tl-navy)]">
+                Put Project On Hold
+              </h3>
+            </div>
+            <form onSubmit={handleOnHoldSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-1">
+                  Reason for Hold <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={onHoldForm.reason}
+                  onChange={(e) =>
+                    setOnHoldForm({ ...onHoldForm, reason: e.target.value })
+                  }
+                  required
+                  rows={3}
+                  placeholder="Explain why this project is being put on hold..."
+                  className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-1">
+                  Expected Resume Date (optional)
+                </label>
+                <input
+                  type="date"
+                  value={onHoldForm.expectedResumeDate}
+                  onChange={(e) =>
+                    setOnHoldForm({ ...onHoldForm, expectedResumeDate: e.target.value })
+                  }
+                  min={new Date().toISOString().split("T")[0]}
+                  className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowOnHoldModal(false);
+                    setOnHoldForm({ reason: "", expectedResumeDate: "" });
+                  }}
+                  className="flex-1 rounded-xl border border-[color:var(--tl-sand)] px-4 py-2.5 text-sm font-medium text-[color:var(--tl-navy)]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updatingStatus || !onHoldForm.reason.trim()}
+                  className="flex-1 rounded-xl bg-yellow-500 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 hover:bg-yellow-600 transition"
+                >
+                  {updatingStatus ? "Updating..." : "Put On Hold"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Invite Client Modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-[color:var(--tl-navy)]">
+                Invite Client to Project
+              </h3>
+              <button
+                onClick={() => {
+                  setShowInviteModal(false);
+                  setInviteEmail("");
+                  setInviteError("");
+                  setInviteSuccess("");
+                }}
+                className="p-1 rounded-lg hover:bg-[color:var(--tl-offwhite)]"
+              >
+                <svg className="w-5 h-5 text-[color:var(--tl-mid)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <p className="text-sm text-[color:var(--tl-mid)] mb-4">
+              Send an invitation email to a client. They&apos;ll be able to sign up and automatically get access to this project.
+            </p>
+
+            {inviteSuccess && (
+              <div className="p-3 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm mb-4">
+                {inviteSuccess}
+              </div>
+            )}
+
+            {inviteError && (
+              <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm mb-4">
+                {inviteError}
+              </div>
+            )}
+
+            <form onSubmit={handleInviteClient} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-1">
+                  Client Email
+                </label>
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  required
+                  placeholder="client@example.com"
+                  className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={sendingInvite || !inviteEmail.trim()}
+                className="w-full rounded-xl bg-[color:var(--tl-navy)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 hover:bg-[color:var(--tl-deep)] transition"
+              >
+                {sendingInvite ? "Sending..." : "Send Invitation"}
+              </button>
+            </form>
+
+            {invitations.length > 0 && (
+              <div className="mt-6 pt-4 border-t border-[color:var(--tl-sand)]">
+                <p className="text-xs uppercase tracking-wider text-[color:var(--tl-mid)] mb-3">
+                  Previous Invitations
+                </p>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {invitations.map((inv) => (
+                    <div
+                      key={inv.id}
+                      className="flex items-center justify-between p-2 rounded-lg bg-[color:var(--tl-offwhite)] text-sm"
+                    >
+                      <span className="text-[color:var(--tl-navy)] truncate flex-1">
+                        {inv.email}
+                      </span>
+                      <span
+                        className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
+                          inv.status === "pending"
+                            ? "bg-yellow-100 text-yellow-700"
+                            : inv.status === "accepted"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {inv.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

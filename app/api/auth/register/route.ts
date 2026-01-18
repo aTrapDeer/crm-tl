@@ -1,4 +1,5 @@
 import { createUser, createSession, getUserByEmail } from "@/lib/auth";
+import { processPendingInvitationsForUser } from "@/lib/projects";
 import { cookies } from "next/headers";
 
 export async function POST(request: Request) {
@@ -36,6 +37,12 @@ export async function POST(request: Request) {
     const user = await createUser(email, password, firstName, lastName, userRole);
     const session = await createSession(user.id);
 
+    // Process any pending project invitations for this email
+    const invitationsProcessed = await processPendingInvitationsForUser(email, user.id);
+    if (invitationsProcessed > 0) {
+      console.log(`Processed ${invitationsProcessed} pending invitation(s) for ${email}`);
+    }
+
     // Set session cookie
     const cookieStore = await cookies();
     cookieStore.set("session_id", session.id, {
@@ -46,7 +53,7 @@ export async function POST(request: Request) {
       path: "/",
     });
 
-    return Response.json({ user, success: true });
+    return Response.json({ user, success: true, invitationsProcessed });
   } catch (error) {
     console.error("Registration error:", error);
     return Response.json(

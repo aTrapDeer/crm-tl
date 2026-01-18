@@ -11,8 +11,23 @@ export interface Project {
   budget_amount: number | null;
   is_funded: boolean;
   funding_notes: string | null;
+  on_hold_reason: string | null;
+  expected_resume_date: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ProjectInvitation {
+  id: string;
+  project_id: string;
+  email: string;
+  token: string;
+  invited_by: string | null;
+  inviter_name?: string;
+  status: "pending" | "accepted" | "expired";
+  expires_at: string;
+  created_at: string;
+  accepted_at: string | null;
 }
 
 export interface ProjectTask {
@@ -63,6 +78,8 @@ function mapRowToProject(row: Record<string, unknown>): Project {
     budget_amount: row.budget_amount as number | null,
     is_funded: Boolean(row.is_funded),
     funding_notes: row.funding_notes as string | null,
+    on_hold_reason: row.on_hold_reason as string | null,
+    expected_resume_date: row.expected_resume_date as string | null,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
   };
@@ -105,11 +122,13 @@ export async function createProject(data: {
   budget_amount?: number;
   is_funded?: boolean;
   funding_notes?: string;
+  on_hold_reason?: string;
+  expected_resume_date?: string;
 }): Promise<Project> {
   const id = crypto.randomUUID().replace(/-/g, "");
   await turso.execute({
-    sql: `INSERT INTO projects (id, name, description, status, address, start_date, end_date, budget_amount, is_funded, funding_notes) 
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO projects (id, name, description, status, address, start_date, end_date, budget_amount, is_funded, funding_notes, on_hold_reason, expected_resume_date)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       data.name,
@@ -121,6 +140,8 @@ export async function createProject(data: {
       data.budget_amount || null,
       data.is_funded ? 1 : 0,
       data.funding_notes || null,
+      data.on_hold_reason || null,
+      data.expected_resume_date || null,
     ],
   });
   return (await getProjectById(id))!;
@@ -168,6 +189,14 @@ export async function updateProject(
   if (data.funding_notes !== undefined) {
     updates.push("funding_notes = ?");
     args.push(data.funding_notes);
+  }
+  if (data.on_hold_reason !== undefined) {
+    updates.push("on_hold_reason = ?");
+    args.push(data.on_hold_reason);
+  }
+  if (data.expected_resume_date !== undefined) {
+    updates.push("expected_resume_date = ?");
+    args.push(data.expected_resume_date);
   }
 
   if (updates.length === 0) return getProjectById(id);
@@ -550,5 +579,143 @@ export async function getProjectImageCount(projectId: string): Promise<number> {
     args: [projectId],
   });
   return (result.rows[0].count as number) || 0;
+}
+
+// ============ INVITATION FUNCTIONS ============
+
+function mapRowToInvitation(row: Record<string, unknown>): ProjectInvitation {
+  return {
+    id: row.id as string,
+    project_id: row.project_id as string,
+    email: row.email as string,
+    token: row.token as string,
+    invited_by: row.invited_by as string | null,
+    inviter_name: row.inviter_name as string | undefined,
+    status: row.status as ProjectInvitation["status"],
+    expires_at: row.expires_at as string,
+    created_at: row.created_at as string,
+    accepted_at: row.accepted_at as string | null,
+  };
+}
+
+export async function createProjectInvitation(data: {
+  project_id: string;
+  email: string;
+  invited_by: string;
+}): Promise<ProjectInvitation> {
+  const id = crypto.randomUUID().replace(/-/g, "");
+  const token = crypto.randomUUID().replace(/-/g, "");
+
+  // Expire in 7 days
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 7);
+
+  await turso.execute({
+    sql: `INSERT INTO project_invitations (id, project_id, email, token, invited_by, expires_at)
+          VALUES (?, ?, ?, ?, ?, ?)`,
+    args: [
+      id,
+      data.project_id,
+      data.email.toLowerCase(),
+      token,
+      data.invited_by,
+      expiresAt.toISOString(),
+    ],
+  });
+
+  const result = await turso.execute({
+    sql: `SELECT pi.*, u.first_name || ' ' || u.last_name as inviter_name
+          FROM project_invitations pi
+          LEFT JOIN users u ON pi.invited_by = u.id
+          WHERE pi.id = ?`,
+    args: [id],
+  });
+
+  return mapRowToInvitation(result.rows[0]);
+}
+
+export async function getProjectInvitations(projectId: string): Promise<ProjectInvitation[]> {
+  const result = await turso.execute({
+    sql: `SELECT pi.*, u.first_name || ' ' || u.last_name as inviter_name
+          FROM project_invitations pi
+          LEFT JOIN users u ON pi.invited_by = u.id
+          WHERE pi.project_id = ?
+          ORDER BY pi.created_at DESC`,
+    args: [projectId],
+  });
+  return result.rows.map(mapRowToInvitation);
+}
+
+export async function getInvitationByToken(token: string): Promise<ProjectInvitation | null> {
+  const result = await turso.execute({
+    sql: `SELECT pi.*, u.first_name || ' ' || u.last_name as inviter_name
+          FROM project_invitations pi
+          LEFT JOIN users u ON pi.invited_by = u.id
+          WHERE pi.token = ?`,
+    args: [token],
+  });
+  if (result.rows.length === 0) return null;
+  return mapRowToInvitation(result.rows[0]);
+}
+
+export async function getInvitationsByEmail(email: string): Promise<ProjectInvitation[]> {
+  const result = await turso.execute({
+    sql: `SELECT pi.*, u.first_name || ' ' || u.last_name as inviter_name
+          FROM project_invitations pi
+          LEFT JOIN users u ON pi.invited_by = u.id
+          WHERE pi.email = ? AND pi.status = 'pending'`,
+    args: [email.toLowerCase()],
+  });
+  return result.rows.map(mapRowToInvitation);
+}
+
+export async function acceptInvitation(token: string, userId: string): Promise<boolean> {
+  const invitation = await getInvitationByToken(token);
+  if (!invitation) return false;
+  if (invitation.status !== "pending") return false;
+
+  // Check if expired
+  if (new Date(invitation.expires_at) < new Date()) {
+    await turso.execute({
+      sql: `UPDATE project_invitations SET status = 'expired' WHERE id = ?`,
+      args: [invitation.id],
+    });
+    return false;
+  }
+
+  // Mark as accepted
+  await turso.execute({
+    sql: `UPDATE project_invitations SET status = 'accepted', accepted_at = datetime('now') WHERE id = ?`,
+    args: [invitation.id],
+  });
+
+  // Assign user to project
+  await assignUserToProject(invitation.project_id, userId);
+
+  return true;
+}
+
+export async function processPendingInvitationsForUser(email: string, userId: string): Promise<number> {
+  const invitations = await getInvitationsByEmail(email);
+  let processed = 0;
+
+  for (const invitation of invitations) {
+    // Check if not expired
+    if (new Date(invitation.expires_at) >= new Date()) {
+      await turso.execute({
+        sql: `UPDATE project_invitations SET status = 'accepted', accepted_at = datetime('now') WHERE id = ?`,
+        args: [invitation.id],
+      });
+      await assignUserToProject(invitation.project_id, userId);
+      processed++;
+    } else {
+      await turso.execute({
+        sql: `UPDATE project_invitations SET status = 'expired' WHERE id = ?`,
+        args: [invitation.id],
+      });
+    }
+  }
+
+  return processed;
 }
 

@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS projects (
   budget_amount REAL,
   is_funded INTEGER NOT NULL DEFAULT 0,
   funding_notes TEXT,
+  on_hold_reason TEXT,
+  expected_resume_date TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -86,3 +88,19 @@ CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_project_tasks_project ON project_tasks(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_tasks_completed ON project_tasks(project_id, is_completed);
 CREATE INDEX IF NOT EXISTS idx_project_images_project ON project_images(project_id);
+
+CREATE TABLE IF NOT EXISTS project_invitations (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  token TEXT NOT NULL UNIQUE,
+  invited_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'expired')),
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  accepted_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_project_invitations_project ON project_invitations(project_id);
+CREATE INDEX IF NOT EXISTS idx_project_invitations_email ON project_invitations(email);
+CREATE INDEX IF NOT EXISTS idx_project_invitations_token ON project_invitations(token);
