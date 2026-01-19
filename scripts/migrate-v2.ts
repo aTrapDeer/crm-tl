@@ -9,8 +9,19 @@ if (envResult.error) {
   console.warn("Warning: Could not load .env.local file:", envResult.error.message);
 }
 
+type TursoClient = {
+  execute: (
+    sql: string,
+    args?: Array<string | number | boolean | null>
+  ) => Promise<{ rows: Array<Record<string, unknown>> }>;
+};
+
 // Helper function to check if a column exists in a table
-async function columnExists(tableName: string, columnName: string, turso: any): Promise<boolean> {
+async function columnExists(
+  tableName: string,
+  columnName: string,
+  turso: TursoClient
+): Promise<boolean> {
   try {
     const result = await turso.execute(
       `PRAGMA table_info(${tableName})`
@@ -23,7 +34,10 @@ async function columnExists(tableName: string, columnName: string, turso: any): 
 }
 
 // Helper function to check if a table exists
-async function tableExists(tableName: string, turso: any): Promise<boolean> {
+async function tableExists(
+  tableName: string,
+  turso: TursoClient
+): Promise<boolean> {
   try {
     const result = await turso.execute(
       `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,

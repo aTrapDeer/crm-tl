@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import ProjectDetailsModal from "@/app/components/ProjectDetailsModal";
 
 interface Project {
@@ -28,6 +29,7 @@ interface ProjectUpdate {
 }
 
 export default function WorkerDashboard() {
+  const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -67,6 +69,13 @@ export default function WorkerDashboard() {
   }
 
   function handleOpenDetails(project: Project) {
+    if (typeof window !== "undefined") {
+      const isMobile = window.matchMedia("(max-width: 767px)").matches;
+      if (isMobile) {
+        router.push(`/dashboard/projects/${project.id}`);
+        return;
+      }
+    }
     setSelectedProject(project);
     setShowDetailsModal(true);
   }
@@ -138,63 +147,63 @@ export default function WorkerDashboard() {
   }
 
   if (loading) {
-    return <div className="text-[color:var(--tl-mid)]">Loading...</div>;
+    return <div className="text-(--text)">Loading...</div>;
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4 md:space-y-8">
       <div>
-        <h2 className="text-2xl font-semibold text-[color:var(--tl-navy)]">
+        <h2 className="text-xl md:text-2xl font-semibold text-(--text)">
           Worker Dashboard
         </h2>
-        <p className="text-sm text-[color:var(--tl-mid)] mt-1">
+        <p className="text-xs md:text-sm text-(--text) mt-1">
           Update progress on your assigned projects
         </p>
       </div>
 
       {projects.length === 0 ? (
-        <div className="rounded-2xl border border-[color:var(--tl-sand)] bg-white p-12 text-center">
-          <p className="text-[color:var(--tl-mid)]">
+        <div className="tl-card p-12 text-center">
+          <p className="text-(--text)">
             You haven&apos;t been assigned to any projects yet.
           </p>
-          <p className="text-sm text-[color:var(--tl-mid)] mt-2">
+          <p className="text-sm text-(--text) mt-2">
             Contact an admin to get assigned to a project.
           </p>
         </div>
       ) : (
-        <div className="grid lg:grid-cols-2 gap-8">
+        <div className="grid lg:grid-cols-2 gap-4 md:gap-8">
           {/* Projects List */}
-          <div className="rounded-2xl border border-[color:var(--tl-sand)] bg-white p-6">
-            <h3 className="text-lg font-semibold text-[color:var(--tl-navy)] mb-4">
+          <div className="tl-card p-4 md:p-6">
+            <h3 className="text-base md:text-lg font-semibold text-(--text) mb-3 md:mb-4">
               Your Projects
             </h3>
-            <div className="space-y-3">
+            <div className="space-y-3 max-h-[400px] md:max-h-[500px] overflow-y-auto -mx-2 px-2">
               {projects.map((project) => (
                 <div
                   key={project.id}
-                  className={`p-4 rounded-xl border transition ${
+                  className={`p-3 md:p-4 rounded-xl border-2 transition shadow-sm bg-white ${
                     selectedProject?.id === project.id
-                      ? "border-[color:var(--tl-cyan)] bg-[color:var(--tl-cyan)]/5"
-                      : "border-[color:var(--tl-sand)] hover:border-[color:var(--tl-teal)]"
+                      ? "border-(--border) bg-(--bg)/5 shadow-md"
+                      : "border-(--border) hover:border-(--border) hover:shadow-md"
                   }`}
                 >
                   <div
                     onClick={() => handleSelectProject(project)}
                     className="cursor-pointer"
                   >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="font-medium text-[color:var(--tl-navy)]">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-(--text) text-sm md:text-base line-clamp-2">
                           {project.name}
                         </p>
                         {project.address && (
-                          <p className="text-sm text-[color:var(--tl-mid)] mt-1">
+                          <p className="text-xs md:text-sm text-(--text) mt-1 line-clamp-1">
                             {project.address}
                           </p>
                         )}
                       </div>
                       <span
-                        className={`text-xs px-2 py-1 rounded-full ${
+                        className={`text-xs px-2 py-1 rounded-full whitespace-nowrap shrink-0 font-medium ${
                           statusColors[project.status] || statusColors.planning
                         }`}
                       >
@@ -202,23 +211,23 @@ export default function WorkerDashboard() {
                       </span>
                     </div>
                     {/* Budget & Funding Mini Display */}
-                    <div className="flex items-center gap-4 mt-3 text-xs text-[color:var(--tl-mid)]">
+                    <div className="flex items-center gap-3 md:gap-4 mt-3 text-xs text-(--text)">
                       {project.budget_amount && (
-                        <span>${project.budget_amount.toLocaleString()}</span>
+                        <span className="font-medium">${project.budget_amount.toLocaleString()}</span>
                       )}
                       <span className="flex items-center gap-1">
                         <span
-                          className={`w-2 h-2 rounded-full ${
+                          className={`w-2.5 h-2.5 rounded-full ${
                             project.is_funded ? "bg-green-500" : "bg-yellow-500"
                           }`}
                         />
-                        {project.is_funded ? "Funded" : "Pending"}
+                        <span className="font-medium">{project.is_funded ? "Funded" : "Pending"}</span>
                       </span>
                     </div>
                   </div>
                   <button
                     onClick={() => handleOpenDetails(project)}
-                    className="mt-3 w-full text-xs py-2 rounded-lg bg-[color:var(--tl-navy)] text-white hover:bg-[color:var(--tl-deep)] transition"
+                    className="mt-3 w-full tl-btn px-4 py-2.5 md:py-2 text-xs font-semibold"
                   >
                     View Details & Tasks
                   </button>
@@ -228,17 +237,17 @@ export default function WorkerDashboard() {
           </div>
 
           {/* Project Details */}
-          <div className="space-y-6">
+          <div className="space-y-4 md:space-y-6">
             {selectedProject ? (
               <>
-                <div className="rounded-2xl border border-[color:var(--tl-sand)] bg-white p-6">
+                <div className="tl-card p-4 md:p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <h3 className="text-lg font-semibold text-[color:var(--tl-navy)]">
+                      <h3 className="text-lg font-semibold text-(--text)">
                         {selectedProject.name}
                       </h3>
                       {selectedProject.description && (
-                        <p className="text-sm text-[color:var(--tl-mid)] mt-1">
+                        <p className="text-sm text-(--text) mt-1">
                           {selectedProject.description}
                         </p>
                       )}
@@ -246,17 +255,17 @@ export default function WorkerDashboard() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setShowEditProject(true)}
-                        className="text-sm text-[color:var(--tl-royal)] hover:underline"
+                        className="text-sm text-(--text) hover:underline"
                       >
                         Edit Status
                       </button>
                       <button
                         onClick={() => handleOpenDetails(selectedProject)}
-                        className="p-2 rounded-lg hover:bg-[color:var(--tl-offwhite)] transition"
+                        className="p-2 rounded-lg hover:bg-(--bg) transition"
                         title="View full details"
                       >
                         <svg
-                          className="w-5 h-5 text-[color:var(--tl-navy)]"
+                          className="w-5 h-5 text-(--text)"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -275,19 +284,19 @@ export default function WorkerDashboard() {
                   <div className="flex gap-4">
                     <button
                       onClick={() => setShowAddUpdate(true)}
-                      className="rounded-xl bg-[color:var(--tl-navy)] px-4 py-2 text-sm font-semibold text-white"
+                      className="tl-btn px-4 py-2 text-sm"
                     >
                       + Add Update
                     </button>
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-[color:var(--tl-sand)] bg-white p-6">
-                  <h4 className="text-sm font-semibold text-[color:var(--tl-navy)] mb-4">
+                <div className="tl-card p-4 md:p-6">
+                  <h4 className="text-sm font-semibold text-(--text) mb-3 md:mb-4">
                     Recent Updates
                   </h4>
                   {updates.length === 0 ? (
-                    <p className="text-sm text-[color:var(--tl-mid)]">
+                    <p className="text-sm text-(--text)">
                       No updates yet. Add the first update!
                     </p>
                   ) : (
@@ -295,24 +304,24 @@ export default function WorkerDashboard() {
                       {updates.map((update) => (
                         <div
                           key={update.id}
-                          className="p-4 rounded-xl bg-[color:var(--tl-offwhite)]"
+                          className="p-4 rounded-xl bg-(--bg)"
                         >
                           <div className="flex items-start justify-between">
-                            <p className="font-medium text-[color:var(--tl-navy)]">
+                            <p className="font-medium text-(--text)">
                               {update.title}
                             </p>
-                            <p className="text-xs text-[color:var(--tl-mid)]">
+                            <p className="text-xs text-(--text)">
                               {formatDate(update.created_at)}
                             </p>
                           </div>
                           {update.content && (
-                            <p className="text-sm text-[color:var(--tl-mid)] mt-2">
+                            <p className="text-sm text-(--text) mt-2">
                               {update.content}
                             </p>
                           )}
                           {update.user_name && (
-                            <p className="text-xs text-[color:var(--tl-mid)] mt-2">
-                              — {update.user_name}
+                            <p className="text-xs text-(--text) mt-2">
+                              - {update.user_name}
                             </p>
                           )}
                         </div>
@@ -322,8 +331,8 @@ export default function WorkerDashboard() {
                 </div>
               </>
             ) : (
-              <div className="rounded-2xl border border-[color:var(--tl-sand)] bg-white p-12 text-center">
-                <p className="text-[color:var(--tl-mid)]">
+              <div className="tl-card p-12 text-center">
+                <p className="text-(--text)">
                   Select a project to view details and add updates
                 </p>
               </div>
@@ -334,14 +343,14 @@ export default function WorkerDashboard() {
 
       {/* Add Update Modal */}
       {showAddUpdate && selectedProject && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-8 w-full max-w-md mx-4">
-            <h3 className="text-xl font-semibold text-[color:var(--tl-navy)] mb-6">
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-9999 p-0 md:p-4">
+          <div className="tl-card p-4 md:p-8 w-full max-w-md rounded-t-3xl md:rounded-3xl rounded-b-none md:rounded-b-3xl">
+            <h3 className="text-lg md:text-xl font-semibold text-(--text) mb-4 md:mb-6">
               Add Project Update
             </h3>
             <form onSubmit={handleAddUpdate} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-2">
+                <label className="block text-sm font-medium text-(--text) mb-2">
                   Title
                 </label>
                 <input
@@ -352,11 +361,11 @@ export default function WorkerDashboard() {
                   }
                   required
                   placeholder="e.g., Framing completed"
-                  className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-2">
+                <label className="block text-sm font-medium text-(--text) mb-2">
                   Details (optional)
                 </label>
                 <textarea
@@ -366,20 +375,20 @@ export default function WorkerDashboard() {
                   }
                   rows={4}
                   placeholder="Add any additional details..."
-                  className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                 />
               </div>
               <div className="flex gap-3 mt-6">
                 <button
                   type="button"
                   onClick={() => setShowAddUpdate(false)}
-                  className="flex-1 rounded-xl border border-[color:var(--tl-sand)] px-4 py-2.5 text-sm font-medium text-[color:var(--tl-navy)]"
+                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 rounded-xl bg-[color:var(--tl-navy)] px-4 py-2.5 text-sm font-semibold text-white"
+                  className="flex-1 tl-btn px-4 py-2.5 text-sm"
                 >
                   Add Update
                 </button>
@@ -391,20 +400,20 @@ export default function WorkerDashboard() {
 
       {/* Edit Status Modal */}
       {showEditProject && selectedProject && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-8 w-full max-w-md mx-4">
-            <h3 className="text-xl font-semibold text-[color:var(--tl-navy)] mb-6">
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-9999 p-0 md:p-4">
+          <div className="tl-card p-4 md:p-8 w-full max-w-md rounded-t-3xl md:rounded-3xl rounded-b-none md:rounded-b-3xl">
+            <h3 className="text-lg md:text-xl font-semibold text-(--text) mb-4 md:mb-6">
               Update Project Status
             </h3>
             <form onSubmit={handleUpdateStatus} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-2">
+                <label className="block text-sm font-medium text-(--text) mb-2">
                   Status
                 </label>
                 <select
                   value={editStatus}
                   onChange={(e) => setEditStatus(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                 >
                   <option value="planning">Planning</option>
                   <option value="in_progress">In Progress</option>
@@ -416,13 +425,13 @@ export default function WorkerDashboard() {
                 <button
                   type="button"
                   onClick={() => setShowEditProject(false)}
-                  className="flex-1 rounded-xl border border-[color:var(--tl-sand)] px-4 py-2.5 text-sm font-medium text-[color:var(--tl-navy)]"
+                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 rounded-xl bg-[color:var(--tl-navy)] px-4 py-2.5 text-sm font-semibold text-white"
+                  className="flex-1 tl-btn px-4 py-2.5 text-sm"
                 >
                   Update Status
                 </button>
@@ -444,3 +453,4 @@ export default function WorkerDashboard() {
     </div>
   );
 }
+

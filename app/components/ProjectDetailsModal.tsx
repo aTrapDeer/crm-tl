@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 
 interface Project {
@@ -70,6 +71,7 @@ export default function ProjectDetailsModal({
   userRole,
   onProjectUpdate,
 }: ProjectDetailsModalProps) {
+  const [mounted, setMounted] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [stats, setStats] = useState<TaskStats>({ total: 0, completed: 0 });
   const [team, setTeam] = useState<TeamMember[]>([]);
@@ -105,6 +107,16 @@ export default function ProjectDetailsModal({
   const [sendingInvite, setSendingInvite] = useState(false);
   const [inviteSuccess, setInviteSuccess] = useState("");
   const [inviteError, setInviteError] = useState("");
+
+  // Portal mounting
+  useEffect(() => {
+    setMounted(true);
+    // Prevent body scroll when modal is open
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
 
   const canManageTasks = userRole === "admin" || userRole === "worker";
   const canManageImages = userRole === "admin" || userRole === "worker";
@@ -447,15 +459,23 @@ export default function ProjectDetailsModal({
     }).format(amount);
   }
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+  // Don't render until mounted (for portal)
+  if (!mounted) return null;
+
+  const modalContent = (
+    <div className="fixed inset-0 bg-black/60 flex items-end md:items-center justify-center z-9999 p-0 md:p-4">
+      <div className="tl-card w-full max-w-3xl h-svh md:h-auto md:max-h-[90vh] overflow-hidden flex flex-col rounded-none md:rounded-3xl shadow-2xl">
+        {/* Mobile drag handle */}
+        <div className="md:hidden flex justify-center pt-3 pb-1 bg-white">
+          <div className="w-10 h-1 bg-gray-300 rounded-full"></div>
+        </div>
+
         {/* Header */}
-        <div className="p-6 border-b border-[color:var(--tl-sand)]">
-          <div className="flex items-start justify-between">
+        <div className="px-4 pb-4 pt-2 md:p-6 border-b border-(--border) bg-white">
+          <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-3 mb-2">
-                <h2 className="text-xl font-semibold text-[color:var(--tl-navy)] truncate">
+              <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-2">
+                <h2 className="text-base md:text-xl font-semibold text-(--text) line-clamp-2 md:truncate md:max-w-none">
                   {project.name}
                 </h2>
                 {canChangeStatus ? (
@@ -463,7 +483,7 @@ export default function ProjectDetailsModal({
                     <button
                       onClick={() => setShowStatusChange(!showStatusChange)}
                       disabled={updatingStatus}
-                      className={`text-xs px-2.5 py-1 rounded-full whitespace-nowrap flex items-center gap-1 transition hover:ring-2 hover:ring-[color:var(--tl-cyan)]/50 ${
+                      className={`text-xs px-2.5 py-1 rounded-full whitespace-nowrap flex items-center gap-1 transition hover:ring-2 hover:ring-(--ring)/50 ${
                         statusColors[project.status] || statusColors.planning
                       } ${updatingStatus ? "opacity-50" : ""}`}
                     >
@@ -473,13 +493,13 @@ export default function ProjectDetailsModal({
                       </svg>
                     </button>
                     {showStatusChange && (
-                      <div className="absolute top-full left-0 mt-1 bg-white border border-[color:var(--tl-sand)] rounded-xl shadow-lg z-10 py-1 min-w-[140px]">
+                      <div className="absolute top-full left-0 mt-1 bg-white border border-(--border) rounded-xl shadow-lg z-10 py-1 min-w-[140px]">
                         {Object.entries(statusLabels).map(([value, label]) => (
                           <button
                             key={value}
                             onClick={() => handleStatusChange(value)}
                             disabled={value === project.status}
-                            className={`w-full px-3 py-2 text-left text-sm hover:bg-[color:var(--tl-offwhite)] transition ${
+                            className={`w-full px-3 py-2 text-left text-sm hover:bg-(--bg) transition ${
                               value === project.status ? "opacity-50 cursor-not-allowed" : ""
                             }`}
                           >
@@ -506,19 +526,19 @@ export default function ProjectDetailsModal({
                 )}
               </div>
               {project.description && (
-                <p className="text-sm text-[color:var(--tl-mid)]">
+                <p className="text-sm text-(--text)">
                   {project.description}
                 </p>
               )}
             </div>
-            <div className="flex items-center gap-2 ml-4">
+            <div className="flex items-center gap-1 md:gap-2 ml-2 md:ml-4 shrink-0">
               {canInviteClients && (
                 <button
                   onClick={() => {
                     setShowInviteModal(true);
                     fetchInvitations();
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-[color:var(--tl-cyan)] text-white hover:bg-[color:var(--tl-royal)] transition"
+                  className="hidden md:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-(--bg) text-white hover:bg-(--bg) transition"
                   title="Invite Client"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -529,11 +549,11 @@ export default function ProjectDetailsModal({
               )}
               <Link
                 href={`/dashboard/projects/${project.id}`}
-                className="p-2 rounded-lg hover:bg-[color:var(--tl-offwhite)] transition"
+                className="hidden md:flex p-2 rounded-lg hover:bg-(--bg) transition"
                 title="Open full page"
               >
                 <svg
-                  className="w-5 h-5 text-[color:var(--tl-navy)]"
+                  className="w-5 h-5 text-(--text)"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -548,10 +568,10 @@ export default function ProjectDetailsModal({
               </Link>
               <button
                 onClick={onClose}
-                className="p-2 rounded-lg hover:bg-[color:var(--tl-offwhite)] transition"
+                className="p-2 rounded-xl bg-gray-100 md:bg-transparent hover:bg-gray-200 md:hover:bg-(--bg) transition"
               >
                 <svg
-                  className="w-5 h-5 text-[color:var(--tl-mid)]"
+                  className="w-5 h-5 text-(--text) md:text-(--text)"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -569,18 +589,18 @@ export default function ProjectDetailsModal({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-24 md:pb-6">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[color:var(--tl-navy)]" />
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-(--border)" />
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-4 md:space-y-6">
               {/* On Hold Alert */}
               {project.status === "on_hold" && (
                 <div className="p-4 rounded-xl bg-yellow-50 border border-yellow-200">
                   <div className="flex items-start gap-3">
-                    <div className="flex-shrink-0">
+                    <div className="shrink-0">
                       <svg className="w-5 h-5 text-yellow-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                       </svg>
@@ -603,54 +623,54 @@ export default function ProjectDetailsModal({
               )}
 
               {/* Progress Bar */}
-              <div className="p-4 rounded-xl bg-[color:var(--tl-offwhite)]">
+              <div className="p-4 rounded-xl bg-(--bg)">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-[color:var(--tl-navy)]">
+                  <span className="text-sm font-medium text-(--text)">
                     Task Progress
                   </span>
-                  <span className="text-sm text-[color:var(--tl-mid)]">
+                  <span className="text-sm text-(--text)">
                     {stats.completed} / {stats.total} tasks
                   </span>
                 </div>
-                <div className="h-3 bg-[color:var(--tl-sand)] rounded-full overflow-hidden">
+                <div className="h-3 bg-(--bg) rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-[color:var(--tl-cyan)] to-[color:var(--tl-royal)] transition-all duration-500"
+                    className="h-full bg-linear-to-r from-(--tl-cyan) to-(--tl-royal) transition-all duration-500"
                     style={{ width: `${progressPercent}%` }}
                   />
                 </div>
-                <p className="text-xs text-[color:var(--tl-mid)] mt-2 text-right">
+                <p className="text-xs text-(--text) mt-2 text-right">
                   {progressPercent}% complete
                 </p>
               </div>
 
               {/* Budget & Funding */}
-              <div className="p-4 rounded-xl border border-[color:var(--tl-sand)]">
+              <div className="p-3 md:p-4 rounded-xl border border-(--border)">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-[color:var(--tl-navy)]">
+                  <h3 className="text-sm font-semibold text-(--text)">
                     Budget & Funding
                   </h3>
                   {canEditBudget && (
                     <button
                       onClick={() => setShowEditBudget(true)}
-                      className="text-xs text-[color:var(--tl-royal)] hover:underline"
+                      className="text-xs text-(--text) hover:underline"
                     >
                       Edit
                     </button>
                   )}
                 </div>
-                <div className="grid sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3 md:gap-4">
                   <div>
-                    <p className="text-xs uppercase tracking-wider text-[color:var(--tl-mid)]">
+                    <p className="text-xs uppercase tracking-wider text-(--text)">
                       Budget
                     </p>
-                    <p className="text-lg font-semibold text-[color:var(--tl-navy)] mt-1">
+                    <p className="text-lg font-semibold text-(--text) mt-1">
                       {project.budget_amount
                         ? formatCurrency(project.budget_amount)
                         : "Not set"}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wider text-[color:var(--tl-mid)]">
+                    <p className="text-xs uppercase tracking-wider text-(--text)">
                       Funding Status
                     </p>
                     <div className="flex items-center gap-2 mt-1">
@@ -659,18 +679,18 @@ export default function ProjectDetailsModal({
                           project.is_funded ? "bg-green-500" : "bg-yellow-500"
                         }`}
                       />
-                      <span className="text-sm font-medium text-[color:var(--tl-navy)]">
+                      <span className="text-sm font-medium text-(--text)">
                         {project.is_funded ? "Funded" : "Pending Funding"}
                       </span>
                     </div>
                   </div>
                 </div>
                 {project.funding_notes && (
-                  <div className="mt-4 pt-4 border-t border-[color:var(--tl-sand)]">
-                    <p className="text-xs uppercase tracking-wider text-[color:var(--tl-mid)] mb-1">
+                  <div className="mt-4 pt-4 border-t border-(--border)">
+                    <p className="text-xs uppercase tracking-wider text-(--text) mb-1">
                       Funding Notes
                     </p>
-                    <p className="text-sm text-[color:var(--tl-navy)]">
+                    <p className="text-sm text-(--text)">
                       {project.funding_notes}
                     </p>
                   </div>
@@ -678,23 +698,23 @@ export default function ProjectDetailsModal({
               </div>
 
               {/* Project Info */}
-              <div className="grid sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                 {project.address && (
-                  <div className="p-3 rounded-xl bg-[color:var(--tl-offwhite)]">
-                    <p className="text-xs uppercase tracking-wider text-[color:var(--tl-mid)]">
+                  <div className="p-3 rounded-xl bg-(--bg)">
+                    <p className="text-xs uppercase tracking-wider text-(--text)">
                       Location
                     </p>
-                    <p className="text-sm font-medium text-[color:var(--tl-navy)] mt-1">
+                    <p className="text-sm font-medium text-(--text) mt-1">
                       {project.address}
                     </p>
                   </div>
                 )}
                 {project.start_date && (
-                  <div className="p-3 rounded-xl bg-[color:var(--tl-offwhite)]">
-                    <p className="text-xs uppercase tracking-wider text-[color:var(--tl-mid)]">
+                  <div className="p-3 rounded-xl bg-(--bg)">
+                    <p className="text-xs uppercase tracking-wider text-(--text)">
                       Start Date
                     </p>
-                    <p className="text-sm font-medium text-[color:var(--tl-navy)] mt-1">
+                    <p className="text-sm font-medium text-(--text) mt-1">
                       {formatDate(project.start_date)}
                     </p>
                   </div>
@@ -702,24 +722,24 @@ export default function ProjectDetailsModal({
               </div>
 
               {/* Project Photos */}
-              <div className="p-4 rounded-xl border border-[color:var(--tl-sand)]">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-[color:var(--tl-navy)]">
+              <div className="p-3 md:p-4 rounded-xl border border-(--border)">
+                <div className="flex items-center justify-between mb-3 md:mb-4">
+                  <h3 className="text-sm font-semibold text-(--text)">
                     Project Photos ({images.length})
                   </h3>
                   {canManageImages && (
                     <button
                       onClick={() => setShowAddImage(true)}
-                      className="text-xs px-3 py-1.5 rounded-lg bg-[color:var(--tl-navy)] text-white hover:bg-[color:var(--tl-deep)] transition"
+                      className="tl-btn px-2 md:px-3 py-1.5 text-xs"
                     >
                       + Add Photo
                     </button>
                   )}
                 </div>
                 {images.length === 0 ? (
-                  <div className="text-center py-8 border-2 border-dashed border-[color:var(--tl-sand)] rounded-xl">
+                  <div className="text-center py-8 border-2 border-dashed border-(--border) rounded-xl">
                     <svg
-                      className="w-12 h-12 mx-auto text-[color:var(--tl-sand)]"
+                      className="w-12 h-12 mx-auto text-(--text)"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -731,27 +751,27 @@ export default function ProjectDetailsModal({
                         d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                       />
                     </svg>
-                    <p className="text-sm text-[color:var(--tl-mid)] mt-2">
+                    <p className="text-sm text-(--text) mt-2">
                       No photos yet
                     </p>
-                    <p className="text-xs text-[color:var(--tl-mid)]">
+                    <p className="text-xs text-(--text)">
                       {canManageImages
                         ? "Add photos to document project progress"
                         : "Photos will appear here once added"}
                     </p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {images.map((image) => (
                       <div
                         key={image.id}
                         onClick={() => setShowImageViewer(image)}
-                        className="aspect-square rounded-lg bg-[color:var(--tl-offwhite)] overflow-hidden cursor-pointer relative group"
+                        className="aspect-square rounded-lg bg-(--bg) overflow-hidden cursor-pointer relative group"
                       >
                         {/* Placeholder - would show actual image when S3 is configured */}
                         <div className="absolute inset-0 flex flex-col items-center justify-center p-2">
                           <svg
-                            className="w-8 h-8 text-[color:var(--tl-sand)]"
+                            className="w-8 h-8 text-(--text)"
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24"
@@ -763,7 +783,7 @@ export default function ProjectDetailsModal({
                               d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                             />
                           </svg>
-                          <p className="text-xs text-[color:var(--tl-mid)] text-center truncate w-full mt-1">
+                          <p className="text-xs text-(--text) text-center truncate w-full mt-1">
                             {image.filename}
                           </p>
                         </div>
@@ -777,12 +797,12 @@ export default function ProjectDetailsModal({
               </div>
 
               {/* Team Members */}
-              <div className="p-4 rounded-xl border border-[color:var(--tl-sand)]">
-                <h3 className="text-sm font-semibold text-[color:var(--tl-navy)] mb-3">
+              <div className="p-3 md:p-4 rounded-xl border border-(--border)">
+                <h3 className="text-sm font-semibold text-(--text) mb-3">
                   Project Team
                 </h3>
                 {team.length === 0 ? (
-                  <p className="text-sm text-[color:var(--tl-mid)]">
+                  <p className="text-sm text-(--text)">
                     No team members assigned yet
                   </p>
                 ) : (
@@ -790,17 +810,17 @@ export default function ProjectDetailsModal({
                     {team.map((member) => (
                       <div
                         key={member.user_id}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[color:var(--tl-offwhite)]"
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-(--bg)"
                       >
-                        <div className="w-8 h-8 rounded-full bg-[color:var(--tl-navy)] flex items-center justify-center text-white text-xs font-medium">
+                        <div className="w-8 h-8 rounded-full bg-(--bg) flex items-center justify-center text-white text-xs font-medium">
                           {member.first_name[0]}
                           {member.last_name[0]}
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-[color:var(--tl-navy)]">
+                          <p className="text-sm font-medium text-(--text)">
                             {member.first_name} {member.last_name}
                           </p>
-                          <p className="text-xs text-[color:var(--tl-mid)] capitalize">
+                          <p className="text-xs text-(--text) capitalize">
                             {member.role}
                           </p>
                         </div>
@@ -811,22 +831,22 @@ export default function ProjectDetailsModal({
               </div>
 
               {/* Tasks */}
-              <div className="p-4 rounded-xl border border-[color:var(--tl-sand)]">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-[color:var(--tl-navy)]">
+              <div className="p-3 md:p-4 rounded-xl border border-(--border)">
+                <div className="flex items-center justify-between mb-3 md:mb-4">
+                  <h3 className="text-sm font-semibold text-(--text)">
                     Tasks
                   </h3>
                   {canManageTasks && (
                     <button
                       onClick={() => setShowAddTask(true)}
-                      className="text-xs px-3 py-1.5 rounded-lg bg-[color:var(--tl-navy)] text-white hover:bg-[color:var(--tl-deep)] transition"
+                      className="tl-btn px-2 md:px-3 py-1.5 text-xs"
                     >
                       + Add Task
                     </button>
                   )}
                 </div>
                 {tasks.length === 0 ? (
-                  <p className="text-sm text-[color:var(--tl-mid)] text-center py-4">
+                  <p className="text-sm text-(--text) text-center py-4">
                     No tasks yet
                   </p>
                 ) : (
@@ -837,16 +857,16 @@ export default function ProjectDetailsModal({
                         className={`flex items-start gap-3 p-3 rounded-lg transition ${
                           task.is_completed
                             ? "bg-green-50"
-                            : "bg-[color:var(--tl-offwhite)]"
+                            : "bg-(--bg)"
                         }`}
                       >
                         <button
                           onClick={() => handleToggleTask(task)}
                           disabled={!canManageTasks}
-                          className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition ${
+                          className={`mt-0.5 shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition ${
                             task.is_completed
                               ? "bg-green-500 border-green-500 text-white"
-                              : "border-[color:var(--tl-sand)] hover:border-[color:var(--tl-cyan)]"
+                              : "border-(--border) hover:border-(--border)"
                           } ${!canManageTasks ? "cursor-not-allowed opacity-50" : ""}`}
                         >
                           {task.is_completed && (
@@ -870,13 +890,13 @@ export default function ProjectDetailsModal({
                             className={`text-sm font-medium ${
                               task.is_completed
                                 ? "text-green-700 line-through"
-                                : "text-[color:var(--tl-navy)]"
+                                : "text-(--text)"
                             }`}
                           >
                             {task.title}
                           </p>
                           {task.description && (
-                            <p className="text-xs text-[color:var(--tl-mid)] mt-1">
+                            <p className="text-xs text-(--text) mt-1">
                               {task.description}
                             </p>
                           )}
@@ -909,18 +929,45 @@ export default function ProjectDetailsModal({
             </div>
           )}
         </div>
+
+        {/* Mobile Action Bar */}
+        <div className="md:hidden flex items-center gap-2 p-4 border-t border-(--border) bg-white">
+          {canInviteClients && (
+            <button
+              onClick={() => {
+                setShowInviteModal(true);
+                fetchInvitations();
+              }}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium rounded-xl bg-(--bg) text-white active:bg-(--bg) transition"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+              </svg>
+              Invite Client
+            </button>
+          )}
+          <Link
+            href={`/dashboard/projects/${project.id}`}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium rounded-xl border-2 border-(--border) text-(--text) active:bg-(--bg) transition"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+            Full Page
+          </Link>
+        </div>
       </div>
 
       {/* Add Task Modal */}
       {showAddTask && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-[color:var(--tl-navy)] mb-4">
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-10000 p-0 md:p-4">
+          <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-(--text) mb-4">
               Add New Task
             </h3>
             <form onSubmit={handleAddTask} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-1">
+                <label className="block text-sm font-medium text-(--text) mb-1">
                   Task Title
                 </label>
                 <input
@@ -931,11 +978,11 @@ export default function ProjectDetailsModal({
                   }
                   required
                   placeholder="e.g., Complete foundation work"
-                  className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-1">
+                <label className="block text-sm font-medium text-(--text) mb-1">
                   Description (optional)
                 </label>
                 <textarea
@@ -945,20 +992,20 @@ export default function ProjectDetailsModal({
                   }
                   rows={3}
                   placeholder="Additional details..."
-                  className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                 />
               </div>
               <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={() => setShowAddTask(false)}
-                  className="flex-1 rounded-xl border border-[color:var(--tl-sand)] px-4 py-2.5 text-sm font-medium text-[color:var(--tl-navy)]"
+                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 rounded-xl bg-[color:var(--tl-navy)] px-4 py-2.5 text-sm font-semibold text-white"
+                  className="flex-1 tl-btn px-4 py-2.5 text-sm"
                 >
                   Add Task
                 </button>
@@ -970,18 +1017,18 @@ export default function ProjectDetailsModal({
 
       {/* Edit Budget Modal */}
       {showEditBudget && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-[color:var(--tl-navy)] mb-4">
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-10000 p-0 md:p-4">
+          <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-(--text) mb-4">
               Edit Budget & Funding
             </h3>
             <form onSubmit={handleUpdateBudget} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-1">
+                <label className="block text-sm font-medium text-(--text) mb-1">
                   Budget Amount
                 </label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[color:var(--tl-mid)]">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-(--text)">
                     $
                   </span>
                   <input
@@ -994,7 +1041,7 @@ export default function ProjectDetailsModal({
                       })
                     }
                     placeholder="0"
-                    className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
+                    className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                   />
                 </div>
               </div>
@@ -1009,15 +1056,15 @@ export default function ProjectDetailsModal({
                         is_funded: e.target.checked,
                       })
                     }
-                    className="w-5 h-5 rounded border-[color:var(--tl-sand)] text-[color:var(--tl-cyan)] focus:ring-[color:var(--tl-cyan)]"
+                    className="w-5 h-5 rounded border-(--border) text-(--text) focus:ring-(--ring)"
                   />
-                  <span className="text-sm font-medium text-[color:var(--tl-navy)]">
+                  <span className="text-sm font-medium text-(--text)">
                     Project is funded
                   </span>
                 </label>
               </div>
               <div>
-                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-1">
+                <label className="block text-sm font-medium text-(--text) mb-1">
                   Funding Notes
                 </label>
                 <textarea
@@ -1030,20 +1077,20 @@ export default function ProjectDetailsModal({
                   }
                   rows={3}
                   placeholder="Notes about funding status, payment terms, etc."
-                  className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                 />
               </div>
               <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={() => setShowEditBudget(false)}
-                  className="flex-1 rounded-xl border border-[color:var(--tl-sand)] px-4 py-2.5 text-sm font-medium text-[color:var(--tl-navy)]"
+                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 rounded-xl bg-[color:var(--tl-navy)] px-4 py-2.5 text-sm font-semibold text-white"
+                  className="flex-1 tl-btn px-4 py-2.5 text-sm"
                 >
                   Save Changes
                 </button>
@@ -1055,9 +1102,9 @@ export default function ProjectDetailsModal({
 
       {/* Add Image Modal */}
       {showAddImage && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-[color:var(--tl-navy)] mb-4">
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-10000 p-0 md:p-4 overflow-y-auto">
+          <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-(--text) mb-4">
               Add Project Photo
             </h3>
             
@@ -1065,10 +1112,10 @@ export default function ProjectDetailsModal({
             <div className="mb-4">
               <div 
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-[color:var(--tl-sand)] rounded-xl p-8 text-center cursor-pointer hover:border-[color:var(--tl-cyan)] transition"
+                className="border-2 border-dashed border-(--border) rounded-xl p-8 text-center cursor-pointer hover:border-(--border) transition"
               >
                 <svg
-                  className="w-12 h-12 mx-auto text-[color:var(--tl-sand)]"
+                  className="w-12 h-12 mx-auto text-(--text)"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -1080,10 +1127,10 @@ export default function ProjectDetailsModal({
                     d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
                   />
                 </svg>
-                <p className="text-sm text-[color:var(--tl-mid)] mt-2">
+                <p className="text-sm text-(--text) mt-2">
                   Click to select a photo
                 </p>
-                <p className="text-xs text-[color:var(--tl-sand)]">
+                <p className="text-xs text-(--text)">
                   (S3 not configured - file won&apos;t actually upload)
                 </p>
               </div>
@@ -1096,13 +1143,13 @@ export default function ProjectDetailsModal({
               />
             </div>
 
-            <div className="text-center text-sm text-[color:var(--tl-mid)] mb-4">
-              — or add manually —
+            <div className="text-center text-sm text-(--text) mb-4">
+              - or add manually -
             </div>
 
             <form onSubmit={handleAddImage} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-1">
+                <label className="block text-sm font-medium text-(--text) mb-1">
                   Filename
                 </label>
                 <input
@@ -1113,11 +1160,11 @@ export default function ProjectDetailsModal({
                   }
                   required
                   placeholder="e.g., foundation-complete.jpg"
-                  className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-1">
+                <label className="block text-sm font-medium text-(--text) mb-1">
                   Caption (optional)
                 </label>
                 <input
@@ -1127,21 +1174,21 @@ export default function ProjectDetailsModal({
                     setNewImage({ ...newImage, caption: e.target.value })
                   }
                   placeholder="Describe this photo..."
-                  className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                 />
               </div>
               <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={() => setShowAddImage(false)}
-                  className="flex-1 rounded-xl border border-[color:var(--tl-sand)] px-4 py-2.5 text-sm font-medium text-[color:var(--tl-navy)]"
+                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={uploadingImage}
-                  className="flex-1 rounded-xl bg-[color:var(--tl-navy)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                  className="flex-1 tl-btn px-4 py-2.5 text-sm disabled:opacity-50"
                 >
                   {uploadingImage ? "Adding..." : "Add Photo"}
                 </button>
@@ -1153,22 +1200,22 @@ export default function ProjectDetailsModal({
 
       {/* Image Viewer Modal */}
       {showImageViewer && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl overflow-hidden">
-            <div className="p-4 border-b border-[color:var(--tl-sand)] flex items-center justify-between">
+        <div className="fixed inset-0 bg-black/80 flex items-end md:items-center justify-center z-10000 p-0 md:p-4">
+          <div className="tl-card w-full max-w-2xl overflow-hidden rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh]">
+            <div className="p-4 border-b border-(--border) flex items-center justify-between">
               <div>
-                <p className="font-medium text-[color:var(--tl-navy)]">
+                <p className="font-medium text-(--text)">
                   {showImageViewer.filename}
                 </p>
                 {showImageViewer.caption && (
-                  <p className="text-sm text-[color:var(--tl-mid)]">
+                  <p className="text-sm text-(--text)">
                     {showImageViewer.caption}
                   </p>
                 )}
               </div>
               <button
                 onClick={() => setShowImageViewer(null)}
-                className="p-2 rounded-lg hover:bg-[color:var(--tl-offwhite)]"
+                className="p-2 rounded-lg hover:bg-(--bg)"
               >
                 <svg
                   className="w-5 h-5"
@@ -1185,11 +1232,11 @@ export default function ProjectDetailsModal({
                 </svg>
               </button>
             </div>
-            <div className="aspect-video bg-[color:var(--tl-offwhite)] flex items-center justify-center">
+            <div className="aspect-video bg-(--bg) flex items-center justify-center">
               {/* Placeholder - would show actual image when S3 is configured */}
               <div className="text-center">
                 <svg
-                  className="w-20 h-20 mx-auto text-[color:var(--tl-sand)]"
+                  className="w-20 h-20 mx-auto text-(--text)"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -1201,18 +1248,18 @@ export default function ProjectDetailsModal({
                     d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                   />
                 </svg>
-                <p className="text-[color:var(--tl-mid)] mt-2">
+                <p className="text-(--text) mt-2">
                   Image preview unavailable
                 </p>
-                <p className="text-xs text-[color:var(--tl-sand)]">
+                <p className="text-xs text-(--text)">
                   S3 not configured
                 </p>
               </div>
             </div>
-            <div className="p-4 flex items-center justify-between border-t border-[color:var(--tl-sand)]">
-              <div className="text-xs text-[color:var(--tl-mid)]">
+            <div className="p-4 flex items-center justify-between border-t border-(--border)">
+              <div className="text-xs text-(--text)">
                 {showImageViewer.uploader_name && (
-                  <span>Uploaded by {showImageViewer.uploader_name} • </span>
+                  <span>Uploaded by {showImageViewer.uploader_name} / </span>
                 )}
                 {formatDate(showImageViewer.created_at)}
               </div>
@@ -1231,21 +1278,21 @@ export default function ProjectDetailsModal({
 
       {/* On Hold Modal */}
       {showOnHoldModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-10000 p-0 md:p-4">
+          <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
                 <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-[color:var(--tl-navy)]">
+              <h3 className="text-lg font-semibold text-(--text)">
                 Put Project On Hold
               </h3>
             </div>
             <form onSubmit={handleOnHoldSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-1">
+                <label className="block text-sm font-medium text-(--text) mb-1">
                   Reason for Hold <span className="text-red-500">*</span>
                 </label>
                 <textarea
@@ -1256,11 +1303,11 @@ export default function ProjectDetailsModal({
                   required
                   rows={3}
                   placeholder="Explain why this project is being put on hold..."
-                  className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-1">
+                <label className="block text-sm font-medium text-(--text) mb-1">
                   Expected Resume Date (optional)
                 </label>
                 <input
@@ -1270,7 +1317,7 @@ export default function ProjectDetailsModal({
                     setOnHoldForm({ ...onHoldForm, expectedResumeDate: e.target.value })
                   }
                   min={new Date().toISOString().split("T")[0]}
-                  className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                 />
               </div>
               <div className="flex gap-3">
@@ -1280,14 +1327,14 @@ export default function ProjectDetailsModal({
                     setShowOnHoldModal(false);
                     setOnHoldForm({ reason: "", expectedResumeDate: "" });
                   }}
-                  className="flex-1 rounded-xl border border-[color:var(--tl-sand)] px-4 py-2.5 text-sm font-medium text-[color:var(--tl-navy)]"
+                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={updatingStatus || !onHoldForm.reason.trim()}
-                  className="flex-1 rounded-xl bg-yellow-500 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 hover:bg-yellow-600 transition"
+                  className="flex-1 rounded-full bg-yellow-500 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 hover:bg-yellow-600 transition"
                 >
                   {updatingStatus ? "Updating..." : "Put On Hold"}
                 </button>
@@ -1299,10 +1346,10 @@ export default function ProjectDetailsModal({
 
       {/* Invite Client Modal */}
       {showInviteModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-10000 p-0 md:p-4">
+          <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-[color:var(--tl-navy)]">
+              <h3 className="text-lg font-semibold text-(--text)">
                 Invite Client to Project
               </h3>
               <button
@@ -1312,15 +1359,15 @@ export default function ProjectDetailsModal({
                   setInviteError("");
                   setInviteSuccess("");
                 }}
-                className="p-1 rounded-lg hover:bg-[color:var(--tl-offwhite)]"
+                className="p-1 rounded-lg hover:bg-(--bg)"
               >
-                <svg className="w-5 h-5 text-[color:var(--tl-mid)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-(--text)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            <p className="text-sm text-[color:var(--tl-mid)] mb-4">
+            <p className="text-sm text-(--text) mb-4">
               Send an invitation email to a client. They&apos;ll be able to sign up and automatically get access to this project.
             </p>
 
@@ -1338,7 +1385,7 @@ export default function ProjectDetailsModal({
 
             <form onSubmit={handleInviteClient} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-1">
+                <label className="block text-sm font-medium text-(--text) mb-1">
                   Client Email
                 </label>
                 <input
@@ -1347,30 +1394,30 @@ export default function ProjectDetailsModal({
                   onChange={(e) => setInviteEmail(e.target.value)}
                   required
                   placeholder="client@example.com"
-                  className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                 />
               </div>
               <button
                 type="submit"
                 disabled={sendingInvite || !inviteEmail.trim()}
-                className="w-full rounded-xl bg-[color:var(--tl-navy)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 hover:bg-[color:var(--tl-deep)] transition"
+                className="w-full tl-btn px-4 py-2.5 text-sm disabled:opacity-50"
               >
                 {sendingInvite ? "Sending..." : "Send Invitation"}
               </button>
             </form>
 
             {invitations.length > 0 && (
-              <div className="mt-6 pt-4 border-t border-[color:var(--tl-sand)]">
-                <p className="text-xs uppercase tracking-wider text-[color:var(--tl-mid)] mb-3">
+              <div className="mt-6 pt-4 border-t border-(--border)">
+                <p className="text-xs uppercase tracking-wider text-(--text) mb-3">
                   Previous Invitations
                 </p>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   {invitations.map((inv) => (
                     <div
                       key={inv.id}
-                      className="flex items-center justify-between p-2 rounded-lg bg-[color:var(--tl-offwhite)] text-sm"
+                      className="flex items-center justify-between p-2 rounded-lg bg-(--bg) text-sm"
                     >
-                      <span className="text-[color:var(--tl-navy)] truncate flex-1">
+                      <span className="text-(--text) truncate flex-1">
                         {inv.email}
                       </span>
                       <span
@@ -1394,4 +1441,9 @@ export default function ProjectDetailsModal({
       )}
     </div>
   );
+
+  // Use portal to render modal at document body level
+  return createPortal(modalContent, document.body);
 }
+
+

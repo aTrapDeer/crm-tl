@@ -381,7 +381,7 @@ export default function ProjectPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[color:var(--tl-navy)]" />
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-(--border)" />
       </div>
     );
   }
@@ -389,10 +389,10 @@ export default function ProjectPage() {
   if (!project) {
     return (
       <div className="text-center py-12">
-        <p className="text-[color:var(--tl-mid)]">Project not found</p>
+        <p className="text-(--text)">Project not found</p>
         <Link
           href="/dashboard"
-          className="text-[color:var(--tl-royal)] hover:underline mt-2 inline-block"
+          className="text-(--text) hover:underline mt-2 inline-block"
         >
           Return to Dashboard
         </Link>
@@ -407,7 +407,7 @@ export default function ProjectPage() {
         <div>
           <Link
             href={`/dashboard/${userRole}`}
-            className="text-sm text-[color:var(--tl-royal)] hover:underline mb-2 inline-flex items-center gap-1"
+            className="text-sm text-(--text) hover:underline mb-2 inline-flex items-center gap-1"
           >
             <svg
               className="w-4 h-4"
@@ -425,7 +425,7 @@ export default function ProjectPage() {
             Back to Dashboard
           </Link>
           <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold text-[color:var(--tl-navy)]">
+            <h1 className="text-3xl font-bold text-(--text)">
               {project.name}
             </h1>
             <span
@@ -437,7 +437,7 @@ export default function ProjectPage() {
             </span>
           </div>
           {project.description && (
-            <p className="text-[color:var(--tl-mid)] mt-2 max-w-2xl">
+            <p className="text-(--text) mt-2 max-w-2xl">
               {project.description}
             </p>
           )}
@@ -445,7 +445,7 @@ export default function ProjectPage() {
         {canEdit && (
           <button
             onClick={() => setShowEditProject(true)}
-            className="rounded-xl bg-[color:var(--tl-navy)] px-5 py-2.5 text-sm font-semibold text-white"
+            className="tl-btn px-5 py-2.5 text-sm"
           >
             Edit Project
           </button>
@@ -453,21 +453,21 @@ export default function ProjectPage() {
       </div>
 
       {/* Progress Section */}
-      <div className="rounded-2xl border border-[color:var(--tl-sand)] bg-white p-6">
-        <h2 className="text-lg font-semibold text-[color:var(--tl-navy)] mb-4">
+      <div className="tl-card p-6">
+        <h2 className="text-lg font-semibold text-(--text) mb-4">
           Project Progress
         </h2>
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-[color:var(--tl-mid)]">
+          <span className="text-sm text-(--text)">
             {stats.completed} of {stats.total} tasks completed
           </span>
-          <span className="text-2xl font-bold text-[color:var(--tl-navy)]">
+          <span className="text-2xl font-bold text-(--text)">
             {progressPercent}%
           </span>
         </div>
-        <div className="h-4 bg-[color:var(--tl-sand)] rounded-full overflow-hidden">
+        <div className="h-4 bg-(--bg) rounded-full overflow-hidden">
           <div
-            className="h-full bg-gradient-to-r from-[color:var(--tl-cyan)] to-[color:var(--tl-royal)] transition-all duration-500"
+            className="h-full bg-linear-to-r from-(--tl-cyan) to-(--tl-royal) transition-all duration-500"
             style={{ width: `${progressPercent}%` }}
           />
         </div>
@@ -477,43 +477,43 @@ export default function ProjectPage() {
         {/* Left Column */}
         <div className="lg:col-span-2 space-y-6">
           {/* Project Details */}
-          <div className="rounded-2xl border border-[color:var(--tl-sand)] bg-white p-6">
-            <h2 className="text-lg font-semibold text-[color:var(--tl-navy)] mb-4">
+          <div className="tl-card p-6">
+            <h2 className="text-lg font-semibold text-(--text) mb-4">
               Project Details
             </h2>
             <div className="grid sm:grid-cols-2 gap-4">
               {project.address && (
-                <div className="p-4 rounded-xl bg-[color:var(--tl-offwhite)]">
-                  <p className="text-xs uppercase tracking-wider text-[color:var(--tl-mid)]">
+                <div className="p-4 rounded-xl bg-(--bg)">
+                  <p className="text-xs uppercase tracking-wider text-(--text)">
                     Location
                   </p>
-                  <p className="text-sm font-medium text-[color:var(--tl-navy)] mt-1">
+                  <p className="text-sm font-medium text-(--text) mt-1">
                     {project.address}
                   </p>
                 </div>
               )}
               {project.start_date && (
-                <div className="p-4 rounded-xl bg-[color:var(--tl-offwhite)]">
-                  <p className="text-xs uppercase tracking-wider text-[color:var(--tl-mid)]">
+                <div className="p-4 rounded-xl bg-(--bg)">
+                  <p className="text-xs uppercase tracking-wider text-(--text)">
                     Start Date
                   </p>
-                  <p className="text-sm font-medium text-[color:var(--tl-navy)] mt-1">
+                  <p className="text-sm font-medium text-(--text) mt-1">
                     {formatDate(project.start_date)}
                   </p>
                 </div>
               )}
-              <div className="p-4 rounded-xl bg-[color:var(--tl-offwhite)]">
-                <p className="text-xs uppercase tracking-wider text-[color:var(--tl-mid)]">
+              <div className="p-4 rounded-xl bg-(--bg)">
+                <p className="text-xs uppercase tracking-wider text-(--text)">
                   Budget
                 </p>
-                <p className="text-lg font-semibold text-[color:var(--tl-navy)] mt-1">
+                <p className="text-lg font-semibold text-(--text) mt-1">
                   {project.budget_amount
                     ? formatCurrency(project.budget_amount)
                     : "Not set"}
                 </p>
               </div>
-              <div className="p-4 rounded-xl bg-[color:var(--tl-offwhite)]">
-                <p className="text-xs uppercase tracking-wider text-[color:var(--tl-mid)]">
+              <div className="p-4 rounded-xl bg-(--bg)">
+                <p className="text-xs uppercase tracking-wider text-(--text)">
                   Funding Status
                 </p>
                 <div className="flex items-center gap-2 mt-1">
@@ -522,18 +522,18 @@ export default function ProjectPage() {
                       project.is_funded ? "bg-green-500" : "bg-yellow-500"
                     }`}
                   />
-                  <span className="text-sm font-medium text-[color:var(--tl-navy)]">
+                  <span className="text-sm font-medium text-(--text)">
                     {project.is_funded ? "Funded" : "Pending Funding"}
                   </span>
                 </div>
               </div>
             </div>
             {project.funding_notes && (
-              <div className="mt-4 p-4 rounded-xl bg-[color:var(--tl-offwhite)]">
-                <p className="text-xs uppercase tracking-wider text-[color:var(--tl-mid)]">
+              <div className="mt-4 p-4 rounded-xl bg-(--bg)">
+                <p className="text-xs uppercase tracking-wider text-(--text)">
                   Funding Notes
                 </p>
-                <p className="text-sm text-[color:var(--tl-navy)] mt-1">
+                <p className="text-sm text-(--text) mt-1">
                   {project.funding_notes}
                 </p>
               </div>
@@ -541,24 +541,24 @@ export default function ProjectPage() {
           </div>
 
           {/* Photos */}
-          <div className="rounded-2xl border border-[color:var(--tl-sand)] bg-white p-6">
+          <div className="tl-card p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-[color:var(--tl-navy)]">
+              <h2 className="text-lg font-semibold text-(--text)">
                 Project Photos ({images.length})
               </h2>
               {canManageImages && (
                 <button
                   onClick={() => setShowAddImage(true)}
-                  className="text-sm px-4 py-2 rounded-lg bg-[color:var(--tl-navy)] text-white"
+                  className="tl-btn px-4 py-2 text-sm"
                 >
                   + Add Photo
                 </button>
               )}
             </div>
             {images.length === 0 ? (
-              <div className="text-center py-12 border-2 border-dashed border-[color:var(--tl-sand)] rounded-xl">
+              <div className="text-center py-12 border-2 border-dashed border-(--border) rounded-xl">
                 <svg
-                  className="w-16 h-16 mx-auto text-[color:var(--tl-sand)]"
+                  className="w-16 h-16 mx-auto text-(--text)"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -570,7 +570,7 @@ export default function ProjectPage() {
                     d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                   />
                 </svg>
-                <p className="text-[color:var(--tl-mid)] mt-4">No photos yet</p>
+                <p className="text-(--text) mt-4">No photos yet</p>
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
@@ -578,11 +578,11 @@ export default function ProjectPage() {
                   <div
                     key={image.id}
                     onClick={() => setShowImageViewer(image)}
-                    className="aspect-square rounded-xl bg-[color:var(--tl-offwhite)] overflow-hidden cursor-pointer relative group"
+                    className="aspect-square rounded-xl bg-(--bg) overflow-hidden cursor-pointer relative group"
                   >
                     <div className="absolute inset-0 flex flex-col items-center justify-center p-2">
                       <svg
-                        className="w-10 h-10 text-[color:var(--tl-sand)]"
+                        className="w-10 h-10 text-(--text)"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -594,7 +594,7 @@ export default function ProjectPage() {
                           d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                         />
                       </svg>
-                      <p className="text-xs text-[color:var(--tl-mid)] text-center truncate w-full mt-2">
+                      <p className="text-xs text-(--text) text-center truncate w-full mt-2">
                         {image.filename}
                       </p>
                     </div>
@@ -608,22 +608,22 @@ export default function ProjectPage() {
           </div>
 
           {/* Tasks */}
-          <div className="rounded-2xl border border-[color:var(--tl-sand)] bg-white p-6">
+          <div className="tl-card p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-[color:var(--tl-navy)]">
+              <h2 className="text-lg font-semibold text-(--text)">
                 Tasks ({tasks.length})
               </h2>
               {canManageTasks && (
                 <button
                   onClick={() => setShowAddTask(true)}
-                  className="text-sm px-4 py-2 rounded-lg bg-[color:var(--tl-navy)] text-white"
+                  className="tl-btn px-4 py-2 text-sm"
                 >
                   + Add Task
                 </button>
               )}
             </div>
             {tasks.length === 0 ? (
-              <p className="text-center text-[color:var(--tl-mid)] py-8">
+              <p className="text-center text-(--text) py-8">
                 No tasks yet
               </p>
             ) : (
@@ -634,16 +634,16 @@ export default function ProjectPage() {
                     className={`flex items-start gap-3 p-4 rounded-xl transition ${
                       task.is_completed
                         ? "bg-green-50"
-                        : "bg-[color:var(--tl-offwhite)]"
+                        : "bg-(--bg)"
                     }`}
                   >
                     <button
                       onClick={() => handleToggleTask(task)}
                       disabled={!canManageTasks}
-                      className={`mt-0.5 flex-shrink-0 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition ${
+                      className={`mt-0.5 shrink-0 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition ${
                         task.is_completed
                           ? "bg-green-500 border-green-500 text-white"
-                          : "border-[color:var(--tl-sand)] hover:border-[color:var(--tl-cyan)]"
+                          : "border-(--border) hover:border-(--border)"
                       } ${!canManageTasks ? "cursor-not-allowed opacity-50" : ""}`}
                     >
                       {task.is_completed && (
@@ -667,13 +667,13 @@ export default function ProjectPage() {
                         className={`font-medium ${
                           task.is_completed
                             ? "text-green-700 line-through"
-                            : "text-[color:var(--tl-navy)]"
+                            : "text-(--text)"
                         }`}
                       >
                         {task.title}
                       </p>
                       {task.description && (
-                        <p className="text-sm text-[color:var(--tl-mid)] mt-1">
+                        <p className="text-sm text-(--text) mt-1">
                           {task.description}
                         </p>
                       )}
@@ -708,12 +708,12 @@ export default function ProjectPage() {
         {/* Right Column */}
         <div className="space-y-6">
           {/* Team */}
-          <div className="rounded-2xl border border-[color:var(--tl-sand)] bg-white p-6">
-            <h2 className="text-lg font-semibold text-[color:var(--tl-navy)] mb-4">
+          <div className="tl-card p-6">
+            <h2 className="text-lg font-semibold text-(--text) mb-4">
               Project Team
             </h2>
             {team.length === 0 ? (
-              <p className="text-sm text-[color:var(--tl-mid)]">
+              <p className="text-sm text-(--text)">
                 No team members assigned
               </p>
             ) : (
@@ -721,17 +721,17 @@ export default function ProjectPage() {
                 {team.map((member) => (
                   <div
                     key={member.user_id}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-[color:var(--tl-offwhite)]"
+                    className="flex items-center gap-3 p-3 rounded-xl bg-(--bg)"
                   >
-                    <div className="w-10 h-10 rounded-full bg-[color:var(--tl-navy)] flex items-center justify-center text-white font-medium">
+                    <div className="w-10 h-10 rounded-full bg-(--bg) flex items-center justify-center text-white font-medium">
                       {member.first_name[0]}
                       {member.last_name[0]}
                     </div>
                     <div>
-                      <p className="font-medium text-[color:var(--tl-navy)]">
+                      <p className="font-medium text-(--text)">
                         {member.first_name} {member.last_name}
                       </p>
-                      <p className="text-xs text-[color:var(--tl-mid)] capitalize">
+                      <p className="text-xs text-(--text) capitalize">
                         {member.role}
                       </p>
                     </div>
@@ -742,45 +742,45 @@ export default function ProjectPage() {
           </div>
 
           {/* Updates */}
-          <div className="rounded-2xl border border-[color:var(--tl-sand)] bg-white p-6">
+          <div className="tl-card p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-[color:var(--tl-navy)]">
+              <h2 className="text-lg font-semibold text-(--text)">
                 Updates
               </h2>
               {canEdit && (
                 <button
                   onClick={() => setShowAddUpdate(true)}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-[color:var(--tl-navy)] text-white"
+                  className="tl-btn px-3 py-1.5 text-xs"
                 >
                   + Add
                 </button>
               )}
             </div>
             {updates.length === 0 ? (
-              <p className="text-sm text-[color:var(--tl-mid)]">No updates yet</p>
+              <p className="text-sm text-(--text)">No updates yet</p>
             ) : (
               <div className="space-y-4 max-h-96 overflow-y-auto">
                 {updates.map((update) => (
                   <div
                     key={update.id}
-                    className="p-3 rounded-xl bg-[color:var(--tl-offwhite)]"
+                    className="p-3 rounded-xl bg-(--bg)"
                   >
                     <div className="flex items-start justify-between">
-                      <p className="font-medium text-[color:var(--tl-navy)]">
+                      <p className="font-medium text-(--text)">
                         {update.title}
                       </p>
-                      <p className="text-xs text-[color:var(--tl-mid)]">
+                      <p className="text-xs text-(--text)">
                         {formatDateTime(update.created_at)}
                       </p>
                     </div>
                     {update.content && (
-                      <p className="text-sm text-[color:var(--tl-mid)] mt-1">
+                      <p className="text-sm text-(--text) mt-1">
                         {update.content}
                       </p>
                     )}
                     {update.user_name && (
-                      <p className="text-xs text-[color:var(--tl-mid)] mt-2">
-                        — {update.user_name}
+                      <p className="text-xs text-(--text) mt-2">
+                        - {update.user_name}
                       </p>
                     )}
                   </div>
@@ -793,14 +793,14 @@ export default function ProjectPage() {
 
       {/* Add Task Modal */}
       {showAddTask && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-[color:var(--tl-navy)] mb-4">
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
+          <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-(--text) mb-4">
               Add New Task
             </h3>
             <form onSubmit={handleAddTask} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-1">
+                <label className="block text-sm font-medium text-(--text) mb-1">
                   Task Title
                 </label>
                 <input
@@ -810,11 +810,11 @@ export default function ProjectPage() {
                     setNewTask({ ...newTask, title: e.target.value })
                   }
                   required
-                  className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)]"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text)"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-1">
+                <label className="block text-sm font-medium text-(--text) mb-1">
                   Description (optional)
                 </label>
                 <textarea
@@ -823,20 +823,20 @@ export default function ProjectPage() {
                     setNewTask({ ...newTask, description: e.target.value })
                   }
                   rows={3}
-                  className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)]"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text)"
                 />
               </div>
               <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={() => setShowAddTask(false)}
-                  className="flex-1 rounded-xl border border-[color:var(--tl-sand)] px-4 py-2.5 text-sm font-medium"
+                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 rounded-xl bg-[color:var(--tl-navy)] px-4 py-2.5 text-sm font-semibold text-white"
+                  className="flex-1 tl-btn px-4 py-2.5 text-sm"
                 >
                   Add Task
                 </button>
@@ -848,17 +848,17 @@ export default function ProjectPage() {
 
       {/* Add Image Modal */}
       {showAddImage && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-[color:var(--tl-navy)] mb-4">
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
+          <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-(--text) mb-4">
               Add Project Photo
             </h3>
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-[color:var(--tl-sand)] rounded-xl p-8 text-center cursor-pointer hover:border-[color:var(--tl-cyan)] transition mb-4"
+              className="border-2 border-dashed border-(--border) rounded-xl p-8 text-center cursor-pointer hover:border-(--border) transition mb-4"
             >
               <svg
-                className="w-12 h-12 mx-auto text-[color:var(--tl-sand)]"
+                className="w-12 h-12 mx-auto text-(--text)"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -870,7 +870,7 @@ export default function ProjectPage() {
                   d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
                 />
               </svg>
-              <p className="text-sm text-[color:var(--tl-mid)] mt-2">
+              <p className="text-sm text-(--text) mt-2">
                 Click to select a photo
               </p>
             </div>
@@ -881,8 +881,8 @@ export default function ProjectPage() {
               onChange={handleFileUpload}
               className="hidden"
             />
-            <div className="text-center text-sm text-[color:var(--tl-mid)] mb-4">
-              — or add manually —
+            <div className="text-center text-sm text-(--text) mb-4">
+              - or add manually -
             </div>
             <form onSubmit={handleAddImage} className="space-y-4">
               <input
@@ -893,7 +893,7 @@ export default function ProjectPage() {
                 }
                 required
                 placeholder="Filename (e.g., photo.jpg)"
-                className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)]"
+                className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text)"
               />
               <input
                 type="text"
@@ -902,19 +902,19 @@ export default function ProjectPage() {
                   setNewImage({ ...newImage, caption: e.target.value })
                 }
                 placeholder="Caption (optional)"
-                className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)]"
+                className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text)"
               />
               <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={() => setShowAddImage(false)}
-                  className="flex-1 rounded-xl border border-[color:var(--tl-sand)] px-4 py-2.5 text-sm font-medium"
+                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 rounded-xl bg-[color:var(--tl-navy)] px-4 py-2.5 text-sm font-semibold text-white"
+                  className="flex-1 tl-btn px-4 py-2.5 text-sm"
                 >
                   Add Photo
                 </button>
@@ -926,9 +926,9 @@ export default function ProjectPage() {
 
       {/* Add Update Modal */}
       {showAddUpdate && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-[color:var(--tl-navy)] mb-4">
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
+          <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-(--text) mb-4">
               Add Project Update
             </h3>
             <form onSubmit={handleAddUpdate} className="space-y-4">
@@ -940,7 +940,7 @@ export default function ProjectPage() {
                 }
                 required
                 placeholder="Update title"
-                className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)]"
+                className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text)"
               />
               <textarea
                 value={newUpdate.content}
@@ -949,19 +949,19 @@ export default function ProjectPage() {
                 }
                 rows={4}
                 placeholder="Details (optional)"
-                className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)]"
+                className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text)"
               />
               <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={() => setShowAddUpdate(false)}
-                  className="flex-1 rounded-xl border border-[color:var(--tl-sand)] px-4 py-2.5 text-sm font-medium"
+                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 rounded-xl bg-[color:var(--tl-navy)] px-4 py-2.5 text-sm font-semibold text-white"
+                  className="flex-1 tl-btn px-4 py-2.5 text-sm"
                 >
                   Add Update
                 </button>
@@ -973,14 +973,14 @@ export default function ProjectPage() {
 
       {/* Edit Project Modal */}
       {showEditProject && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-[color:var(--tl-navy)] mb-4">
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
+          <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-(--text) mb-4">
               Edit Project
             </h3>
             <form onSubmit={handleUpdateProject} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-1">
+                <label className="block text-sm font-medium text-(--text) mb-1">
                   Status
                 </label>
                 <select
@@ -988,7 +988,7 @@ export default function ProjectPage() {
                   onChange={(e) =>
                     setEditForm({ ...editForm, status: e.target.value })
                   }
-                  className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)]"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text)"
                 >
                   <option value="planning">Planning</option>
                   <option value="in_progress">In Progress</option>
@@ -999,11 +999,11 @@ export default function ProjectPage() {
               {userRole === "admin" && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-1">
+                    <label className="block text-sm font-medium text-(--text) mb-1">
                       Budget Amount
                     </label>
                     <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[color:var(--tl-mid)]">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-(--text)">
                         $
                       </span>
                       <input
@@ -1012,7 +1012,7 @@ export default function ProjectPage() {
                         onChange={(e) =>
                           setEditForm({ ...editForm, budget_amount: e.target.value })
                         }
-                        className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)]"
+                        className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text)"
                       />
                     </div>
                   </div>
@@ -1025,12 +1025,12 @@ export default function ProjectPage() {
                       }
                       className="w-5 h-5 rounded"
                     />
-                    <span className="text-sm font-medium text-[color:var(--tl-navy)]">
+                    <span className="text-sm font-medium text-(--text)">
                       Project is funded
                     </span>
                   </label>
                   <div>
-                    <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-1">
+                    <label className="block text-sm font-medium text-(--text) mb-1">
                       Funding Notes
                     </label>
                     <textarea
@@ -1039,7 +1039,7 @@ export default function ProjectPage() {
                         setEditForm({ ...editForm, funding_notes: e.target.value })
                       }
                       rows={2}
-                      className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)]"
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text)"
                     />
                   </div>
                 </>
@@ -1048,13 +1048,13 @@ export default function ProjectPage() {
                 <button
                   type="button"
                   onClick={() => setShowEditProject(false)}
-                  className="flex-1 rounded-xl border border-[color:var(--tl-sand)] px-4 py-2.5 text-sm font-medium"
+                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 rounded-xl bg-[color:var(--tl-navy)] px-4 py-2.5 text-sm font-semibold text-white"
+                  className="flex-1 tl-btn px-4 py-2.5 text-sm"
                 >
                   Save Changes
                 </button>
@@ -1066,22 +1066,22 @@ export default function ProjectPage() {
 
       {/* Image Viewer Modal */}
       {showImageViewer && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-3xl overflow-hidden">
-            <div className="p-4 border-b border-[color:var(--tl-sand)] flex items-center justify-between">
+        <div className="fixed inset-0 bg-black/80 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
+          <div className="tl-card w-full max-w-3xl overflow-hidden rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh]">
+            <div className="p-4 border-b border-(--border) flex items-center justify-between">
               <div>
-                <p className="font-medium text-[color:var(--tl-navy)]">
+                <p className="font-medium text-(--text)">
                   {showImageViewer.filename}
                 </p>
                 {showImageViewer.caption && (
-                  <p className="text-sm text-[color:var(--tl-mid)]">
+                  <p className="text-sm text-(--text)">
                     {showImageViewer.caption}
                   </p>
                 )}
               </div>
               <button
                 onClick={() => setShowImageViewer(null)}
-                className="p-2 rounded-lg hover:bg-[color:var(--tl-offwhite)]"
+                className="p-2 rounded-lg hover:bg-(--bg)"
               >
                 <svg
                   className="w-5 h-5"
@@ -1098,10 +1098,10 @@ export default function ProjectPage() {
                 </svg>
               </button>
             </div>
-            <div className="aspect-video bg-[color:var(--tl-offwhite)] flex items-center justify-center">
+            <div className="aspect-video bg-(--bg) flex items-center justify-center">
               <div className="text-center">
                 <svg
-                  className="w-24 h-24 mx-auto text-[color:var(--tl-sand)]"
+                  className="w-24 h-24 mx-auto text-(--text)"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -1113,18 +1113,18 @@ export default function ProjectPage() {
                     d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                   />
                 </svg>
-                <p className="text-[color:var(--tl-mid)] mt-4">
+                <p className="text-(--text) mt-4">
                   Image preview unavailable
                 </p>
-                <p className="text-xs text-[color:var(--tl-sand)]">
+                <p className="text-xs text-(--text)">
                   S3 not configured
                 </p>
               </div>
             </div>
-            <div className="p-4 flex items-center justify-between border-t border-[color:var(--tl-sand)]">
-              <div className="text-xs text-[color:var(--tl-mid)]">
+            <div className="p-4 flex items-center justify-between border-t border-(--border)">
+              <div className="text-xs text-(--text)">
                 {showImageViewer.uploader_name && (
-                  <span>Uploaded by {showImageViewer.uploader_name} • </span>
+                  <span>Uploaded by {showImageViewer.uploader_name} / </span>
                 )}
                 {formatDate(showImageViewer.created_at)}
               </div>
@@ -1143,4 +1143,3 @@ export default function ProjectPage() {
     </div>
   );
 }
-

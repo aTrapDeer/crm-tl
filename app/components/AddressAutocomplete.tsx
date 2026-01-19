@@ -202,7 +202,7 @@ export default function AddressAutocomplete({
         />
         {isLoading && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
-            <div className="w-4 h-4 border-2 border-[color:var(--tl-cyan)] border-t-transparent rounded-full animate-spin" />
+            <div className="w-4 h-4 border-2 border-(--border) border-t-transparent rounded-full animate-spin" />
           </div>
         )}
       </div>
@@ -210,7 +210,7 @@ export default function AddressAutocomplete({
       {isOpen && suggestions.length > 0 && (
         <div
           ref={dropdownRef}
-          className="absolute z-50 w-full mt-1 bg-white border border-[color:var(--tl-sand)] rounded-xl shadow-lg overflow-hidden"
+          className="absolute z-50 w-full mt-1 bg-white border border-(--border) rounded-xl shadow-lg overflow-hidden"
         >
           {suggestions.map((suggestion, index) => (
             <button
@@ -220,13 +220,13 @@ export default function AddressAutocomplete({
               onMouseEnter={() => setHighlightedIndex(index)}
               className={`w-full px-4 py-3 text-left text-sm transition ${
                 index === highlightedIndex
-                  ? "bg-[color:var(--tl-cyan)]/10 text-[color:var(--tl-navy)]"
-                  : "text-[color:var(--tl-navy)] hover:bg-[color:var(--tl-offwhite)]"
+                  ? "bg-(--bg)/10 text-(--text)"
+                  : "text-(--text) hover:bg-(--bg)"
               }`}
             >
               <div className="flex items-start gap-2">
                 <svg
-                  className="w-4 h-4 mt-0.5 text-[color:var(--tl-mid)] flex-shrink-0"
+                  className="w-4 h-4 mt-0.5 text-(--text) shrink-0"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -248,7 +248,7 @@ export default function AddressAutocomplete({
               </div>
             </button>
           ))}
-          <div className="px-4 py-2 text-xs text-[color:var(--tl-mid)] bg-[color:var(--tl-offwhite)] border-t border-[color:var(--tl-sand)]">
+          <div className="px-4 py-2 text-xs text-(--text) bg-(--bg) border-t border-(--border)">
             Powered by OpenStreetMap
           </div>
         </div>
@@ -256,3 +256,4 @@ export default function AddressAutocomplete({
     </div>
   );
 }
+

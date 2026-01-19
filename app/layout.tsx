@@ -1,14 +1,8 @@
 import type { Metadata } from "next";
-import { Fraunces, Manrope } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
-const fraunces = Fraunces({
-  variable: "--font-heading",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-const manrope = Manrope({
+const inter = Inter({
   variable: "--font-body",
   subsets: ["latin"],
   display: "swap",
@@ -18,6 +12,9 @@ export const metadata: Metadata = {
   title: "Taylor Leonard Corp | CRM Portal",
   description:
     "Unified client, employee, and maintenance portals for Taylor Leonard Corp.",
+  icons: {
+    icon: "/site-icon.ico",
+  },
 };
 
 export default function RootLayout({
@@ -27,9 +24,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${manrope.variable} ${fraunces.variable} antialiased`}>
-        {children}
-      </body>
+      <body className={`${inter.variable} antialiased`}>{children}</body>
     </html>
   );
 }
+

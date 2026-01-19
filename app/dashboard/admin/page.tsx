@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import ProjectDetailsModal from "@/app/components/ProjectDetailsModal";
 import AddressAutocomplete from "@/app/components/AddressAutocomplete";
 
@@ -37,6 +38,7 @@ interface Assignment {
 }
 
 export default function AdminDashboard() {
+  const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,6 +122,13 @@ export default function AdminDashboard() {
   }
 
   function handleOpenDetails(project: Project) {
+    if (typeof window !== "undefined") {
+      const isMobile = window.matchMedia("(max-width: 767px)").matches;
+      if (isMobile) {
+        router.push(`/dashboard/projects/${project.id}`);
+        return;
+      }
+    }
     setSelectedProject(project);
     setShowDetailsModal(true);
   }
@@ -183,7 +192,7 @@ export default function AdminDashboard() {
   }
 
   if (loading) {
-    return <div className="text-[color:var(--tl-mid)]">Loading...</div>;
+    return <div className="text-(--text)">Loading...</div>;
   }
 
   const totalBudget = projects.reduce(
@@ -193,103 +202,103 @@ export default function AdminDashboard() {
   const fundedProjects = projects.filter((p) => p.is_funded).length;
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 md:space-y-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-semibold text-[color:var(--tl-navy)]">
+          <h2 className="text-xl md:text-2xl font-semibold text-(--text)">
             Admin Dashboard
           </h2>
-          <p className="text-sm text-[color:var(--tl-mid)] mt-1">
+          <p className="text-xs md:text-sm text-(--text) mt-1">
             Manage all projects, users, and assignments
           </p>
         </div>
         <button
           onClick={() => setShowNewProject(true)}
-          className="rounded-xl bg-[color:var(--tl-navy)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_16px_rgba(1,34,79,0.2)] transition hover:bg-[color:var(--tl-deep)]"
+          className="tl-btn px-4 md:px-6 py-2.5 text-sm w-full sm:w-auto"
         >
           + New Project
         </button>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="rounded-xl border border-[color:var(--tl-sand)] bg-white p-5">
-          <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--tl-mid)]">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
+        <div className="tl-card p-3 md:p-5">
+          <p className="text-[10px] md:text-xs uppercase tracking-[0.15em] md:tracking-[0.2em] text-(--text)">
             Total Projects
           </p>
-          <p className="text-3xl font-semibold text-[color:var(--tl-navy)] mt-2">
+          <p className="text-2xl md:text-3xl font-semibold text-(--text) mt-1 md:mt-2">
             {projects.length}
           </p>
         </div>
-        <div className="rounded-xl border border-[color:var(--tl-sand)] bg-white p-5">
-          <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--tl-mid)]">
+        <div className="tl-card p-3 md:p-5">
+          <p className="text-[10px] md:text-xs uppercase tracking-[0.15em] md:tracking-[0.2em] text-(--text)">
             Active Projects
           </p>
-          <p className="text-3xl font-semibold text-[color:var(--tl-navy)] mt-2">
+          <p className="text-2xl md:text-3xl font-semibold text-(--text) mt-1 md:mt-2">
             {projects.filter((p) => p.status === "in_progress").length}
           </p>
         </div>
-        <div className="rounded-xl border border-[color:var(--tl-sand)] bg-white p-5">
-          <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--tl-mid)]">
+        <div className="tl-card p-3 md:p-5">
+          <p className="text-[10px] md:text-xs uppercase tracking-[0.15em] md:tracking-[0.2em] text-(--text)">
             Total Budget
           </p>
-          <p className="text-2xl font-semibold text-[color:var(--tl-navy)] mt-2">
+          <p className="text-lg md:text-2xl font-semibold text-(--text) mt-1 md:mt-2">
             {formatCurrency(totalBudget)}
           </p>
         </div>
-        <div className="rounded-xl border border-[color:var(--tl-sand)] bg-white p-5">
-          <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--tl-mid)]">
+        <div className="tl-card p-3 md:p-5">
+          <p className="text-[10px] md:text-xs uppercase tracking-[0.15em] md:tracking-[0.2em] text-(--text)">
             Funded Projects
           </p>
-          <p className="text-3xl font-semibold text-[color:var(--tl-navy)] mt-2">
+          <p className="text-2xl md:text-3xl font-semibold text-(--text) mt-1 md:mt-2">
             {fundedProjects}
-            <span className="text-lg text-[color:var(--tl-mid)]">
+            <span className="text-sm md:text-lg text-(--text)">
               /{projects.length}
             </span>
           </p>
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-8">
+      <div className="grid lg:grid-cols-2 gap-4 md:gap-8">
         {/* Projects List */}
-        <div className="rounded-2xl border border-[color:var(--tl-sand)] bg-white p-6">
-          <h3 className="text-lg font-semibold text-[color:var(--tl-navy)] mb-4">
+        <div className="tl-card p-4 md:p-6">
+          <h3 className="text-base md:text-lg font-semibold text-(--text) mb-3 md:mb-4">
             All Projects
           </h3>
           {projects.length === 0 ? (
-            <p className="text-sm text-[color:var(--tl-mid)]">
+            <p className="text-sm text-(--text)">
               No projects yet. Create your first project.
             </p>
           ) : (
-            <div className="space-y-3 max-h-[500px] overflow-y-auto">
+            <div className="space-y-3 max-h-[400px] md:max-h-[500px] overflow-y-auto -mx-2 px-2">
               {projects.map((project) => (
                 <div
                   key={project.id}
-                  className={`p-4 rounded-xl border transition ${
+                  className={`p-3 md:p-4 rounded-xl border-2 transition shadow-sm ${
                     statusCardStyles[project.status] || statusCardStyles.planning
                   } ${
                     selectedProject?.id === project.id
-                      ? "border-[color:var(--tl-cyan)] bg-[color:var(--tl-cyan)]/5"
-                      : "border-[color:var(--tl-sand)] hover:border-[color:var(--tl-teal)]"
+                      ? "border-(--border) bg-(--bg)/10 shadow-md"
+                      : "border-(--border) hover:border-(--border) bg-white"
                   }`}
                 >
                   <div
                     onClick={() => handleSelectProject(project)}
                     className="cursor-pointer"
                   >
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-[color:var(--tl-navy)] truncate">
+                        <p className="font-semibold text-(--text) text-sm md:text-base line-clamp-2">
                           {project.name}
                         </p>
                         {project.description && (
-                          <p className="text-sm text-[color:var(--tl-mid)] mt-1 truncate">
+                          <p className="text-xs md:text-sm text-(--text) mt-1 line-clamp-2">
                             {project.description}
                           </p>
                         )}
                       </div>
                       <span
-                        className={`ml-2 text-xs px-2 py-1 rounded-full whitespace-nowrap ${
+                        className={`shrink-0 text-[10px] md:text-xs px-2 py-1 rounded-full whitespace-nowrap font-medium ${
                           statusColors[project.status] || statusColors.planning
                         }`}
                       >
@@ -301,7 +310,7 @@ export default function AdminDashboard() {
                     {project.status === "on_hold" && project.on_hold_reason && (
                       <div className="mt-2 p-2 rounded-lg bg-yellow-100 border border-yellow-200">
                         <div className="flex items-center gap-2 text-xs text-yellow-800">
-                          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                           </svg>
                           <span className="line-clamp-1">{project.on_hold_reason}</span>
@@ -310,23 +319,23 @@ export default function AdminDashboard() {
                     )}
 
                     {/* Budget & Funding Row */}
-                    <div className="flex items-center gap-4 mt-3 text-xs">
+                    <div className="flex items-center gap-3 md:gap-4 mt-3 text-xs">
                       {project.budget_amount ? (
-                        <span className="text-[color:var(--tl-navy)] font-medium">
+                        <span className="text-(--text) font-semibold">
                           {formatCurrency(project.budget_amount)}
                         </span>
                       ) : (
-                        <span className="text-[color:var(--tl-mid)]">
-                          No budget set
+                        <span className="text-(--text)">
+                          No budget
                         </span>
                       )}
-                      <span className="flex items-center gap-1">
+                      <span className="flex items-center gap-1.5">
                         <span
-                          className={`w-2 h-2 rounded-full ${
+                          className={`w-2.5 h-2.5 rounded-full ${
                             project.is_funded ? "bg-green-500" : "bg-yellow-500"
                           }`}
                         />
-                        <span className="text-[color:var(--tl-mid)]">
+                        <span className="text-(--text) font-medium">
                           {project.is_funded ? "Funded" : "Pending"}
                         </span>
                       </span>
@@ -334,7 +343,7 @@ export default function AdminDashboard() {
                   </div>
                   <button
                     onClick={() => handleOpenDetails(project)}
-                    className="mt-3 w-full text-xs py-2 rounded-lg bg-[color:var(--tl-navy)] text-white hover:bg-[color:var(--tl-deep)] transition"
+                    className="mt-3 w-full tl-btn px-4 py-2.5 md:py-2 text-xs font-semibold"
                   >
                     View Details & Tasks
                   </button>
@@ -345,20 +354,20 @@ export default function AdminDashboard() {
         </div>
 
         {/* Project Details & Assignments */}
-        <div className="rounded-2xl border border-[color:var(--tl-sand)] bg-white p-6">
+        <div className="tl-card p-4 md:p-6">
           {selectedProject ? (
             <>
               <div className="flex items-start justify-between mb-4">
-                <h3 className="text-lg font-semibold text-[color:var(--tl-navy)]">
+                <h3 className="text-lg font-semibold text-(--text)">
                   {selectedProject.name} - Assignments
                 </h3>
                 <button
                   onClick={() => handleOpenDetails(selectedProject)}
-                  className="p-2 rounded-lg hover:bg-[color:var(--tl-offwhite)] transition"
+                  className="p-2 rounded-lg hover:bg-(--bg) transition"
                   title="View full details"
                 >
                   <svg
-                    className="w-5 h-5 text-[color:var(--tl-navy)]"
+                    className="w-5 h-5 text-(--text)"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -374,17 +383,17 @@ export default function AdminDashboard() {
               </div>
 
               {/* Quick Budget Info */}
-              <div className="p-3 rounded-lg bg-[color:var(--tl-offwhite)] mb-4">
+              <div className="p-3 rounded-lg bg-(--bg) mb-4">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-[color:var(--tl-mid)]">Budget:</span>
-                  <span className="font-medium text-[color:var(--tl-navy)]">
+                  <span className="text-(--text)">Budget:</span>
+                  <span className="font-medium text-(--text)">
                     {selectedProject.budget_amount
                       ? formatCurrency(selectedProject.budget_amount)
                       : "Not set"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm mt-1">
-                  <span className="text-[color:var(--tl-mid)]">Status:</span>
+                  <span className="text-(--text)">Status:</span>
                   <span className="flex items-center gap-1">
                     <span
                       className={`w-2 h-2 rounded-full ${
@@ -393,7 +402,7 @@ export default function AdminDashboard() {
                           : "bg-yellow-500"
                       }`}
                     />
-                    <span className="font-medium text-[color:var(--tl-navy)]">
+                    <span className="font-medium text-(--text)">
                       {selectedProject.is_funded ? "Funded" : "Pending Funding"}
                     </span>
                   </span>
@@ -401,11 +410,11 @@ export default function AdminDashboard() {
               </div>
 
               <div className="mb-6">
-                <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--tl-mid)] mb-3">
+                <p className="text-xs uppercase tracking-[0.2em] text-(--text) mb-3">
                   Currently Assigned
                 </p>
                 {assignments.length === 0 ? (
-                  <p className="text-sm text-[color:var(--tl-mid)]">
+                  <p className="text-sm text-(--text)">
                     No users assigned yet
                   </p>
                 ) : (
@@ -413,14 +422,14 @@ export default function AdminDashboard() {
                     {assignments.map((a) => (
                       <div
                         key={a.user_id}
-                        className="flex items-center justify-between p-3 rounded-lg bg-[color:var(--tl-offwhite)]"
+                        className="flex items-center justify-between p-3 rounded-lg bg-(--bg)"
                       >
                         <div>
-                          <p className="text-sm font-medium text-[color:var(--tl-navy)]">
+                          <p className="text-sm font-medium text-(--text)">
                             {a.first_name} {a.last_name}
                           </p>
-                          <p className="text-xs text-[color:var(--tl-mid)]">
-                            {a.email} • {a.role}
+                          <p className="text-xs text-(--text)">
+                            {a.email} / {a.role}
                           </p>
                         </div>
                         <button
@@ -436,7 +445,7 @@ export default function AdminDashboard() {
               </div>
 
               <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--tl-mid)] mb-3">
+                <p className="text-xs uppercase tracking-[0.2em] text-(--text) mb-3">
                   Add User
                 </p>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -445,19 +454,19 @@ export default function AdminDashboard() {
                     .map((user) => (
                       <div
                         key={user.id}
-                        className="flex items-center justify-between p-3 rounded-lg border border-[color:var(--tl-sand)]"
+                        className="flex items-center justify-between p-3 rounded-lg border border-(--border)"
                       >
                         <div>
-                          <p className="text-sm font-medium text-[color:var(--tl-navy)]">
+                          <p className="text-sm font-medium text-(--text)">
                             {user.first_name} {user.last_name}
                           </p>
-                          <p className="text-xs text-[color:var(--tl-mid)]">
-                            {user.email} • {user.role}
+                          <p className="text-xs text-(--text)">
+                            {user.email} / {user.role}
                           </p>
                         </div>
                         <button
                           onClick={() => handleAssignUser(user.id)}
-                          className="text-xs text-[color:var(--tl-royal)] hover:underline"
+                          className="text-xs text-(--text) hover:underline"
                         >
                           Assign
                         </button>
@@ -468,7 +477,7 @@ export default function AdminDashboard() {
             </>
           ) : (
             <div className="text-center py-12">
-              <p className="text-[color:var(--tl-mid)]">
+              <p className="text-(--text)">
                 Select a project to manage assignments
               </p>
             </div>
@@ -477,31 +486,32 @@ export default function AdminDashboard() {
       </div>
 
       {/* Users List */}
-      <div className="rounded-2xl border border-[color:var(--tl-sand)] bg-white p-6">
-        <h3 className="text-lg font-semibold text-[color:var(--tl-navy)] mb-4">
+      <div className="tl-card p-4 md:p-6">
+        <h3 className="text-base md:text-lg font-semibold text-(--text) mb-3 md:mb-4">
           All Users ({users.length})
         </h3>
-        <div className="overflow-x-auto">
-          <table className="w-full">
+        <div className="overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
+          <table className="w-full min-w-[400px]">
             <thead>
-              <tr className="text-left text-xs uppercase tracking-[0.2em] text-[color:var(--tl-mid)]">
+              <tr className="text-left text-[10px] md:text-xs uppercase tracking-[0.15em] md:tracking-[0.2em] text-(--text)">
                 <th className="pb-3">Name</th>
-                <th className="pb-3">Email</th>
+                <th className="pb-3 hidden sm:table-cell">Email</th>
                 <th className="pb-3">Role</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[color:var(--tl-sand)]">
+            <tbody className="divide-y divide-(--divide)">
               {users.map((user) => (
                 <tr key={user.id}>
-                  <td className="py-3 text-sm text-[color:var(--tl-navy)]">
-                    {user.first_name} {user.last_name}
+                  <td className="py-3 text-xs md:text-sm text-(--text)">
+                    <div>{user.first_name} {user.last_name}</div>
+                    <div className="text-[10px] text-(--text) sm:hidden">{user.email}</div>
                   </td>
-                  <td className="py-3 text-sm text-[color:var(--tl-mid)]">
+                  <td className="py-3 text-sm text-(--text) hidden sm:table-cell">
                     {user.email}
                   </td>
                   <td className="py-3">
                     <span
-                      className={`text-xs px-2 py-1 rounded-full ${
+                      className={`text-[10px] md:text-xs px-2 py-1 rounded-full ${
                         user.role === "admin"
                           ? "bg-purple-100 text-purple-700"
                           : user.role === "worker"
@@ -521,14 +531,14 @@ export default function AdminDashboard() {
 
       {/* New Project Modal */}
       {showNewProject && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-8 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-xl font-semibold text-[color:var(--tl-navy)] mb-6">
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-9999 p-0 md:p-4">
+          <div className="tl-card p-4 md:p-8 w-full max-w-lg max-h-[95vh] md:max-h-[90vh] overflow-y-auto rounded-t-3xl md:rounded-3xl rounded-b-none md:rounded-b-3xl">
+            <h3 className="text-lg md:text-xl font-semibold text-(--text) mb-4 md:mb-6">
               Create New Project
             </h3>
             <form onSubmit={handleCreateProject} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-2">
+                <label className="block text-sm font-medium text-(--text) mb-2">
                   Project Name
                 </label>
                 <input
@@ -538,11 +548,11 @@ export default function AdminDashboard() {
                     setNewProject({ ...newProject, name: e.target.value })
                   }
                   required
-                  className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-2">
+                <label className="block text-sm font-medium text-(--text) mb-2">
                   Description
                 </label>
                 <textarea
@@ -551,11 +561,11 @@ export default function AdminDashboard() {
                     setNewProject({ ...newProject, description: e.target.value })
                   }
                   rows={3}
-                  className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-2">
+                <label className="block text-sm font-medium text-(--text) mb-2">
                   Address
                 </label>
                 <AddressAutocomplete
@@ -564,11 +574,11 @@ export default function AdminDashboard() {
                     setNewProject({ ...newProject, address: value })
                   }
                   placeholder="Start typing an address..."
-                  className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-2">
+                <label className="block text-sm font-medium text-(--text) mb-2">
                   Status
                 </label>
                 <select
@@ -576,7 +586,7 @@ export default function AdminDashboard() {
                   onChange={(e) =>
                     setNewProject({ ...newProject, status: e.target.value })
                   }
-                  className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                 >
                   <option value="planning">Planning</option>
                   <option value="in_progress">In Progress</option>
@@ -586,17 +596,17 @@ export default function AdminDashboard() {
               </div>
 
               {/* Budget Section */}
-              <div className="pt-4 border-t border-[color:var(--tl-sand)]">
-                <p className="text-sm font-semibold text-[color:var(--tl-navy)] mb-4">
+              <div className="pt-4 border-t border-(--border)">
+                <p className="text-sm font-semibold text-(--text) mb-4">
                   Budget & Funding
                 </p>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-2">
+                    <label className="block text-sm font-medium text-(--text) mb-2">
                       Budget Amount
                     </label>
                     <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[color:var(--tl-mid)]">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-(--text)">
                         $
                       </span>
                       <input
@@ -609,7 +619,7 @@ export default function AdminDashboard() {
                           })
                         }
                         placeholder="0"
-                        className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
+                        className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                       />
                     </div>
                   </div>
@@ -624,15 +634,15 @@ export default function AdminDashboard() {
                             is_funded: e.target.checked,
                           })
                         }
-                        className="w-5 h-5 rounded border-[color:var(--tl-sand)] text-[color:var(--tl-cyan)] focus:ring-[color:var(--tl-cyan)]"
+                        className="w-5 h-5 rounded border-(--border) text-(--text) focus:ring-(--ring)"
                       />
-                      <span className="text-sm font-medium text-[color:var(--tl-navy)]">
+                      <span className="text-sm font-medium text-(--text)">
                         Project is funded
                       </span>
                     </label>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-[color:var(--tl-navy)] mb-2">
+                    <label className="block text-sm font-medium text-(--text) mb-2">
                       Funding Notes
                     </label>
                     <textarea
@@ -645,7 +655,7 @@ export default function AdminDashboard() {
                       }
                       rows={2}
                       placeholder="Notes about funding status, payment terms, etc."
-                      className="w-full px-4 py-2.5 rounded-xl border border-[color:var(--tl-sand)] bg-[color:var(--tl-offwhite)] text-[color:var(--tl-navy)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tl-cyan)]"
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                     />
                   </div>
                 </div>
@@ -655,13 +665,13 @@ export default function AdminDashboard() {
                 <button
                   type="button"
                   onClick={() => setShowNewProject(false)}
-                  className="flex-1 rounded-xl border border-[color:var(--tl-sand)] px-4 py-2.5 text-sm font-medium text-[color:var(--tl-navy)]"
+                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 rounded-xl bg-[color:var(--tl-navy)] px-4 py-2.5 text-sm font-semibold text-white"
+                  className="flex-1 tl-btn px-4 py-2.5 text-sm"
                 >
                   Create Project
                 </button>
@@ -683,3 +693,5 @@ export default function AdminDashboard() {
     </div>
   );
 }
+
+

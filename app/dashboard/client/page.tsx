@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import ProjectDetailsModal from "@/app/components/ProjectDetailsModal";
 
 interface Project {
@@ -28,6 +29,7 @@ interface ProjectUpdate {
 }
 
 export default function ClientDashboard() {
+  const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -62,6 +64,13 @@ export default function ClientDashboard() {
   }
 
   function handleOpenDetails(project: Project) {
+    if (typeof window !== "undefined") {
+      const isMobile = window.matchMedia("(max-width: 767px)").matches;
+      if (isMobile) {
+        router.push(`/dashboard/projects/${project.id}`);
+        return;
+      }
+    }
     setSelectedProject(project);
     setShowDetailsModal(true);
   }
@@ -105,25 +114,25 @@ export default function ClientDashboard() {
   }
 
   if (loading) {
-    return <div className="text-[color:var(--tl-mid)]">Loading...</div>;
+    return <div className="text-(--text)">Loading...</div>;
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4 md:space-y-8">
       <div>
-        <h2 className="text-2xl font-semibold text-[color:var(--tl-navy)]">
+        <h2 className="text-xl md:text-2xl font-semibold text-(--text)">
           Client Dashboard
         </h2>
-        <p className="text-sm text-[color:var(--tl-mid)] mt-1">
+        <p className="text-xs md:text-sm text-(--text) mt-1">
           View your projects and track progress
         </p>
       </div>
 
       {projects.length === 0 ? (
-        <div className="rounded-2xl border border-[color:var(--tl-sand)] bg-white p-12 text-center">
-          <div className="w-16 h-16 rounded-full bg-[color:var(--tl-cyan)]/20 flex items-center justify-center mx-auto mb-4">
+        <div className="tl-card p-12 text-center">
+          <div className="w-16 h-16 rounded-full bg-(--bg)/20 flex items-center justify-center mx-auto mb-4">
             <svg
-              className="w-8 h-8 text-[color:var(--tl-navy)]"
+              className="w-8 h-8 text-(--text)"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -136,38 +145,38 @@ export default function ClientDashboard() {
               />
             </svg>
           </div>
-          <p className="text-[color:var(--tl-navy)] font-medium">
+          <p className="text-(--text) font-medium">
             No projects yet
           </p>
-          <p className="text-sm text-[color:var(--tl-mid)] mt-2">
+          <p className="text-sm text-(--text) mt-2">
             You&apos;ll see your projects here once you&apos;re added to one.
           </p>
         </div>
       ) : (
-        <div className="grid lg:grid-cols-3 gap-8">
+        <div className="grid lg:grid-cols-3 gap-4 md:gap-8">
           {/* Projects List */}
           <div className="lg:col-span-1">
-            <div className="rounded-2xl border border-[color:var(--tl-sand)] bg-white p-6">
-              <h3 className="text-sm font-semibold text-[color:var(--tl-navy)] mb-4">
+            <div className="tl-card p-4 md:p-6">
+              <h3 className="text-sm font-semibold text-(--text) mb-3 md:mb-4">
                 Your Projects ({projects.length})
               </h3>
-              <div className="space-y-3">
+              <div className="space-y-3 max-h-[400px] md:max-h-[500px] overflow-y-auto -mx-2 px-2">
                 {projects.map((project) => (
                   <div
                     key={project.id}
-                    className={`p-4 rounded-xl border cursor-pointer transition ${
+                    className={`p-3 md:p-4 rounded-xl border-2 cursor-pointer transition shadow-sm bg-white ${
                       selectedProject?.id === project.id
-                        ? "border-[color:var(--tl-cyan)] bg-[color:var(--tl-cyan)]/5"
-                        : "border-[color:var(--tl-sand)] hover:border-[color:var(--tl-teal)]"
+                        ? "border-(--border) bg-(--bg)/5 shadow-md"
+                        : "border-(--border) hover:border-(--border) hover:shadow-md"
                     }`}
                   >
                     <div onClick={() => handleSelectProject(project)}>
-                      <p className="font-medium text-[color:var(--tl-navy)]">
+                      <p className="font-semibold text-(--text) text-sm md:text-base line-clamp-2">
                         {project.name}
                       </p>
                       <div className="flex items-center justify-between mt-2">
                         <span
-                          className={`text-xs px-2 py-1 rounded-full ${
+                          className={`text-xs px-2 py-1 rounded-full font-medium ${
                             statusColors[project.status] || statusColors.planning
                           }`}
                         >
@@ -177,7 +186,7 @@ export default function ClientDashboard() {
                     </div>
                     <button
                       onClick={() => handleOpenDetails(project)}
-                      className="mt-3 w-full text-xs py-2 rounded-lg bg-[color:var(--tl-navy)] text-white hover:bg-[color:var(--tl-deep)] transition"
+                      className="mt-3 w-full tl-btn px-4 py-2.5 md:py-2 text-xs font-semibold"
                     >
                       View Details & Tasks
                     </button>
@@ -188,17 +197,17 @@ export default function ClientDashboard() {
           </div>
 
           {/* Project Details */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-4 md:space-y-6">
             {selectedProject ? (
               <>
                 {/* Project Overview */}
-                <div className="rounded-2xl border border-[color:var(--tl-sand)] bg-white p-6">
+                <div className="tl-card p-4 md:p-6">
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--tl-mid)]">
+                      <p className="text-xs uppercase tracking-[0.2em] text-(--text)">
                         Project Overview
                       </p>
-                      <h3 className="text-xl font-semibold text-[color:var(--tl-navy)] mt-1">
+                      <h3 className="text-xl font-semibold text-(--text) mt-1">
                         {selectedProject.name}
                       </h3>
                     </div>
@@ -214,11 +223,11 @@ export default function ClientDashboard() {
                       </span>
                       <button
                         onClick={() => handleOpenDetails(selectedProject)}
-                        className="p-2 rounded-lg hover:bg-[color:var(--tl-offwhite)] transition"
+                        className="p-2 rounded-lg hover:bg-(--bg) transition"
                         title="View full details"
                       >
                         <svg
-                          className="w-5 h-5 text-[color:var(--tl-navy)]"
+                          className="w-5 h-5 text-(--text)"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -235,44 +244,44 @@ export default function ClientDashboard() {
                   </div>
 
                   {selectedProject.description && (
-                    <p className="text-sm text-[color:var(--tl-mid)] mt-4">
+                    <p className="text-sm text-(--text) mt-4">
                       {selectedProject.description}
                     </p>
                   )}
 
-                  <div className="grid sm:grid-cols-2 gap-4 mt-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 mt-4 md:mt-6">
                     {selectedProject.address && (
-                      <div className="p-4 rounded-xl bg-[color:var(--tl-offwhite)]">
-                        <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--tl-mid)]">
+                      <div className="p-4 rounded-xl bg-(--bg)">
+                        <p className="text-xs uppercase tracking-[0.2em] text-(--text)">
                           Location
                         </p>
-                        <p className="text-sm font-medium text-[color:var(--tl-navy)] mt-1">
+                        <p className="text-sm font-medium text-(--text) mt-1">
                           {selectedProject.address}
                         </p>
                       </div>
                     )}
                     {selectedProject.start_date && (
-                      <div className="p-4 rounded-xl bg-[color:var(--tl-offwhite)]">
-                        <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--tl-mid)]">
+                      <div className="p-4 rounded-xl bg-(--bg)">
+                        <p className="text-xs uppercase tracking-[0.2em] text-(--text)">
                           Start Date
                         </p>
-                        <p className="text-sm font-medium text-[color:var(--tl-navy)] mt-1">
+                        <p className="text-sm font-medium text-(--text) mt-1">
                           {formatDate(selectedProject.start_date)}
                         </p>
                       </div>
                     )}
                     {selectedProject.budget_amount && (
-                      <div className="p-4 rounded-xl bg-[color:var(--tl-offwhite)]">
-                        <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--tl-mid)]">
+                      <div className="p-4 rounded-xl bg-(--bg)">
+                        <p className="text-xs uppercase tracking-[0.2em] text-(--text)">
                           Budget
                         </p>
-                        <p className="text-sm font-medium text-[color:var(--tl-navy)] mt-1">
+                        <p className="text-sm font-medium text-(--text) mt-1">
                           ${selectedProject.budget_amount.toLocaleString()}
                         </p>
                       </div>
                     )}
-                    <div className="p-4 rounded-xl bg-[color:var(--tl-offwhite)]">
-                      <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--tl-mid)]">
+                    <div className="p-4 rounded-xl bg-(--bg)">
+                      <p className="text-xs uppercase tracking-[0.2em] text-(--text)">
                         Funding Status
                       </p>
                       <div className="flex items-center gap-2 mt-1">
@@ -283,7 +292,7 @@ export default function ClientDashboard() {
                               : "bg-yellow-500"
                           }`}
                         />
-                        <span className="text-sm font-medium text-[color:var(--tl-navy)]">
+                        <span className="text-sm font-medium text-(--text)">
                           {selectedProject.is_funded ? "Funded" : "Pending"}
                         </span>
                       </div>
@@ -292,13 +301,13 @@ export default function ClientDashboard() {
                 </div>
 
                 {/* Progress Timeline */}
-                <div className="rounded-2xl border border-[color:var(--tl-sand)] bg-white p-6">
-                  <h4 className="text-sm font-semibold text-[color:var(--tl-navy)] mb-4">
+                <div className="tl-card p-4 md:p-6">
+                  <h4 className="text-sm font-semibold text-(--text) mb-3 md:mb-4">
                     Progress Updates
                   </h4>
                   {updates.length === 0 ? (
                     <div className="text-center py-8">
-                      <p className="text-sm text-[color:var(--tl-mid)]">
+                      <p className="text-sm text-(--text)">
                         No updates yet. Check back soon!
                       </p>
                     </div>
@@ -307,27 +316,27 @@ export default function ClientDashboard() {
                       {updates.map((update, index) => (
                         <div key={update.id} className="flex gap-4">
                           <div className="flex flex-col items-center">
-                            <div className="w-3 h-3 rounded-full bg-[color:var(--tl-cyan)]" />
+                            <div className="w-3 h-3 rounded-full bg-(--bg)" />
                             {index < updates.length - 1 && (
-                              <div className="w-0.5 h-full bg-[color:var(--tl-sand)] my-1" />
+                              <div className="w-0.5 h-full bg-(--bg) my-1" />
                             )}
                           </div>
                           <div className="flex-1 pb-4">
                             <div className="flex items-start justify-between">
-                              <p className="font-medium text-[color:var(--tl-navy)]">
+                              <p className="font-medium text-(--text)">
                                 {update.title}
                               </p>
-                              <p className="text-xs text-[color:var(--tl-mid)]">
+                              <p className="text-xs text-(--text)">
                                 {formatDateTime(update.created_at)}
                               </p>
                             </div>
                             {update.content && (
-                              <p className="text-sm text-[color:var(--tl-mid)] mt-1">
+                              <p className="text-sm text-(--text) mt-1">
                                 {update.content}
                               </p>
                             )}
                             {update.user_name && (
-                              <p className="text-xs text-[color:var(--tl-mid)] mt-2">
+                              <p className="text-xs text-(--text) mt-2">
                                 Posted by {update.user_name}
                               </p>
                             )}
@@ -339,8 +348,8 @@ export default function ClientDashboard() {
                 </div>
               </>
             ) : (
-              <div className="rounded-2xl border border-[color:var(--tl-sand)] bg-white p-12 text-center">
-                <p className="text-[color:var(--tl-mid)]">
+              <div className="tl-card p-12 text-center">
+                <p className="text-(--text)">
                   Select a project to view details and updates
                 </p>
               </div>
@@ -361,3 +370,4 @@ export default function ClientDashboard() {
     </div>
   );
 }
+

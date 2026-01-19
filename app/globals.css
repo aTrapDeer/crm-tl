@@ -10,6 +10,10 @@
   --tl-offwhite: #f7f8fb;
   --tl-sand: #e8edf4;
   --tl-ink: #0c1c33;
+  --tl-blue-500: #3b82f6;
+  --tl-blue-600: #2563eb;
+  --tl-slate-300: #cbd5e1;
+  --tl-slate-400: #94a3b8;
 }
 
 @theme inline {
@@ -25,13 +29,17 @@ body {
   background: var(--tl-offwhite);
   color: var(--tl-navy);
   font-family: var(--font-body), "Segoe UI", sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
   margin: 0;
 }
 
 h1,
 h2,
 h3 {
-  font-family: var(--font-heading), "Times New Roman", serif;
+  font-family: var(--font-body), "Segoe UI", sans-serif;
 }
 
 ::selection {
@@ -57,3 +65,176 @@ h3 {
     transform: translateY(-16px);
   }
 }
+
+.tl-hero {
+  background: linear-gradient(135deg, var(--tl-navy), var(--tl-deep), var(--tl-navy));
+  color: #ffffff;
+}
+
+.tl-card {
+  background: #ffffff;
+  border: 1px solid rgba(31, 79, 170, 0.18);
+  border-radius: 1.5rem;
+  box-shadow: 0 25px 50px -12px rgba(1, 34, 79, 0.2);
+  transition: transform 700ms ease, box-shadow 700ms ease;
+}
+
+.tl-card-dark {
+  background: linear-gradient(135deg, rgba(4, 50, 113, 0.95), rgba(1, 34, 79, 0.95));
+  border: 1px solid rgba(31, 79, 170, 0.3);
+  border-radius: 1.5rem;
+  box-shadow: 0 25px 50px -12px rgba(1, 34, 79, 0.6);
+  color: #ffffff;
+  transition: transform 700ms ease, box-shadow 700ms ease;
+}
+
+.tl-btn {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.4rem;
+  justify-content: center;
+  background: var(--tl-blue-500);
+  border-radius: 9999px;
+  color: #ffffff;
+  font-weight: 500;
+  box-shadow: 0 25px 50px -12px rgba(59, 130, 246, 0.35);
+  transition: transform 500ms ease, box-shadow 500ms ease, background-color 500ms ease;
+}
+
+.tl-btn:hover {
+  background: var(--tl-blue-600);
+  box-shadow: 0 25px 50px -12px rgba(1, 183, 231, 0.25);
+  transform: scale(1.05);
+}
+
+.tl-btn-outline {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.4rem;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 9999px;
+  color: #ffffff;
+  font-weight: 500;
+  background: transparent;
+  backdrop-filter: blur(8px);
+  transition: transform 500ms ease, background-color 500ms ease, color 500ms ease;
+}
+
+.tl-btn-outline:hover {
+  background: #ffffff;
+  color: var(--tl-navy);
+  transform: scale(1.05);
+}
+
+.tl-badge {
+  border: 1px solid rgba(31, 79, 170, 0.5);
+  background: rgba(31, 79, 170, 0.3);
+  color: #bfdbfe;
+  border-radius: 9999px;
+  font-weight: 500;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.glass-dark {
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.focus-visible:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--tl-blue-500);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--tl-navy);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, var(--tl-royal), var(--tl-deep));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to bottom, var(--tl-cyan), var(--tl-royal));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Mobile-specific styles for job site accessibility */
+@media (max-width: 640px) {
+  /* Larger touch targets for buttons */
+  .tl-btn,
+  .tl-btn-outline {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Better tap targets for form inputs */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  textarea,
+  select {
+    font-size: 16px !important; /* Prevents iOS zoom on focus */
+    min-height: 48px;
+    padding: 12px 16px;
+  }
+
+  /* Checkbox and radio larger touch targets */
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-width: 24px;
+    min-height: 24px;
+  }
+
+  /* Scrollbar hide on mobile for cleaner look */
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  /* Card spacing adjustments */
+  .tl-card {
+    border-radius: 1rem;
+  }
+
+  /* Safe area padding for notched devices */
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* iOS-specific fixes */
+@supports (-webkit-touch-callout: none) {
+  /* Fix for iOS momentum scrolling */
+  .overflow-y-auto,
+  .overflow-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Prevent text size adjustment on orientation change */
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+}
+
+
