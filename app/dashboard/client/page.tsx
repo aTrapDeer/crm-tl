@@ -14,6 +14,8 @@ interface Project {
   budget_amount: number | null;
   is_funded: boolean;
   funding_notes: string | null;
+  on_hold_reason: string | null;
+  expected_resume_date: string | null;
   created_at: string;
 }
 
