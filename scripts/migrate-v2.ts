@@ -1,13 +1,21 @@
-import { turso } from "../lib/turso";
+// Load environment variables FIRST, before any other imports
+import { config } from "dotenv";
+import { join } from "path";
+
+// Load environment variables from .env.local
+const envResult = config({ path: join(process.cwd(), ".env.local") });
+
+if (envResult.error) {
+  console.warn("Warning: Could not load .env.local file:", envResult.error.message);
+}
 
 // Helper function to check if a column exists in a table
-async function columnExists(tableName: string, columnName: string): Promise<boolean> {
+async function columnExists(tableName: string, columnName: string, turso: any): Promise<boolean> {
   try {
     const result = await turso.execute(
       `PRAGMA table_info(${tableName})`
     );
-    const columns = result.rows as Array<{ name: string }>;
-    return columns.some((col) => col.name === columnName);
+    return result.rows.some((row: Record<string, unknown>) => (row.name as string) === columnName);
   } catch {
     // If PRAGMA fails, assume column doesn't exist (safer to try adding it)
     return false;
@@ -15,7 +23,7 @@ async function columnExists(tableName: string, columnName: string): Promise<bool
 }
 
 // Helper function to check if a table exists
-async function tableExists(tableName: string): Promise<boolean> {
+async function tableExists(tableName: string, turso: any): Promise<boolean> {
   try {
     const result = await turso.execute(
       `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
@@ -29,11 +37,14 @@ async function tableExists(tableName: string): Promise<boolean> {
 }
 
 async function migrate() {
+  // Dynamically import turso AFTER env vars are loaded
+  const { turso } = await import("../lib/turso");
+  
   console.log("Running migration v2...");
   console.log("This migration will preserve all existing data.\n");
 
   // Add new columns to projects table
-  if (!(await columnExists("projects", "on_hold_reason"))) {
+  if (!(await columnExists("projects", "on_hold_reason", turso))) {
     try {
       await turso.execute(
         "ALTER TABLE projects ADD COLUMN on_hold_reason TEXT"
@@ -47,7 +58,7 @@ async function migrate() {
     console.log("✓ on_hold_reason column already exists");
   }
 
-  if (!(await columnExists("projects", "expected_resume_date"))) {
+  if (!(await columnExists("projects", "expected_resume_date", turso))) {
     try {
       await turso.execute(
         "ALTER TABLE projects ADD COLUMN expected_resume_date TEXT"
@@ -62,7 +73,7 @@ async function migrate() {
   }
 
   // Create project_invitations table
-  if (!(await tableExists("project_invitations"))) {
+  if (!(await tableExists("project_invitations", turso))) {
     try {
       await turso.execute(`
         CREATE TABLE project_invitations (
