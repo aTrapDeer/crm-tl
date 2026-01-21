@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
+import Link from "next/link";
 import SignatureCapture from "./SignatureCapture";
 
 interface WorkOrder {
@@ -382,14 +383,39 @@ export default function WorkOrderDetailsModal({
               {workOrder.company || "No company"} {workOrder.department ? `- ${workOrder.department}` : ""}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-(--bg) rounded-full transition ml-4"
-          >
-            <svg className="w-5 h-5 text-(--text)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2 ml-4">
+            <Link
+              href={`/dashboard/management/work-orders/${workOrder.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 hover:bg-(--bg) rounded-full transition"
+              title="Open in new tab"
+            >
+              <svg className="w-5 h-5 text-(--text)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </Link>
+            {canDelete && (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="p-2 hover:bg-red-50 rounded-full transition"
+                title="Delete work order"
+              >
+                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-(--bg) rounded-full transition"
+              title="Close"
+            >
+              <svg className="w-5 h-5 text-(--text)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -415,14 +441,6 @@ export default function WorkOrderDetailsModal({
                   >
                     Edit Execution Details
                   </button>
-                  {canDelete && (
-                    <button
-                      onClick={() => setShowDeleteConfirm(true)}
-                      className="px-4 py-2 text-sm rounded-full border border-red-300 text-red-600 hover:bg-red-50 transition"
-                    >
-                      Delete
-                    </button>
-                  )}
                 </div>
               )}
 

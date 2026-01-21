@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import WorkOrderListView from "@/app/components/WorkOrderListView";
 import WorkOrderDetailsModal from "@/app/components/WorkOrderDetailsModal";
 import DocumentManager from "@/app/components/DocumentManager";
@@ -83,32 +84,6 @@ export default function ManagementPage() {
   const [loading, setLoading] = useState(true);
   const [selectedWorkOrder, setSelectedWorkOrder] = useState<WorkOrder | null>(null);
 
-  // Create work order modal
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [users, setUsers] = useState<User[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [creating, setCreating] = useState(false);
-  const [newWorkOrder, setNewWorkOrder] = useState({
-    date: new Date().toISOString().slice(0, 10),
-    time_received: new Date().toTimeString().slice(0, 5),
-    phone: "",
-    email: "",
-    company: "",
-    department: "",
-    location: "",
-    unit: "",
-    area: "",
-    access_needed: "",
-    preferred_entry_time: "",
-    priority: "normal" as WorkOrder["priority"],
-    service_type: "maintenance" as WorkOrder["service_type"],
-    description: "",
-    assigned_to: "",
-    scheduled_date: "",
-    scheduled_time: "",
-    project_id: "",
-  });
-
   // Check auth
   useEffect(() => {
     async function checkAuth() {
@@ -156,76 +131,13 @@ export default function ManagementPage() {
     }
   }, []);
 
-  const fetchUsersAndProjects = useCallback(async () => {
-    try {
-      const [usersRes, projectsRes] = await Promise.all([
-        fetch("/api/users"),
-        fetch("/api/projects"),
-      ]);
-      const usersData = await usersRes.json();
-      const projectsData = await projectsRes.json();
-      setUsers((usersData.users || []).filter((u: User) => u.role !== "client"));
-      setProjects(projectsData.projects || []);
-    } catch (error) {
-      console.error("Failed to fetch users/projects:", error);
-    }
-  }, []);
-
   useEffect(() => {
     if (user) {
-      Promise.all([fetchWorkOrders(), fetchStats(), fetchUsersAndProjects()]).finally(() => {
+      Promise.all([fetchWorkOrders(), fetchStats()]).finally(() => {
         setLoading(false);
       });
     }
-  }, [user, fetchWorkOrders, fetchStats, fetchUsersAndProjects]);
-
-  async function handleCreateWorkOrder(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newWorkOrder.description.trim()) return;
-
-    setCreating(true);
-    try {
-      const res = await fetch("/api/work-orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...newWorkOrder,
-          assigned_to: newWorkOrder.assigned_to || null,
-          project_id: newWorkOrder.project_id || null,
-        }),
-      });
-
-      if (res.ok) {
-        setShowCreateModal(false);
-        setNewWorkOrder({
-          date: new Date().toISOString().slice(0, 10),
-          time_received: new Date().toTimeString().slice(0, 5),
-          phone: "",
-          email: "",
-          company: "",
-          department: "",
-          location: "",
-          unit: "",
-          area: "",
-          access_needed: "",
-          preferred_entry_time: "",
-          priority: "normal",
-          service_type: "maintenance",
-          description: "",
-          assigned_to: "",
-          scheduled_date: "",
-          scheduled_time: "",
-          project_id: "",
-        });
-        fetchWorkOrders();
-        fetchStats();
-      }
-    } catch (error) {
-      console.error("Failed to create work order:", error);
-    } finally {
-      setCreating(false);
-    }
-  }
+  }, [user, fetchWorkOrders, fetchStats]);
 
   function handleWorkOrderUpdate(updated: WorkOrder) {
     setWorkOrders((prev) =>
@@ -259,12 +171,12 @@ export default function ManagementPage() {
             <p className="text-sm text-(--text)/60">Manage work orders and documents</p>
           </div>
           {activeTab === "work-orders" && (
-            <button
-              onClick={() => setShowCreateModal(true)}
+            <Link
+              href="/dashboard/management/work-orders/new"
               className="tl-btn px-4 py-2.5 text-sm"
             >
               + New Work Order
-            </button>
+            </Link>
           )}
         </div>
 
@@ -347,268 +259,6 @@ export default function ManagementPage() {
           onWorkOrderUpdate={handleWorkOrderUpdate}
           onWorkOrderDelete={handleWorkOrderDelete}
         />
-      )}
-
-      {/* Create Work Order Modal */}
-      {showCreateModal && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-end md:items-center justify-center z-9999 p-0 md:p-4"
-          onClick={() => setShowCreateModal(false)}
-        >
-          <div
-            className="tl-card w-full max-w-2xl h-svh md:h-auto md:max-h-[90vh] overflow-hidden flex flex-col rounded-none md:rounded-3xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Mobile drag handle */}
-            <div className="md:hidden flex justify-center pt-3 pb-1 bg-white">
-              <div className="w-10 h-1 bg-gray-300 rounded-full"></div>
-            </div>
-
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 md:p-6 border-b border-(--border)">
-              <h2 className="text-xl font-semibold text-(--text)">New Work Order</h2>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="p-2 hover:bg-(--bg) rounded-full transition"
-              >
-                <svg className="w-5 h-5 text-(--text)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Form */}
-            <form onSubmit={handleCreateWorkOrder} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
-              {/* Contact Info */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-(--text) uppercase tracking-wide">Contact Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-(--text) mb-1">Phone</label>
-                    <input
-                      type="tel"
-                      value={newWorkOrder.phone}
-                      onChange={(e) => setNewWorkOrder({ ...newWorkOrder, phone: e.target.value })}
-                      placeholder="(555) 123-4567"
-                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-(--text) mb-1">Email</label>
-                    <input
-                      type="email"
-                      value={newWorkOrder.email}
-                      onChange={(e) => setNewWorkOrder({ ...newWorkOrder, email: e.target.value })}
-                      placeholder="email@example.com"
-                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-(--text) mb-1">Company</label>
-                    <input
-                      type="text"
-                      value={newWorkOrder.company}
-                      onChange={(e) => setNewWorkOrder({ ...newWorkOrder, company: e.target.value })}
-                      placeholder="Company name"
-                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-(--text) mb-1">Department</label>
-                    <input
-                      type="text"
-                      value={newWorkOrder.department}
-                      onChange={(e) => setNewWorkOrder({ ...newWorkOrder, department: e.target.value })}
-                      placeholder="Department"
-                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Location */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-(--text) uppercase tracking-wide">Location</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-(--text) mb-1">Location</label>
-                    <input
-                      type="text"
-                      value={newWorkOrder.location}
-                      onChange={(e) => setNewWorkOrder({ ...newWorkOrder, location: e.target.value })}
-                      placeholder="Building/Address"
-                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-(--text) mb-1">Unit</label>
-                    <input
-                      type="text"
-                      value={newWorkOrder.unit}
-                      onChange={(e) => setNewWorkOrder({ ...newWorkOrder, unit: e.target.value })}
-                      placeholder="Unit #"
-                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-(--text) mb-1">Area</label>
-                    <input
-                      type="text"
-                      value={newWorkOrder.area}
-                      onChange={(e) => setNewWorkOrder({ ...newWorkOrder, area: e.target.value })}
-                      placeholder="Area"
-                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-(--text) mb-1">Access Needed</label>
-                    <input
-                      type="text"
-                      value={newWorkOrder.access_needed}
-                      onChange={(e) => setNewWorkOrder({ ...newWorkOrder, access_needed: e.target.value })}
-                      placeholder="Key, Code, etc."
-                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-(--text) mb-1">Preferred Entry Time</label>
-                    <input
-                      type="text"
-                      value={newWorkOrder.preferred_entry_time}
-                      onChange={(e) => setNewWorkOrder({ ...newWorkOrder, preferred_entry_time: e.target.value })}
-                      placeholder="9AM - 5PM"
-                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Work Details */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-(--text) uppercase tracking-wide">Work Details</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-(--text) mb-1">Priority *</label>
-                    <select
-                      value={newWorkOrder.priority}
-                      onChange={(e) => setNewWorkOrder({ ...newWorkOrder, priority: e.target.value as WorkOrder["priority"] })}
-                      required
-                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                    >
-                      <option value="emergency">Emergency</option>
-                      <option value="high">High</option>
-                      <option value="normal">Normal</option>
-                      <option value="low">Low</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-(--text) mb-1">Service Type *</label>
-                    <select
-                      value={newWorkOrder.service_type}
-                      onChange={(e) => setNewWorkOrder({ ...newWorkOrder, service_type: e.target.value as WorkOrder["service_type"] })}
-                      required
-                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                    >
-                      {SERVICE_TYPES.map((type) => (
-                        <option key={type.value} value={type.value}>
-                          {type.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-(--text) mb-1">Description *</label>
-                  <textarea
-                    value={newWorkOrder.description}
-                    onChange={(e) => setNewWorkOrder({ ...newWorkOrder, description: e.target.value })}
-                    required
-                    rows={4}
-                    placeholder="Describe the issue or work requested..."
-                    className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                  />
-                </div>
-              </div>
-
-              {/* Assignment */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-(--text) uppercase tracking-wide">Assignment (Optional)</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-(--text) mb-1">Assign To</label>
-                    <select
-                      value={newWorkOrder.assigned_to}
-                      onChange={(e) => setNewWorkOrder({ ...newWorkOrder, assigned_to: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                    >
-                      <option value="">Unassigned</option>
-                      {users.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.first_name} {u.last_name} ({u.role})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-(--text) mb-1">Link to Project</label>
-                    <select
-                      value={newWorkOrder.project_id}
-                      onChange={(e) => setNewWorkOrder({ ...newWorkOrder, project_id: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                    >
-                      <option value="">No project</option>
-                      {projects.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-(--text) mb-1">Scheduled Date</label>
-                    <input
-                      type="date"
-                      value={newWorkOrder.scheduled_date}
-                      onChange={(e) => setNewWorkOrder({ ...newWorkOrder, scheduled_date: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-(--text) mb-1">Scheduled Time</label>
-                    <input
-                      type="time"
-                      value={newWorkOrder.scheduled_time}
-                      onChange={(e) => setNewWorkOrder({ ...newWorkOrder, scheduled_time: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Submit */}
-              <div className="flex gap-3 pt-4 border-t border-(--border)">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="flex-1 tl-btn px-4 py-2.5 text-sm disabled:opacity-50"
-                >
-                  {creating ? "Creating..." : "Create Work Order"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
       )}
     </div>
   );

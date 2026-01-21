@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "db:init": "tsx scripts/init-db.ts",
-    "db:seed-admin": "tsx scripts/seed-admin.ts"
+    "db:seed-admin": "tsx scripts/seed-admin.ts",
+    "db:fix-work-orders": "tsx scripts/fix-work-orders-schema.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.15.12",
