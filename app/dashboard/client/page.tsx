@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import ProjectDetailsModal from "@/app/components/ProjectDetailsModal";
+import ClientDocumentPortal from "@/app/components/ClientDocumentPortal";
 
 interface Project {
   id: string;
@@ -35,6 +36,7 @@ export default function ClientDashboard() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [updates, setUpdates] = useState<ProjectUpdate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"projects" | "documents">("projects");
 
   useEffect(() => {
     fetchProjects();
@@ -124,11 +126,42 @@ export default function ClientDashboard() {
           Client Dashboard
         </h2>
         <p className="text-xs md:text-sm text-(--text) mt-1">
-          View your projects and track progress
+          View your projects, track progress, and access shared documents
         </p>
       </div>
 
-      {projects.length === 0 ? (
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-(--border)">
+        <button
+          onClick={() => setActiveTab("projects")}
+          className={`px-4 py-3 text-sm font-medium border-b-2 transition ${
+            activeTab === "projects"
+              ? "border-(--text) text-(--text)"
+              : "border-transparent text-(--text)/60 hover:text-(--text)"
+          }`}
+        >
+          Projects
+        </button>
+        <button
+          onClick={() => setActiveTab("documents")}
+          className={`px-4 py-3 text-sm font-medium border-b-2 transition ${
+            activeTab === "documents"
+              ? "border-(--text) text-(--text)"
+              : "border-transparent text-(--text)/60 hover:text-(--text)"
+          }`}
+        >
+          Documents
+        </button>
+      </div>
+
+      {activeTab === "documents" ? (
+        <div className="tl-card p-4 md:p-6">
+          <h3 className="text-sm font-semibold text-(--text) mb-4">
+            Shared Documents
+          </h3>
+          <ClientDocumentPortal />
+        </div>
+      ) : projects.length === 0 ? (
         <div className="tl-card p-12 text-center">
           <div className="w-16 h-16 rounded-full bg-(--bg)/20 flex items-center justify-center mx-auto mb-4">
             <svg

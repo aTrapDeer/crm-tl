@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import ProjectDetailsModal from "@/app/components/ProjectDetailsModal";
 import AddressAutocomplete from "@/app/components/AddressAutocomplete";
 
@@ -212,12 +213,14 @@ export default function AdminDashboard() {
             Manage all projects, users, and assignments
           </p>
         </div>
-        <button
-          onClick={() => setShowNewProject(true)}
-          className="tl-btn px-4 md:px-6 py-2.5 text-sm w-full sm:w-auto"
-        >
-          + New Project
-        </button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <button
+            onClick={() => setShowNewProject(true)}
+            className="flex-1 sm:flex-initial tl-btn px-4 md:px-6 py-2.5 text-sm"
+          >
+            + New Project
+          </button>
+        </div>
       </div>
 
       {/* Stats */}

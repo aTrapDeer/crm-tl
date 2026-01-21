@@ -21,6 +21,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showAdminMenu, setShowAdminMenu] = useState(false);
 
   useEffect(() => {
     async function checkSession() {
@@ -100,6 +101,48 @@ export default function DashboardLayout({
           </div>
 
           <div className="flex items-center gap-2 md:gap-4">
+            {/* Management Portal Link - Admin Only */}
+            {user.role === "admin" && (
+              <div className="relative hidden md:block">
+                <button
+                  type="button"
+                  onClick={() => setShowAdminMenu((prev) => !prev)}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  Admin
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {showAdminMenu && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setShowAdminMenu(false)}
+                    />
+                    <div className="absolute right-0 mt-2 w-44 rounded-xl bg-white shadow-xl border border-(--border) overflow-hidden z-50">
+                      <Link
+                        href="/dashboard/admin"
+                        className="block px-4 py-2.5 text-xs font-medium text-(--text) hover:bg-(--bg) transition"
+                        onClick={() => setShowAdminMenu(false)}
+                      >
+                        Projects
+                      </Link>
+                      <Link
+                        href="/dashboard/management"
+                        className="block px-4 py-2.5 text-xs font-medium text-(--text) hover:bg-(--bg) transition"
+                        onClick={() => setShowAdminMenu(false)}
+                      >
+                        Management
+                      </Link>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             <div className="text-right">
               <p className="text-xs md:text-sm font-medium text-white">
                 {user.first_name} {user.last_name}
@@ -130,6 +173,5 @@ export default function DashboardLayout({
     </div>
   );
 }
-
 
 
