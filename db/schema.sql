@@ -245,3 +245,22 @@ CREATE TABLE IF NOT EXISTS client_documents (
 
 CREATE INDEX IF NOT EXISTS idx_client_documents_document ON client_documents(document_id);
 CREATE INDEX IF NOT EXISTS idx_client_documents_client ON client_documents(client_user_id);
+
+-- ============ WORK ORDER CUSTOMER INVITATIONS ============
+
+CREATE TABLE IF NOT EXISTS work_order_invitations (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  work_order_id TEXT NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
+  customer_name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  token TEXT NOT NULL UNIQUE,
+  invited_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'expired')),
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  accepted_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_work_order_invitations_order ON work_order_invitations(work_order_id);
+CREATE INDEX IF NOT EXISTS idx_work_order_invitations_email ON work_order_invitations(email);
+CREATE INDEX IF NOT EXISTS idx_work_order_invitations_token ON work_order_invitations(token);

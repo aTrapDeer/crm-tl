@@ -607,3 +607,108 @@ export async function searchWorkOrders(filters: WorkOrderFilters): Promise<WorkO
 
   return result.rows.map(mapRowToWorkOrder);
 }
+
+// ============ WORK ORDER CUSTOMER INVITATIONS ============
+
+export interface WorkOrderInvitation {
+  id: string;
+  work_order_id: string;
+  customer_name: string;
+  email: string;
+  token: string;
+  invited_by: string | null;
+  inviter_name?: string;
+  status: "pending" | "accepted" | "expired";
+  expires_at: string;
+  created_at: string;
+  accepted_at: string | null;
+}
+
+function mapRowToInvitation(row: Record<string, unknown>): WorkOrderInvitation {
+  return {
+    id: row.id as string,
+    work_order_id: row.work_order_id as string,
+    customer_name: row.customer_name as string,
+    email: row.email as string,
+    token: row.token as string,
+    invited_by: row.invited_by as string | null,
+    inviter_name: row.inviter_name as string | undefined,
+    status: row.status as "pending" | "accepted" | "expired",
+    expires_at: row.expires_at as string,
+    created_at: row.created_at as string,
+    accepted_at: row.accepted_at as string | null,
+  };
+}
+
+export async function getWorkOrderInvitations(workOrderId: string): Promise<WorkOrderInvitation[]> {
+  const result = await turso.execute({
+    sql: `SELECT woi.*, u.first_name || ' ' || u.last_name as inviter_name
+          FROM work_order_invitations woi
+          LEFT JOIN users u ON woi.invited_by = u.id
+          WHERE woi.work_order_id = ?
+          ORDER BY woi.created_at DESC`,
+    args: [workOrderId],
+  });
+  return result.rows.map(mapRowToInvitation);
+}
+
+export async function createWorkOrderInvitation(data: {
+  work_order_id: string;
+  customer_name: string;
+  email: string;
+  invited_by: string;
+}): Promise<WorkOrderInvitation> {
+  const id = crypto.randomUUID().replace(/-/g, "");
+  const token = crypto.randomUUID().replace(/-/g, "");
+
+  // Expires in 30 days
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 30);
+
+  await turso.execute({
+    sql: `INSERT INTO work_order_invitations (id, work_order_id, customer_name, email, token, invited_by, expires_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, data.work_order_id, data.customer_name, data.email, token, data.invited_by, expiresAt.toISOString()],
+  });
+
+  const result = await turso.execute({
+    sql: `SELECT woi.*, u.first_name || ' ' || u.last_name as inviter_name
+          FROM work_order_invitations woi
+          LEFT JOIN users u ON woi.invited_by = u.id
+          WHERE woi.id = ?`,
+    args: [id],
+  });
+  return mapRowToInvitation(result.rows[0]);
+}
+
+export async function getWorkOrderInvitationByToken(token: string): Promise<WorkOrderInvitation | null> {
+  const result = await turso.execute({
+    sql: `SELECT woi.*, u.first_name || ' ' || u.last_name as inviter_name
+          FROM work_order_invitations woi
+          LEFT JOIN users u ON woi.invited_by = u.id
+          WHERE woi.token = ?`,
+    args: [token],
+  });
+
+  if (result.rows.length === 0) return null;
+
+  const invitation = mapRowToInvitation(result.rows[0]);
+
+  // Check if expired
+  if (new Date(invitation.expires_at) < new Date() && invitation.status === "pending") {
+    await turso.execute({
+      sql: `UPDATE work_order_invitations SET status = 'expired' WHERE id = ?`,
+      args: [invitation.id],
+    });
+    invitation.status = "expired";
+  }
+
+  return invitation;
+}
+
+export async function deleteWorkOrderInvitation(invitationId: string): Promise<void> {
+  await turso.execute({
+    sql: `DELETE FROM work_order_invitations WHERE id = ?`,
+    args: [invitationId],
+  });
+}

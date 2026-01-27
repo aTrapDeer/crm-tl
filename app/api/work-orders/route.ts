@@ -7,6 +7,7 @@ import {
   searchWorkOrders,
   type WorkOrderFilters,
 } from "@/lib/work-orders";
+import { sendWorkOrderChangeNotification } from "@/lib/email";
 import { cookies } from "next/headers";
 
 export async function GET(request: Request) {
@@ -137,6 +138,17 @@ export async function POST(request: Request) {
       project_id: body.project_id,
       created_by: user.id,
     });
+
+    // Send email notification to admins
+    sendWorkOrderChangeNotification({
+      workOrderId: workOrder.id,
+      workOrderNumber: workOrder.work_order_number,
+      action: "created",
+      description: workOrder.description,
+      performedBy: `${user.first_name} ${user.last_name}`,
+      company: workOrder.company || undefined,
+      location: workOrder.location || undefined,
+    }).catch(console.error);
 
     return Response.json({ workOrder });
   } catch (error) {

@@ -4,6 +4,7 @@ import {
   getWorkOrderSignatures,
   addWorkOrderSignature,
 } from "@/lib/work-orders";
+import { sendSignatureAlertEmail } from "@/lib/email";
 import { cookies, headers } from "next/headers";
 
 export async function GET(
@@ -125,6 +126,17 @@ export async function POST(
       signature_data: body.signature_data,
       ip_address: ipAddress || undefined,
     });
+
+    // Send signature alert email to all associated parties
+    sendSignatureAlertEmail({
+      workOrderId: id,
+      workOrderNumber: workOrder.work_order_number,
+      signerType: body.signer_type,
+      signerName: body.signer_name,
+      signerTitle: body.signer_title,
+      company: workOrder.company || undefined,
+      location: workOrder.location || undefined,
+    }).catch(console.error);
 
     return Response.json({ signature });
   } catch (error) {

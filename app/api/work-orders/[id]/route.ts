@@ -4,6 +4,7 @@ import {
   updateWorkOrder,
   deleteWorkOrder,
 } from "@/lib/work-orders";
+import { sendWorkOrderChangeNotification } from "@/lib/email";
 import { cookies } from "next/headers";
 
 export async function GET(
@@ -93,6 +94,8 @@ export async function PATCH(
 
     const body = await request.json();
 
+    const previousStatus = workOrder.work_completed;
+
     const updatedWorkOrder = await updateWorkOrder(id, {
       date: body.date,
       time_received: body.time_received,
@@ -120,6 +123,36 @@ export async function PATCH(
       work_summary: body.work_summary,
       project_id: body.project_id,
     });
+
+    // Send email notification based on what changed
+    if (updatedWorkOrder) {
+      const newStatus = body.work_completed;
+
+      if (newStatus === "completed" && previousStatus !== "completed") {
+        // Work order was marked as completed
+        sendWorkOrderChangeNotification({
+          workOrderId: id,
+          workOrderNumber: updatedWorkOrder.work_order_number,
+          action: "completed",
+          description: updatedWorkOrder.description,
+          performedBy: `${user.first_name} ${user.last_name}`,
+          company: updatedWorkOrder.company || undefined,
+          location: updatedWorkOrder.location || undefined,
+        }).catch(console.error);
+      } else if (newStatus && newStatus !== previousStatus) {
+        // Status changed to something other than completed
+        sendWorkOrderChangeNotification({
+          workOrderId: id,
+          workOrderNumber: updatedWorkOrder.work_order_number,
+          action: "status_changed",
+          newStatus: newStatus,
+          description: updatedWorkOrder.description,
+          performedBy: `${user.first_name} ${user.last_name}`,
+          company: updatedWorkOrder.company || undefined,
+          location: updatedWorkOrder.location || undefined,
+        }).catch(console.error);
+      }
+    }
 
     return Response.json({ workOrder: updatedWorkOrder });
   } catch (error) {

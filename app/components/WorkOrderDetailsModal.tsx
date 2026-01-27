@@ -72,6 +72,17 @@ interface User {
   role: string;
 }
 
+interface Invitation {
+  id: string;
+  work_order_id: string;
+  customer_name: string;
+  email: string;
+  status: "pending" | "accepted" | "expired";
+  inviter_name?: string;
+  created_at: string;
+  accepted_at: string | null;
+}
+
 // interface Project {
 //   id: string;
 //   name: string;
@@ -120,6 +131,7 @@ export default function WorkOrderDetailsModal({
   const [workOrder, setWorkOrder] = useState(initialWorkOrder);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [signatures, setSignatures] = useState<Signature[]>([]);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -129,6 +141,8 @@ export default function WorkOrderDetailsModal({
   const [showSignatureCapture, setShowSignatureCapture] = useState<"tl_corp_rep" | "building_rep" | null>(null);
   const [showStatusChange, setShowStatusChange] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showInviteCustomer, setShowInviteCustomer] = useState(false);
+  const [inviteLoading, setInviteLoading] = useState(false);
 
   // Form states
   const [editForm, setEditForm] = useState({
@@ -153,6 +167,11 @@ export default function WorkOrderDetailsModal({
     signer_title: "",
   });
 
+  const [inviteForm, setInviteForm] = useState({
+    customer_name: "",
+    email: "",
+  });
+
   const [updating, setUpdating] = useState(false);
 
   // Portal mounting
@@ -169,18 +188,21 @@ export default function WorkOrderDetailsModal({
 
   const fetchData = useCallback(async () => {
     try {
-      const [materialsRes, signaturesRes, usersRes] = await Promise.all([
+      const [materialsRes, signaturesRes, invitationsRes, usersRes] = await Promise.all([
         fetch(`/api/work-orders/${workOrder.id}/materials`),
         fetch(`/api/work-orders/${workOrder.id}/signatures`),
+        fetch(`/api/work-orders/${workOrder.id}/invitations`),
         fetch("/api/users"),
       ]);
 
       const materialsData = await materialsRes.json();
       const signaturesData = await signaturesRes.json();
+      const invitationsData = await invitationsRes.json();
       const usersData = await usersRes.json();
 
       setMaterials(materialsData.materials || []);
       setSignatures(signaturesData.signatures || []);
+      setInvitations(invitationsData.invitations || []);
       setUsers((usersData.users || []).filter((u: User) => u.role !== "client"));
     } catch (error) {
       console.error("Failed to fetch work order details:", error);
@@ -345,6 +367,38 @@ export default function WorkOrderDetailsModal({
     }
   }
 
+  async function handleInviteCustomer(e: React.FormEvent) {
+    e.preventDefault();
+    if (!inviteForm.customer_name.trim() || !inviteForm.email.trim()) return;
+
+    setInviteLoading(true);
+    try {
+      const res = await fetch(`/api/work-orders/${workOrder.id}/invitations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customer_name: inviteForm.customer_name.trim(),
+          email: inviteForm.email.trim(),
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setInvitations((prev) => [data.invitation, ...prev]);
+        setInviteForm({ customer_name: "", email: "" });
+        setShowInviteCustomer(false);
+      } else {
+        const error = await res.json();
+        alert(error.error || "Failed to send invitation");
+      }
+    } catch (error) {
+      console.error("Failed to invite customer:", error);
+      alert("Failed to send invitation");
+    } finally {
+      setInviteLoading(false);
+    }
+  }
+
   const totalMaterialsCost = materials.reduce((sum, m) => sum + (m.total_cost || 0), 0);
   const tlCorpSignature = signatures.find((s) => s.signer_type === "tl_corp_rep");
   const buildingRepSignature = signatures.find((s) => s.signer_type === "building_rep");
@@ -492,6 +546,52 @@ export default function WorkOrderDetailsModal({
                     <p className="text-sm font-medium text-(--text) mt-1">{workOrder.email || "—"}</p>
                   </div>
                 </div>
+              </div>
+
+              {/* Customer Contacts Section */}
+              <div className="tl-card p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-(--text)">Customer Contacts</h3>
+                  {canEdit && (
+                    <button
+                      onClick={() => setShowInviteCustomer(true)}
+                      className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      + Add Customer
+                    </button>
+                  )}
+                </div>
+                {invitations.length === 0 ? (
+                  <p className="text-sm text-(--text)/60">No customer contacts added</p>
+                ) : (
+                  <div className="space-y-2">
+                    {invitations.map((inv) => (
+                      <div
+                        key={inv.id}
+                        className="flex items-center justify-between p-3 rounded-lg bg-(--bg)"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-(--text)">{inv.customer_name}</p>
+                          <p className="text-xs text-(--text)/60 truncate">{inv.email}</p>
+                          {inv.inviter_name && (
+                            <p className="text-xs text-(--text)/40 mt-1">Added by {inv.inviter_name}</p>
+                          )}
+                        </div>
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full ml-2 shrink-0 ${
+                            inv.status === "accepted"
+                              ? "bg-green-100 text-green-700"
+                              : inv.status === "expired"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-yellow-100 text-yellow-700"
+                          }`}
+                        >
+                          {inv.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Location Section */}
@@ -996,6 +1096,61 @@ export default function WorkOrderDetailsModal({
             setSignatureForm({ signer_name: "", signer_title: "" });
           }}
         />
+      )}
+
+      {/* Invite Customer Modal */}
+      {showInviteCustomer && (
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-10000 p-0 md:p-4" onClick={() => setShowInviteCustomer(false)}>
+          <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-(--text) mb-4">Add Customer Contact</h3>
+            <p className="text-sm text-(--text)/70 mb-4">
+              Add a customer contact to receive updates about this work order.
+            </p>
+            <form onSubmit={handleInviteCustomer} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-(--text) mb-1">Customer Name *</label>
+                <input
+                  type="text"
+                  value={inviteForm.customer_name}
+                  onChange={(e) => setInviteForm({ ...inviteForm, customer_name: e.target.value })}
+                  required
+                  placeholder="Full name"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-(--text) mb-1">Email Address *</label>
+                <input
+                  type="email"
+                  value={inviteForm.email}
+                  onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                  required
+                  placeholder="customer@example.com"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowInviteCustomer(false);
+                    setInviteForm({ customer_name: "", email: "" });
+                  }}
+                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={inviteLoading}
+                  className="flex-1 tl-btn px-4 py-2.5 text-sm disabled:opacity-50"
+                >
+                  {inviteLoading ? "Sending..." : "Add & Send Email"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* Delete Confirmation Modal */}

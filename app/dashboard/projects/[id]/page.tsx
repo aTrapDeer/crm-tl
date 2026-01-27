@@ -58,6 +58,15 @@ interface ProjectUpdate {
   user_name?: string;
 }
 
+interface ProjectInvitation {
+  id: string;
+  email: string;
+  status: "pending" | "accepted" | "expired";
+  inviter_name?: string;
+  created_at: string;
+  accepted_at: string | null;
+}
+
 interface User {
   id: string;
   role: "admin" | "worker" | "client";
@@ -74,6 +83,7 @@ export default function ProjectPage() {
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [images, setImages] = useState<ProjectImage[]>([]);
   const [updates, setUpdates] = useState<ProjectUpdate[]>([]);
+  const [invitations, setInvitations] = useState<ProjectInvitation[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -82,10 +92,13 @@ export default function ProjectPage() {
   const [showAddUpdate, setShowAddUpdate] = useState(false);
   const [showEditProject, setShowEditProject] = useState(false);
   const [showImageViewer, setShowImageViewer] = useState<ProjectImage | null>(null);
+  const [showInviteCustomer, setShowInviteCustomer] = useState(false);
+  const [inviteLoading, setInviteLoading] = useState(false);
 
   const [newTask, setNewTask] = useState({ title: "", description: "" });
   const [newImage, setNewImage] = useState({ filename: "", caption: "" });
   const [newUpdate, setNewUpdate] = useState({ title: "", content: "" });
+  const [inviteEmail, setInviteEmail] = useState("");
   const [editForm, setEditForm] = useState({
     status: "",
     budget_amount: "",
@@ -126,23 +139,28 @@ export default function ProjectPage() {
       });
 
       // Fetch related data
-      const [tasksRes, teamRes, imagesRes, updatesRes] = await Promise.all([
+      const [tasksRes, teamRes, imagesRes, updatesRes, invitationsRes] = await Promise.all([
         fetch(`/api/projects/${projectId}/tasks`),
         fetch(`/api/projects/${projectId}/team`),
         fetch(`/api/projects/${projectId}/images`),
         fetch(`/api/projects/${projectId}/updates`),
+        sessionData.user?.role !== "client"
+          ? fetch(`/api/projects/${projectId}/invitations`)
+          : Promise.resolve({ json: () => Promise.resolve({ invitations: [] }) }),
       ]);
 
       const tasksData = await tasksRes.json();
       const teamData = await teamRes.json();
       const imagesData = await imagesRes.json();
       const updatesData = await updatesRes.json();
+      const invitationsData = await invitationsRes.json();
 
       setTasks(tasksData.tasks || []);
       setStats(tasksData.stats || { total: 0, completed: 0 });
       setTeam(teamData.team || []);
       setImages(imagesData.images || []);
       setUpdates(updatesData.updates || []);
+      setInvitations(invitationsData.invitations || []);
     } catch (error) {
       console.error("Failed to fetch project:", error);
       router.push("/dashboard");
@@ -332,6 +350,35 @@ export default function ProjectPage() {
       }
     } catch (error) {
       console.error("Failed to update project:", error);
+    }
+  }
+
+  async function handleInviteCustomer(e: React.FormEvent) {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+
+    setInviteLoading(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/invitations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail.trim() }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setInvitations((prev) => [data.invitation, ...prev]);
+        setInviteEmail("");
+        setShowInviteCustomer(false);
+      } else {
+        const error = await res.json();
+        alert(error.error || "Failed to send invitation");
+      }
+    } catch (error) {
+      console.error("Failed to invite customer:", error);
+      alert("Failed to send invitation");
+    } finally {
+      setInviteLoading(false);
     }
   }
 
@@ -741,6 +788,63 @@ export default function ProjectPage() {
             )}
           </div>
 
+          {/* Invitations */}
+          {canEdit && (
+            <div className="tl-card p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-(--text)">
+                  Customer Invitations
+                </h2>
+                <button
+                  onClick={() => setShowInviteCustomer(true)}
+                  className="tl-btn px-3 py-1.5 text-xs"
+                >
+                  + Invite
+                </button>
+              </div>
+              {invitations.length === 0 ? (
+                <p className="text-sm text-(--text)">
+                  No invitations sent yet
+                </p>
+              ) : (
+                <div className="space-y-3 max-h-64 overflow-y-auto">
+                  {invitations.map((inv) => (
+                    <div
+                      key={inv.id}
+                      className="p-3 rounded-xl bg-(--bg)"
+                    >
+                      <div className="flex items-start justify-between">
+                        <p className="text-sm font-medium text-(--text) truncate flex-1">
+                          {inv.email}
+                        </p>
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full ml-2 shrink-0 ${
+                            inv.status === "accepted"
+                              ? "bg-green-100 text-green-700"
+                              : inv.status === "expired"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-yellow-100 text-yellow-700"
+                          }`}
+                        >
+                          {inv.status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-(--text) mt-1">
+                        Sent {formatDate(inv.created_at)}
+                        {inv.inviter_name && ` by ${inv.inviter_name}`}
+                      </p>
+                      {inv.accepted_at && (
+                        <p className="text-xs text-green-600 mt-1">
+                          Accepted {formatDate(inv.accepted_at)}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Updates */}
           <div className="tl-card p-6">
             <div className="flex items-center justify-between mb-4">
@@ -1057,6 +1161,54 @@ export default function ProjectPage() {
                   className="flex-1 tl-btn px-4 py-2.5 text-sm"
                 >
                   Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Invite Customer Modal */}
+      {showInviteCustomer && (
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
+          <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-(--text) mb-4">
+              Invite Customer
+            </h3>
+            <p className="text-sm text-(--text) mb-4">
+              Send an invitation to a customer to give them view access to this project.
+            </p>
+            <form onSubmit={handleInviteCustomer} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-(--text) mb-1">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  required
+                  placeholder="customer@example.com"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text)"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowInviteCustomer(false);
+                    setInviteEmail("");
+                  }}
+                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={inviteLoading}
+                  className="flex-1 tl-btn px-4 py-2.5 text-sm disabled:opacity-50"
+                >
+                  {inviteLoading ? "Sending..." : "Send Invitation"}
                 </button>
               </div>
             </form>

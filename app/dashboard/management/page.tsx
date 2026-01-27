@@ -52,29 +52,6 @@ interface Stats {
   emergency: number;
 }
 
-interface User {
-  id: string;
-  first_name: string;
-  last_name: string;
-  role: string;
-  email: string;
-}
-
-interface Project {
-  id: string;
-  name: string;
-}
-
-const SERVICE_TYPES = [
-  { value: "maintenance", label: "Maintenance" },
-  { value: "repair", label: "Repair" },
-  { value: "replace", label: "Replace" },
-  { value: "inspection", label: "Inspection" },
-  { value: "preventive", label: "Preventive" },
-  { value: "cleaning", label: "Cleaning" },
-  { value: "other", label: "Other" },
-];
-
 export default function ManagementPage() {
   const router = useRouter();
   const [user, setUser] = useState<{ role: "admin" | "worker" } | null>(null);
@@ -111,16 +88,6 @@ export default function ManagementPage() {
     checkAuth();
   }, [router]);
 
-  const fetchWorkOrders = useCallback(async () => {
-    try {
-      const res = await fetch("/api/work-orders");
-      const data = await res.json();
-      setWorkOrders(data.workOrders || []);
-    } catch (error) {
-      console.error("Failed to fetch work orders:", error);
-    }
-  }, []);
-
   const fetchStats = useCallback(async () => {
     try {
       const res = await fetch("/api/work-orders/stats");
@@ -132,12 +99,40 @@ export default function ManagementPage() {
   }, []);
 
   useEffect(() => {
-    if (user) {
-      Promise.all([fetchWorkOrders(), fetchStats()]).finally(() => {
-        setLoading(false);
-      });
+    if (!user) return;
+
+    let cancelled = false;
+
+    async function loadData() {
+      try {
+        const [workOrdersRes, statsRes] = await Promise.all([
+          fetch("/api/work-orders"),
+          fetch("/api/work-orders/stats"),
+        ]);
+        const [workOrdersData, statsData] = await Promise.all([
+          workOrdersRes.json(),
+          statsRes.json(),
+        ]);
+
+        if (!cancelled) {
+          setWorkOrders(workOrdersData.workOrders || []);
+          setStats(statsData.stats || null);
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error("Failed to load data:", error);
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
     }
-  }, [user, fetchWorkOrders, fetchStats]);
+
+    loadData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   function handleWorkOrderUpdate(updated: WorkOrder) {
     setWorkOrders((prev) =>

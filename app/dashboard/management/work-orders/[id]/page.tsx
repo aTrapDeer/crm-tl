@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import SignatureCapture from "@/app/components/SignatureCapture";
 
 interface WorkOrder {
@@ -515,7 +516,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
               <p className="text-xs text-(--text)/60 uppercase tracking-wide">TL Corp Representative</p>
               {tlCorpSignature ? (
                 <div className="border border-(--border) rounded-lg p-3">
-                  <img src={tlCorpSignature.signature_data} alt="TL Corp Rep Signature" className="h-16 object-contain" />
+                  <Image src={tlCorpSignature.signature_data} alt="TL Corp Rep Signature" width={200} height={64} className="h-16 w-auto object-contain" unoptimized />
                   <p className="text-sm font-medium text-(--text) mt-2">{tlCorpSignature.signer_name}</p>
                   {tlCorpSignature.signer_title && <p className="text-xs text-(--text)/60">{tlCorpSignature.signer_title}</p>}
                   <p className="text-xs text-(--text)/60">{new Date(tlCorpSignature.signed_date).toLocaleDateString()}</p>
@@ -535,7 +536,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
               <p className="text-xs text-(--text)/60 uppercase tracking-wide">Building Representative</p>
               {buildingRepSignature ? (
                 <div className="border border-(--border) rounded-lg p-3">
-                  <img src={buildingRepSignature.signature_data} alt="Building Rep Signature" className="h-16 object-contain" />
+                  <Image src={buildingRepSignature.signature_data} alt="Building Rep Signature" width={200} height={64} className="h-16 w-auto object-contain" unoptimized />
                   <p className="text-sm font-medium text-(--text) mt-2">{buildingRepSignature.signer_name}</p>
                   {buildingRepSignature.signer_title && <p className="text-xs text-(--text)/60">{buildingRepSignature.signer_title}</p>}
                   <p className="text-xs text-(--text)/60">{new Date(buildingRepSignature.signed_date).toLocaleDateString()}</p>

@@ -6,7 +6,9 @@ import {
   deleteProjectTask,
   getProjectsByUserId,
   getProjectTaskStats,
+  getProjectById,
 } from "@/lib/projects";
+import { sendTaskChangeNotification } from "@/lib/email";
 import { cookies } from "next/headers";
 
 export async function GET(
@@ -102,6 +104,18 @@ export async function POST(
       created_by: user.id,
     });
 
+    // Send email notification to admins
+    const project = await getProjectById(id);
+    if (project) {
+      sendTaskChangeNotification({
+        projectId: id,
+        projectName: project.name,
+        taskTitle: task.title,
+        action: "created",
+        performedBy: `${user.first_name} ${user.last_name}`,
+      }).catch(console.error);
+    }
+
     return Response.json({ task });
   } catch (error) {
     console.error("Error creating task:", error);
@@ -167,6 +181,20 @@ export async function PATCH(
       return Response.json({ error: "Task not found" }, { status: 404 });
     }
 
+    // Send email notification if task was completed
+    if (is_completed === true) {
+      const project = await getProjectById(projectId);
+      if (project) {
+        sendTaskChangeNotification({
+          projectId: projectId,
+          projectName: project.name,
+          taskTitle: task.title,
+          action: "completed",
+          performedBy: `${user.first_name} ${user.last_name}`,
+        }).catch(console.error);
+      }
+    }
+
     const stats = await getProjectTaskStats(projectId);
     return Response.json({ task, stats });
   } catch (error) {
@@ -204,13 +232,27 @@ export async function DELETE(
     }
 
     const body = await request.json();
-    const { taskId } = body;
+    const { taskId, taskTitle } = body;
 
     if (!taskId) {
       return Response.json({ error: "Task ID is required" }, { status: 400 });
     }
 
     await deleteProjectTask(taskId);
+
+    // Send email notification for task deletion
+    if (taskTitle) {
+      const project = await getProjectById(projectId);
+      if (project) {
+        sendTaskChangeNotification({
+          projectId: projectId,
+          projectName: project.name,
+          taskTitle: taskTitle,
+          action: "deleted",
+          performedBy: `${user.first_name} ${user.last_name}`,
+        }).catch(console.error);
+      }
+    }
 
     const stats = await getProjectTaskStats(projectId);
     return Response.json({ success: true, stats });

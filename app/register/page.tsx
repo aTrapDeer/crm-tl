@@ -153,6 +153,7 @@ export default function RegisterPage() {
               />
             </div>
 
+            {/* Account Type - fixed as Client for public registration */}
             <div>
               <label
                 htmlFor="role"
@@ -160,17 +161,13 @@ export default function RegisterPage() {
               >
                 Account Type
               </label>
-              <select
-                id="role"
-                name="role"
-                value={formData.role}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-full border border-white/20 bg-white/10 text-white focus:outline-none focus:ring-2 focus:ring-(--ring) focus:border-transparent transition"
-              >
-                <option value="client">Client</option>
-                <option value="worker">Worker</option>
-                <option value="admin">Admin</option>
-              </select>
+              <input
+                type="text"
+                value="Client"
+                disabled
+                className="w-full px-4 py-3 rounded-full border border-white/20 bg-white/5 text-white/70 cursor-not-allowed"
+              />
+              <input type="hidden" name="role" value="client" />
             </div>
 
             <div>

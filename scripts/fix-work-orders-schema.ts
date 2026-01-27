@@ -103,7 +103,7 @@ async function fixWorkOrdersSchema() {
             // So we'll need to recreate the table
             console.log(`  Column ${col.name} is missing. Need to recreate table...`);
             throw new Error("Table needs to be recreated");
-          } catch (e) {
+          } catch {
             // If we can't add the column, we need to recreate the table
             console.log("\n⚠️  Cannot add column with constraints. Recreating table...");
             console.log("⚠️  WARNING: This will delete all existing work orders data!");
