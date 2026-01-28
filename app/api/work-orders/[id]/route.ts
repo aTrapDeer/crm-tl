@@ -29,7 +29,7 @@ export async function GET(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admin and worker can access work orders
+    // Only admin and employee can access work orders
     if (user.role === "client") {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
@@ -41,8 +41,8 @@ export async function GET(
       return Response.json({ error: "Work order not found" }, { status: 404 });
     }
 
-    // Workers can only see work orders assigned to them
-    if (user.role === "worker" && workOrder.assigned_to !== user.id) {
+    // Employees can only see work orders assigned to them
+    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
 
@@ -75,7 +75,7 @@ export async function PATCH(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admin and worker can update work orders
+    // Only admin and employee can update work orders
     if (user.role === "client") {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
@@ -87,8 +87,8 @@ export async function PATCH(
       return Response.json({ error: "Work order not found" }, { status: 404 });
     }
 
-    // Workers can only update work orders assigned to them
-    if (user.role === "worker" && workOrder.assigned_to !== user.id) {
+    // Employees can only update work orders assigned to them
+    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
 

@@ -35,7 +35,7 @@ export async function GET() {
       });
     }
 
-    // Admin and worker see all documents
+    // Admin and employee see all documents
     const documents = await getAllDocuments();
 
     return Response.json({ documents });
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admin and worker can upload documents
+    // Only admin and employee can upload documents
     if (user.role === "client") {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }

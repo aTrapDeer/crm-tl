@@ -21,7 +21,7 @@ export async function GET() {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admin and worker can generate work order numbers
+    // Only admin and employee can generate work order numbers
     if (user.role === "client") {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }

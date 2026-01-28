@@ -69,7 +69,7 @@ interface ProjectInvitation {
 
 interface User {
   id: string;
-  role: "admin" | "worker" | "client";
+  role: "admin" | "employee" | "client";
 }
 
 export default function ProjectPage() {
@@ -109,9 +109,9 @@ export default function ProjectPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const userRole = currentUser?.role || "client";
-  const canManageTasks = userRole === "admin" || userRole === "worker";
-  const canManageImages = userRole === "admin" || userRole === "worker";
-  const canEdit = userRole === "admin" || userRole === "worker";
+  const canManageTasks = userRole === "admin" || userRole === "employee";
+  const canManageImages = userRole === "admin" || userRole === "employee";
+  const canEdit = userRole === "admin" || userRole === "employee";
 
   const fetchData = useCallback(async () => {
     try {

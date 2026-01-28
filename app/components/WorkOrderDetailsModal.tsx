@@ -91,7 +91,7 @@ interface Invitation {
 interface WorkOrderDetailsModalProps {
   workOrder: WorkOrder;
   onClose: () => void;
-  userRole: "admin" | "worker";
+  userRole: "admin" | "employee";
   onWorkOrderUpdate?: (workOrder: WorkOrder) => void;
   onWorkOrderDelete?: (id: string) => void;
 }
@@ -438,6 +438,17 @@ export default function WorkOrderDetailsModal({
             </p>
           </div>
           <div className="flex items-center gap-2 ml-4">
+            {canEdit && (
+              <button
+                onClick={() => setShowEditModal(true)}
+                className="p-2 hover:bg-(--bg) rounded-full transition"
+                title="Edit work order"
+              >
+                <svg className="w-5 h-5 text-(--text)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+            )}
             <Link
               href={`/dashboard/management/work-orders/${workOrder.id}`}
               target="_blank"

@@ -10,7 +10,7 @@ interface User {
   email: string;
   first_name: string;
   last_name: string;
-  role: "admin" | "worker" | "client";
+  role: "admin" | "employee" | "client";
 }
 
 export default function DashboardLayout({
@@ -62,14 +62,14 @@ export default function DashboardLayout({
 
   const roleLabel = {
     admin: "Administrator",
-    worker: "Worker",
+    employee: "Employee",
     client: "Client",
   };
 
   const roleColor = {
     admin:
       "bg-(--bg)/30 text-blue-100 border border-(--border)/60",
-    worker:
+    employee:
       "bg-(--bg)/30 text-blue-100 border border-(--border)/60",
     client:
       "bg-(--bg)/40 text-(--text) border border-(--border)/70",

@@ -82,7 +82,7 @@ export async function POST(
     }
 
     // Workers can only add tasks to assigned projects
-    if (user.role === "worker") {
+    if (user.role === "employee") {
       const assignedProjects = await getProjectsByUserId(user.id);
       const isAssigned = assignedProjects.some((p) => p.id === id);
       if (!isAssigned) {
@@ -152,7 +152,7 @@ export async function PATCH(
     }
 
     // Workers can only update tasks on assigned projects
-    if (user.role === "worker") {
+    if (user.role === "employee") {
       const assignedProjects = await getProjectsByUserId(user.id);
       const isAssigned = assignedProjects.some((p) => p.id === projectId);
       if (!isAssigned) {

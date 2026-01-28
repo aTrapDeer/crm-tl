@@ -21,7 +21,7 @@ export async function GET() {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admin and worker can get list of clients
+    // Only admin and employee can get list of clients
     if (user.role === "client") {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }

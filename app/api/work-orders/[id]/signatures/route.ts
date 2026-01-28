@@ -29,7 +29,7 @@ export async function GET(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admin and worker can access signatures
+    // Only admin and employee can access signatures
     if (user.role === "client") {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
@@ -41,8 +41,8 @@ export async function GET(
       return Response.json({ error: "Work order not found" }, { status: 404 });
     }
 
-    // Workers can only see signatures for work orders assigned to them
-    if (user.role === "worker" && workOrder.assigned_to !== user.id) {
+    // Employees can only see signatures for work orders assigned to them
+    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
 
@@ -77,7 +77,7 @@ export async function POST(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admin and worker can add signatures
+    // Only admin and employee can add signatures
     if (user.role === "client") {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
@@ -89,8 +89,8 @@ export async function POST(
       return Response.json({ error: "Work order not found" }, { status: 404 });
     }
 
-    // Workers can only add signatures to work orders assigned to them
-    if (user.role === "worker" && workOrder.assigned_to !== user.id) {
+    // Employees can only add signatures to work orders assigned to them
+    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
 

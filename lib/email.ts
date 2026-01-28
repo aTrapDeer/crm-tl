@@ -121,6 +121,7 @@ async function getProjectAssociatedEmails(projectId: string): Promise<string[]> 
 }
 
 async function getWorkOrderAssociatedEmails(workOrderId: string): Promise<string[]> {
+  // Get assigned and creator emails
   const result = await turso.execute({
     sql: `SELECT DISTINCT u.email
           FROM users u
@@ -129,11 +130,18 @@ async function getWorkOrderAssociatedEmails(workOrderId: string): Promise<string
     args: [workOrderId],
   });
 
+  // Get invited customer emails from work_order_invitations
+  const invitations = await turso.execute({
+    sql: `SELECT email FROM work_order_invitations WHERE work_order_id = ? AND status = 'accepted'`,
+    args: [workOrderId],
+  });
+
   // Also get all admins
   const admins = await getAdminEmails();
-  const emails = result.rows.map((row) => row.email as string);
+  const userEmails = result.rows.map((row) => row.email as string);
+  const customerEmails = invitations.rows.map((row) => row.email as string);
 
-  return [...new Set([...emails, ...admins])];
+  return [...new Set([...userEmails, ...customerEmails, ...admins])];
 }
 
 // ============ PROJECT INVITATION EMAIL ============
@@ -590,5 +598,159 @@ export async function sendWorkOrderInvitationEmail(data: {
     to: data.to,
     subject: `Work Order #${data.workOrderNumber} - You've been added as a contact`,
     html: getEmailTemplate(content, "Work Order Invitation"),
+  });
+}
+
+// ============ CHANGE REQUEST NOTIFICATION EMAIL ============
+
+export async function sendChangeRequestNotification(data: {
+  projectId: string;
+  projectName: string;
+  requesterName: string;
+  requesterEmail: string;
+  sections: string[];
+  message?: string;
+}): Promise<boolean> {
+  const adminEmails = await getAdminEmails();
+  if (adminEmails.length === 0) return true;
+
+  const projectUrl = `${APP_URL}/dashboard/projects/${data.projectId}`;
+
+  const sectionLabels: Record<string, string> = {
+    name: "Project Name",
+    description: "Description",
+    address: "Address",
+    dates: "Project Dates",
+    budget: "Budget & Funding",
+    status: "Status",
+  };
+
+  const requestedSectionsList = data.sections
+    .map((s) => sectionLabels[s] || s)
+    .join(", ");
+
+  const content = `
+    <div style="background-color: #dbeafe; border-left: 4px solid #3b82f6; padding: 16px; border-radius: 0 12px 12px 0; margin-bottom: 24px;">
+      <p style="margin: 0; color: #1e40af; font-size: 14px; font-weight: 600; text-transform: uppercase;">
+        Change Request
+      </p>
+    </div>
+    <h2 style="margin: 0 0 16px; color: #01224f; font-size: 20px; font-weight: 600;">
+      New change request for "${data.projectName}"
+    </h2>
+    <p style="margin: 0 0 16px; color: #6b7280; font-size: 14px;">
+      <strong>${data.requesterName}</strong> (${data.requesterEmail}) has requested permission to edit the following sections:
+    </p>
+    <div style="background-color: #f7f8fb; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+      <p style="margin: 0 0 8px; color: #6b7280; font-size: 12px; text-transform: uppercase;">Requested Sections</p>
+      <p style="margin: 0; color: #01224f; font-size: 16px; font-weight: 600;">
+        ${requestedSectionsList}
+      </p>
+      ${data.message ? `
+      <p style="margin: 16px 0 0; color: #6b7280; font-size: 12px; text-transform: uppercase;">Message</p>
+      <p style="margin: 4px 0 0; color: #01224f; font-size: 14px; line-height: 1.5;">
+        "${data.message}"
+      </p>
+      ` : ""}
+    </div>
+    <p style="margin: 0 0 24px; color: #6b7280; font-size: 14px;">
+      Please review this request and approve or reject the sections the client can edit.
+    </p>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td align="center">
+          <a href="${projectUrl}" style="display: inline-block; padding: 14px 28px; background-color: #01224f; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 12px;">
+            Review Request
+          </a>
+        </td>
+      </tr>
+    </table>
+  `;
+
+  return sendEmail({
+    to: adminEmails,
+    subject: `[Change Request] ${data.projectName} - ${data.requesterName}`,
+    html: getEmailTemplate(content, "Change Request Notification"),
+  });
+}
+
+// ============ CHANGE REQUEST APPROVAL EMAIL ============
+
+export async function sendChangeRequestApprovalNotification(data: {
+  projectId: string;
+  projectName: string;
+  requesterEmail: string;
+  requesterName: string;
+  status: "approved" | "rejected";
+  approvedSections: string[];
+  adminNotes?: string;
+  reviewerName: string;
+}): Promise<boolean> {
+  const projectUrl = `${APP_URL}/dashboard/projects/${data.projectId}`;
+
+  const sectionLabels: Record<string, string> = {
+    name: "Project Name",
+    description: "Description",
+    address: "Address",
+    dates: "Project Dates",
+    budget: "Budget & Funding",
+    status: "Status",
+  };
+
+  const isApproved = data.status === "approved";
+  const statusColor = isApproved ? "#16a34a" : "#dc2626";
+  const statusBgColor = isApproved ? "#dcfce7" : "#fee2e2";
+  const statusLabel = isApproved ? "Approved" : "Rejected";
+
+  const approvedSectionsList = data.approvedSections
+    .map((s) => sectionLabels[s] || s)
+    .join(", ");
+
+  const content = `
+    <div style="background-color: ${statusBgColor}; border-left: 4px solid ${statusColor}; padding: 16px; border-radius: 0 12px 12px 0; margin-bottom: 24px;">
+      <p style="margin: 0; color: ${statusColor}; font-size: 14px; font-weight: 600; text-transform: uppercase;">
+        Request ${statusLabel}
+      </p>
+    </div>
+    <h2 style="margin: 0 0 16px; color: #01224f; font-size: 20px; font-weight: 600;">
+      Hi ${data.requesterName}, your change request has been ${data.status}
+    </h2>
+    <p style="margin: 0 0 16px; color: #6b7280; font-size: 14px;">
+      Your request to edit sections of <strong>"${data.projectName}"</strong> has been reviewed by ${data.reviewerName}.
+    </p>
+    ${isApproved && data.approvedSections.length > 0 ? `
+    <div style="background-color: #f7f8fb; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+      <p style="margin: 0 0 8px; color: #6b7280; font-size: 12px; text-transform: uppercase;">Approved Sections</p>
+      <p style="margin: 0; color: #16a34a; font-size: 16px; font-weight: 600;">
+        ${approvedSectionsList}
+      </p>
+      <p style="margin: 16px 0 0; color: #6b7280; font-size: 14px;">
+        You can now edit these sections. Click the button below to make your changes.
+      </p>
+    </div>
+    ` : ""}
+    ${data.adminNotes ? `
+    <div style="background-color: #f7f8fb; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+      <p style="margin: 0 0 8px; color: #6b7280; font-size: 12px; text-transform: uppercase;">Admin Notes</p>
+      <p style="margin: 0; color: #01224f; font-size: 14px; line-height: 1.5;">
+        "${data.adminNotes}"
+      </p>
+    </div>
+    ` : ""}
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td align="center">
+          <a href="${projectUrl}" style="display: inline-block; padding: 14px 28px; background-color: #01224f; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 12px;">
+            View Project
+          </a>
+        </td>
+      </tr>
+    </table>
+  `;
+
+  return sendEmail({
+    to: data.requesterEmail,
+    subject: `[${statusLabel}] Change Request for ${data.projectName}`,
+    html: getEmailTemplate(content, "Change Request Update"),
   });
 }

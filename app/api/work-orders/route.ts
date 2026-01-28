@@ -29,7 +29,7 @@ export async function GET(request: Request) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admin and worker can access work orders
+    // Only admin and employee can access work orders
     if (user.role === "client") {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
@@ -63,8 +63,8 @@ export async function GET(request: Request) {
       filters.search = searchParams.get("search")!;
     }
 
-    // Worker can only see their assigned work orders
-    if (user.role === "worker") {
+    // Employee can only see their assigned work orders
+    if (user.role === "employee") {
       filters.assigned_to = user.id;
     }
 
@@ -102,7 +102,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admin and worker can create work orders
+    // Only admin and employee can create work orders
     if (user.role === "client") {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }

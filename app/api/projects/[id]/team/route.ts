@@ -39,7 +39,7 @@ export async function GET(
     }
 
     // Admins see all assigned users including other admins
-    // Non-admins see only workers and clients (no admins)
+    // Non-admins see only employees and clients (no admins)
     const team = user.role === "admin" 
       ? await getProjectAssignments(id)
       : await getProjectAssignmentsPublic(id);

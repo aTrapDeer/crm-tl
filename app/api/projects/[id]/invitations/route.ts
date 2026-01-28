@@ -31,13 +31,13 @@ export async function GET(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admins and workers can view invitations
+    // Only admins and employees can view invitations
     if (user.role === "client") {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
 
     // Workers can only view for assigned projects
-    if (user.role === "worker") {
+    if (user.role === "employee") {
       const assignedProjects = await getProjectsByUserId(user.id);
       const isAssigned = assignedProjects.some((p) => p.id === id);
       if (!isAssigned) {
@@ -80,7 +80,7 @@ export async function POST(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admins and workers can invite clients
+    // Only admins and employees can invite clients
     if (user.role === "client") {
       return Response.json(
         { error: "Clients cannot invite other users" },
@@ -89,7 +89,7 @@ export async function POST(
     }
 
     // Workers can only invite for assigned projects
-    if (user.role === "worker") {
+    if (user.role === "employee") {
       const assignedProjects = await getProjectsByUserId(user.id);
       const isAssigned = assignedProjects.some((p) => p.id === id);
       if (!isAssigned) {

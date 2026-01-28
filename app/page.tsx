@@ -42,13 +42,13 @@ export default function Home() {
         <main className="relative z-10 mx-auto w-full max-w-6xl px-6 pb-24 pt-32">
           <section className="text-center max-w-3xl mx-auto">
             <p className="tl-badge inline-flex items-center gap-2 px-5 py-2 text-xs uppercase tracking-[0.25em]">
-              Client / Worker / Admin Portals
+              Client / Employee / Admin Portals
             </p>
             <h2 className="mt-6 text-4xl sm:text-5xl lg:text-6xl font-semibold leading-tight">
               One portal for projects, progress, and people.
             </h2>
             <p className="mt-6 text-lg sm:text-xl text-(--text) leading-relaxed">
-              Keep clients informed, workers aligned, and admins in control.
+              Keep clients informed, employees aligned, and admins in control.
               Track project status, approvals, and updates in one secure place.
             </p>
             <div className="flex flex-wrap justify-center gap-4 mt-8">

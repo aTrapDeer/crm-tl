@@ -73,7 +73,7 @@ export async function PATCH(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admin and worker can update documents
+    // Only admin and employee can update documents
     if (user.role === "client") {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }

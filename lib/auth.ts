@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { turso } from "./turso";
 
-export type UserRole = "admin" | "worker" | "client";
+export type UserRole = "admin" | "employee" | "client";
 
 export interface User {
   id: string;

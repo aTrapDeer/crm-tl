@@ -280,8 +280,8 @@ export default function AdminDashboard() {
                     statusCardStyles[project.status] || statusCardStyles.planning
                   } ${
                     selectedProject?.id === project.id
-                      ? "border-(--border) bg-(--bg)/10 shadow-md"
-                      : "border-(--border) hover:border-(--border) bg-white"
+                      ? "border-blue-500 bg-blue-50/50 shadow-lg ring-2 ring-blue-500/20"
+                      : "border-(--border) hover:border-(--border) hover:shadow-md bg-white"
                   }`}
                 >
                   <div
@@ -420,28 +420,44 @@ export default function AdminDashboard() {
                     No users assigned yet
                   </p>
                 ) : (
-                  <div className="space-y-2">
-                    {assignments.map((a) => (
-                      <div
-                        key={a.user_id}
-                        className="flex items-center justify-between p-3 rounded-lg bg-(--bg)"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-(--text)">
-                            {a.first_name} {a.last_name}
+                  <div className="space-y-4">
+                    {/* Group by role */}
+                    {["admin", "employee", "client"].map((role) => {
+                      const roleAssignments = assignments.filter((a) => a.role === role);
+                      if (roleAssignments.length === 0) return null;
+                      const roleLabel = role === "admin" ? "Admins" : role === "employee" ? "Employees" : "Clients";
+                      const roleColor = role === "admin" ? "bg-purple-100 text-purple-700 border-purple-200" : role === "employee" ? "bg-blue-100 text-blue-700 border-blue-200" : "bg-green-100 text-green-700 border-green-200";
+                      return (
+                        <div key={role}>
+                          <p className={`text-xs font-semibold mb-2 px-2 py-1 rounded-md inline-block ${roleColor}`}>
+                            {roleLabel} ({roleAssignments.length})
                           </p>
-                          <p className="text-xs text-(--text)">
-                            {a.email} / {a.role}
-                          </p>
+                          <div className="space-y-2">
+                            {roleAssignments.map((a) => (
+                              <div
+                                key={a.user_id}
+                                className="flex items-center justify-between p-3 rounded-lg bg-(--bg)"
+                              >
+                                <div>
+                                  <p className="text-sm font-medium text-(--text)">
+                                    {a.first_name} {a.last_name}
+                                  </p>
+                                  <p className="text-xs text-(--text)">
+                                    {a.email}
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={() => handleUnassignUser(a.user_id)}
+                                  className="text-xs text-red-600 hover:underline"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <button
-                          onClick={() => handleUnassignUser(a.user_id)}
-                          className="text-xs text-red-600 hover:underline"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -450,30 +466,45 @@ export default function AdminDashboard() {
                 <p className="text-xs uppercase tracking-[0.2em] text-(--text) mb-3">
                   Add User
                 </p>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {users
-                    .filter((u) => !assignments.some((a) => a.user_id === u.id))
-                    .map((user) => (
-                      <div
-                        key={user.id}
-                        className="flex items-center justify-between p-3 rounded-lg border border-(--border)"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-(--text)">
-                            {user.first_name} {user.last_name}
-                          </p>
-                          <p className="text-xs text-(--text)">
-                            {user.email} / {user.role}
-                          </p>
+                <div className="space-y-4 max-h-64 overflow-y-auto">
+                  {/* Group available users by role */}
+                  {["admin", "employee", "client"].map((role) => {
+                    const availableUsers = users.filter((u) => u.role === role && !assignments.some((a) => a.user_id === u.id));
+                    if (availableUsers.length === 0) return null;
+                    const roleLabel = role === "admin" ? "Admins" : role === "employee" ? "Employees" : "Clients";
+                    const roleColor = role === "admin" ? "bg-purple-100 text-purple-700 border-purple-200" : role === "employee" ? "bg-blue-100 text-blue-700 border-blue-200" : "bg-green-100 text-green-700 border-green-200";
+                    const borderColor = role === "admin" ? "border-purple-200 hover:border-purple-300" : role === "employee" ? "border-blue-200 hover:border-blue-300" : "border-green-200 hover:border-green-300";
+                    return (
+                      <div key={role}>
+                        <p className={`text-xs font-semibold mb-2 px-2 py-1 rounded-md inline-block ${roleColor}`}>
+                          {roleLabel} ({availableUsers.length})
+                        </p>
+                        <div className="space-y-2">
+                          {availableUsers.map((user) => (
+                            <div
+                              key={user.id}
+                              className={`flex items-center justify-between p-3 rounded-lg border ${borderColor} transition`}
+                            >
+                              <div>
+                                <p className="text-sm font-medium text-(--text)">
+                                  {user.first_name} {user.last_name}
+                                </p>
+                                <p className="text-xs text-(--text)">
+                                  {user.email}
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => handleAssignUser(user.id)}
+                                className="text-xs px-3 py-1 rounded-full bg-(--bg) hover:bg-(--bg)/80 text-(--text) font-medium transition"
+                              >
+                                + Assign
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                        <button
-                          onClick={() => handleAssignUser(user.id)}
-                          className="text-xs text-(--text) hover:underline"
-                        >
-                          Assign
-                        </button>
                       </div>
-                    ))}
+                    );
+                  })}
                 </div>
               </div>
             </>
@@ -516,7 +547,7 @@ export default function AdminDashboard() {
                       className={`text-[10px] md:text-xs px-2 py-1 rounded-full ${
                         user.role === "admin"
                           ? "bg-purple-100 text-purple-700"
-                          : user.role === "worker"
+                          : user.role === "employee"
                           ? "bg-blue-100 text-blue-700"
                           : "bg-green-100 text-green-700"
                       }`}

@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     }
 
     // Validate role (default to client, restrict admin creation later)
-    const validRoles = ["client", "worker", "admin"];
+    const validRoles = ["client", "employee", "admin"];
     const userRole = validRoles.includes(role) ? role : "client";
 
     const user = await createUser(email, password, firstName, lastName, userRole);

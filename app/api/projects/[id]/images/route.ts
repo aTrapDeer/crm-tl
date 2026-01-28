@@ -72,13 +72,13 @@ export async function POST(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admins and workers can upload images
+    // Only admins and employees can upload images
     if (user.role === "client") {
       return Response.json({ error: "Clients cannot upload images" }, { status: 403 });
     }
 
-    // Workers can only upload to assigned projects
-    if (user.role === "worker") {
+    // Employees can only upload to assigned projects
+    if (user.role === "employee") {
       const assignedProjects = await getProjectsByUserId(user.id);
       const isAssigned = assignedProjects.some((p) => p.id === projectId);
       if (!isAssigned) {
@@ -178,13 +178,13 @@ export async function PATCH(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admins and workers can update images
+    // Only admins and employees can update images
     if (user.role === "client") {
       return Response.json({ error: "Clients cannot update images" }, { status: 403 });
     }
 
     // Workers can only update on assigned projects
-    if (user.role === "worker") {
+    if (user.role === "employee") {
       const assignedProjects = await getProjectsByUserId(user.id);
       const isAssigned = assignedProjects.some((p) => p.id === projectId);
       if (!isAssigned) {

@@ -29,7 +29,7 @@ export async function GET(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admin and worker can view document shares
+    // Only admin and employee can view document shares
     if (user.role === "client") {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
@@ -72,7 +72,7 @@ export async function POST(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admin and worker can share documents
+    // Only admin and employee can share documents
     if (user.role === "client") {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
@@ -133,7 +133,7 @@ export async function DELETE(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admin and worker can revoke document access
+    // Only admin and employee can revoke document access
     if (user.role === "client") {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }

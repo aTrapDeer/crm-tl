@@ -61,7 +61,7 @@ interface ProjectImage {
 interface ProjectDetailsModalProps {
   project: Project;
   onClose: () => void;
-  userRole: "admin" | "worker" | "client";
+  userRole: "admin" | "employee" | "client";
   onProjectUpdate?: (project: Project) => void;
 }
 
@@ -79,6 +79,7 @@ export default function ProjectDetailsModal({
   const [loading, setLoading] = useState(true);
   const [showAddTask, setShowAddTask] = useState(false);
   const [showEditBudget, setShowEditBudget] = useState(false);
+  const [showEditProject, setShowEditProject] = useState(false);
   const [showAddImage, setShowAddImage] = useState(false);
   const [showImageViewer, setShowImageViewer] = useState<ProjectImage | null>(null);
   const [newTask, setNewTask] = useState({ title: "", description: "" });
@@ -89,6 +90,13 @@ export default function ProjectDetailsModal({
     budget_amount: project.budget_amount?.toString() || "",
     is_funded: project.is_funded,
     funding_notes: project.funding_notes || "",
+  });
+  const [projectForm, setProjectForm] = useState({
+    name: project.name,
+    description: project.description || "",
+    address: project.address || "",
+    start_date: project.start_date || "",
+    end_date: project.end_date || "",
   });
 
   // Status change state
@@ -108,6 +116,14 @@ export default function ProjectDetailsModal({
   const [inviteSuccess, setInviteSuccess] = useState("");
   const [inviteError, setInviteError] = useState("");
 
+  // Change request state (for clients)
+  const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
+  const [changeRequestSections, setChangeRequestSections] = useState<string[]>([]);
+  const [changeRequestMessage, setChangeRequestMessage] = useState("");
+  const [submittingChangeRequest, setSubmittingChangeRequest] = useState(false);
+  const [changeRequestSuccess, setChangeRequestSuccess] = useState("");
+  const [changeRequestError, setChangeRequestError] = useState("");
+
   // Portal mounting
   useEffect(() => {
     setMounted(true);
@@ -118,11 +134,20 @@ export default function ProjectDetailsModal({
     };
   }, []);
 
-  const canManageTasks = userRole === "admin" || userRole === "worker";
-  const canManageImages = userRole === "admin" || userRole === "worker";
+  const canManageTasks = userRole === "admin" || userRole === "employee";
+  const canManageImages = userRole === "admin" || userRole === "employee";
   const canEditBudget = userRole === "admin";
-  const canChangeStatus = userRole === "admin" || userRole === "worker";
-  const canInviteClients = userRole === "admin" || userRole === "worker";
+  const canChangeStatus = userRole === "admin" || userRole === "employee";
+  const canInviteClients = userRole === "admin" || userRole === "employee";
+  const changeRequestOptions = [
+    { id: "name", label: "Project name" },
+    { id: "description", label: "Description" },
+    { id: "address", label: "Address" },
+    { id: "start_date", label: "Start date" },
+    { id: "end_date", label: "End date" },
+    { id: "budget", label: "Budget & funding" },
+    { id: "status", label: "Project status" },
+  ];
 
   const fetchData = useCallback(async () => {
     try {
@@ -242,6 +267,34 @@ export default function ProjectDetailsModal({
       }
     } catch (error) {
       console.error("Failed to update budget:", error);
+    }
+  }
+
+  async function handleUpdateProject(e: React.FormEvent) {
+    e.preventDefault();
+
+    try {
+      const res = await fetch(`/api/projects/${project.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: projectForm.name,
+          description: projectForm.description || null,
+          address: projectForm.address || null,
+          start_date: projectForm.start_date || null,
+          end_date: projectForm.end_date || null,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setShowEditProject(false);
+        if (onProjectUpdate) {
+          onProjectUpdate(data.project);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to update project:", error);
     }
   }
 
@@ -393,6 +446,49 @@ export default function ProjectDetailsModal({
     }
   }
 
+  async function handleSubmitChangeRequest(e: React.FormEvent) {
+    e.preventDefault();
+    if (changeRequestSections.length === 0) return;
+
+    setSubmittingChangeRequest(true);
+    setChangeRequestError("");
+    setChangeRequestSuccess("");
+
+    try {
+      const res = await fetch(`/api/projects/${project.id}/change-requests`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sections: changeRequestSections,
+          message: changeRequestMessage || undefined,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setChangeRequestSuccess("Your change request has been submitted. You will be notified once an admin reviews it.");
+        setChangeRequestSections([]);
+        setChangeRequestMessage("");
+      } else {
+        setChangeRequestError(data.error || "Failed to submit change request");
+      }
+    } catch (error) {
+      console.error("Failed to submit change request:", error);
+      setChangeRequestError("Failed to submit change request");
+    } finally {
+      setSubmittingChangeRequest(false);
+    }
+  }
+
+  function toggleChangeRequestSection(section: string) {
+    setChangeRequestSections((prev) =>
+      prev.includes(section)
+        ? prev.filter((s) => s !== section)
+        : [...prev, section]
+    );
+  }
+
   async function handleInviteClient(e: React.FormEvent) {
     e.preventDefault();
     if (!inviteEmail.trim()) return;
@@ -532,6 +628,17 @@ export default function ProjectDetailsModal({
               )}
             </div>
             <div className="flex items-center gap-1 md:gap-2 ml-2 md:ml-4 shrink-0">
+              {userRole === "admin" && (
+                <button
+                  onClick={() => setShowEditProject(true)}
+                  className="p-2 hover:bg-(--bg) rounded-full transition"
+                  title="Edit project details"
+                >
+                  <svg className="w-5 h-5 text-(--text)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+              )}
               {canInviteClients && (
                 <button
                   onClick={() => {
@@ -545,6 +652,22 @@ export default function ProjectDetailsModal({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                   </svg>
                   Invite Client
+                </button>
+              )}
+              {userRole === "client" && (
+                <button
+                  onClick={() => {
+                    setShowChangeRequestModal(true);
+                    setChangeRequestError("");
+                    setChangeRequestSuccess("");
+                  }}
+                  className="hidden md:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-(--border) text-(--text) hover:bg-(--bg) transition"
+                  title="Request Changes"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 4h2a2 2 0 012 2v2m-2 12h-2a2 2 0 01-2-2v-2m-6 6H6a2 2 0 01-2-2v-2m2-12h2a2 2 0 012 2v2" />
+                  </svg>
+                  Request Changes
                 </button>
               )}
               <Link
@@ -932,6 +1055,21 @@ export default function ProjectDetailsModal({
 
         {/* Mobile Action Bar */}
         <div className="md:hidden flex items-center gap-2 p-4 border-t border-(--border) bg-white">
+          {userRole === "client" && (
+            <button
+              onClick={() => {
+                setShowChangeRequestModal(true);
+                setChangeRequestError("");
+                setChangeRequestSuccess("");
+              }}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium rounded-xl border-2 border-(--border) text-(--text) active:bg-(--bg) transition"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 4h2a2 2 0 012 2v2m-2 12h-2a2 2 0 01-2-2v-2m-6 6H6a2 2 0 01-2-2v-2m2-12h2a2 2 0 012 2v2" />
+              </svg>
+              Request Changes
+            </button>
+          )}
           {canInviteClients && (
             <button
               onClick={() => {
@@ -1439,11 +1577,202 @@ export default function ProjectDetailsModal({
           </div>
         </div>
       )}
+
+      {/* Change Request Modal */}
+      {showChangeRequestModal && userRole === "client" && (
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-10000 p-0 md:p-4">
+          <div className="tl-card p-4 md:p-6 w-full max-w-lg rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-(--text)">
+                Request Changes
+              </h3>
+              <button
+                onClick={() => {
+                  setShowChangeRequestModal(false);
+                  setChangeRequestError("");
+                  setChangeRequestSuccess("");
+                }}
+                className="p-1 rounded-lg hover:bg-(--bg)"
+              >
+                <svg className="w-5 h-5 text-(--text)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <p className="text-sm text-(--text) mb-4">
+              Select the areas you want updated and include any details for the team.
+            </p>
+            <form onSubmit={handleSubmitChangeRequest} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {changeRequestOptions.map((option) => (
+                  <label
+                    key={option.id}
+                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm cursor-pointer transition ${
+                      changeRequestSections.includes(option.id)
+                        ? "border-(--ring) bg-(--bg)"
+                        : "border-(--border) hover:bg-(--bg)"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={changeRequestSections.includes(option.id)}
+                      onChange={() => toggleChangeRequestSection(option.id)}
+                      className="h-4 w-4"
+                    />
+                    <span className="text-(--text)">{option.label}</span>
+                  </label>
+                ))}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-(--text) mb-1">
+                  Details (optional)
+                </label>
+                <textarea
+                  value={changeRequestMessage}
+                  onChange={(e) => setChangeRequestMessage(e.target.value)}
+                  rows={4}
+                  placeholder="Add context or specific edits..."
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                />
+              </div>
+              {changeRequestError && (
+                <div className="text-sm text-red-500">{changeRequestError}</div>
+              )}
+              {changeRequestSuccess && (
+                <div className="text-sm text-green-600">{changeRequestSuccess}</div>
+              )}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowChangeRequestModal(false)}
+                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingChangeRequest || changeRequestSections.length === 0}
+                  className="flex-1 tl-btn px-4 py-2.5 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {submittingChangeRequest ? "Submitting..." : "Submit Request"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Project Modal */}
+      {showEditProject && userRole === "admin" && (
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-10000 p-0 md:p-4">
+          <div className="tl-card p-4 md:p-6 w-full max-w-lg rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-(--text)">
+                Edit Project
+              </h3>
+              <button
+                onClick={() => setShowEditProject(false)}
+                className="p-1 rounded-lg hover:bg-(--bg)"
+              >
+                <svg className="w-5 h-5 text-(--text)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleUpdateProject} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-(--text) mb-1">
+                  Project Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={projectForm.name}
+                  onChange={(e) =>
+                    setProjectForm({ ...projectForm, name: e.target.value })
+                  }
+                  required
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-(--text) mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={projectForm.description}
+                  onChange={(e) =>
+                    setProjectForm({ ...projectForm, description: e.target.value })
+                  }
+                  rows={3}
+                  placeholder="Project description..."
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-(--text) mb-1">
+                  Address
+                </label>
+                <input
+                  type="text"
+                  value={projectForm.address}
+                  onChange={(e) =>
+                    setProjectForm({ ...projectForm, address: e.target.value })
+                  }
+                  placeholder="Project location address"
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-(--text) mb-1">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={projectForm.start_date}
+                    onChange={(e) =>
+                      setProjectForm({ ...projectForm, start_date: e.target.value })
+                    }
+                    className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-(--text) mb-1">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    value={projectForm.end_date}
+                    onChange={(e) =>
+                      setProjectForm({ ...projectForm, end_date: e.target.value })
+                    }
+                    className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditProject(false)}
+                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 tl-btn px-4 py-2.5 text-sm"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 
   // Use portal to render modal at document body level
   return createPortal(modalContent, document.body);
 }
-
 

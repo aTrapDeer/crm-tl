@@ -65,6 +65,19 @@ interface Signature {
   signed_at: string;
 }
 
+interface User {
+  id: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+  email: string;
+}
+
+interface Project {
+  id: string;
+  name: string;
+}
+
 const PRIORITY_COLORS = {
   emergency: "bg-red-100 text-red-700",
   high: "bg-orange-100 text-orange-700",
@@ -96,13 +109,16 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   const [materials, setMaterials] = useState<Material[]>([]);
   const [signatures, setSignatures] = useState<Signature[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userRole, setUserRole] = useState<"admin" | "worker" | null>(null);
+  const [userRole, setUserRole] = useState<"admin" | "employee" | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
 
   // Modal states
   const [showStatusChange, setShowStatusChange] = useState(false);
   const [showAddMaterial, setShowAddMaterial] = useState(false);
   const [showSignatureCapture, setShowSignatureCapture] = useState<"tl_corp_rep" | "building_rep" | null>(null);
   const [signatureForm, setSignatureForm] = useState({ signer_name: "", signer_title: "" });
+  const [showEditWorkOrder, setShowEditWorkOrder] = useState(false);
 
   // Form states
   const [newMaterial, setNewMaterial] = useState({
@@ -114,6 +130,35 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   });
 
   const [updating, setUpdating] = useState(false);
+  const [savingEdits, setSavingEdits] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [editForm, setEditForm] = useState({
+    phone: "",
+    email: "",
+    company: "",
+    department: "",
+    location: "",
+    unit: "",
+    area: "",
+    access_needed: "",
+    preferred_entry_time: "",
+    priority: "normal" as WorkOrder["priority"],
+    service_type: "maintenance" as WorkOrder["service_type"],
+    description: "",
+    assigned_to: "",
+    scheduled_date: "",
+    scheduled_time: "",
+    time_in: "",
+    time_out: "",
+    total_labor_hours: "",
+    work_completed: "pending" as WorkOrder["work_completed"],
+    completed_date: "",
+    completed_time: "",
+    work_summary: "",
+    project_id: "",
+    date: "",
+    time_received: "",
+  });
 
   useEffect(() => {
     async function checkAuth() {
@@ -138,6 +183,56 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
     }
     checkAuth();
   }, [router]);
+
+  useEffect(() => {
+    if (!workOrder) return;
+    setEditForm({
+      phone: workOrder.phone || "",
+      email: workOrder.email || "",
+      company: workOrder.company || "",
+      department: workOrder.department || "",
+      location: workOrder.location || "",
+      unit: workOrder.unit || "",
+      area: workOrder.area || "",
+      access_needed: workOrder.access_needed || "",
+      preferred_entry_time: workOrder.preferred_entry_time || "",
+      priority: workOrder.priority,
+      service_type: workOrder.service_type,
+      description: workOrder.description || "",
+      assigned_to: workOrder.assigned_to || "",
+      scheduled_date: workOrder.scheduled_date || "",
+      scheduled_time: workOrder.scheduled_time || "",
+      time_in: workOrder.time_in || "",
+      time_out: workOrder.time_out || "",
+      total_labor_hours: workOrder.total_labor_hours?.toString() || "",
+      work_completed: workOrder.work_completed,
+      completed_date: workOrder.completed_date || "",
+      completed_time: workOrder.completed_time || "",
+      work_summary: workOrder.work_summary || "",
+      project_id: workOrder.project_id || "",
+      date: workOrder.date || "",
+      time_received: workOrder.time_received || "",
+    });
+  }, [workOrder]);
+
+  useEffect(() => {
+    if (userRole !== "admin") return;
+    async function fetchAdminData() {
+      try {
+        const [usersRes, projectsRes] = await Promise.all([
+          fetch("/api/users"),
+          fetch("/api/projects"),
+        ]);
+        const usersData = await usersRes.json();
+        const projectsData = await projectsRes.json();
+        setUsers((usersData.users || []).filter((u: User) => u.role !== "client"));
+        setProjects(projectsData.projects || []);
+      } catch (error) {
+        console.error("Failed to load users or projects:", error);
+      }
+    }
+    fetchAdminData();
+  }, [userRole]);
 
   const fetchWorkOrder = useCallback(async () => {
     try {
@@ -259,6 +354,73 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
     }
   }
 
+  async function handleUpdateWorkOrder(e: React.FormEvent) {
+    e.preventDefault();
+    setEditError("");
+
+    if (!editForm.description.trim()) {
+      setEditError("Description is required.");
+      return;
+    }
+
+    setSavingEdits(true);
+    try {
+      const payload: Record<string, string | number | null> = {
+        phone: editForm.phone || null,
+        email: editForm.email || null,
+        company: editForm.company || null,
+        department: editForm.department || null,
+        location: editForm.location || null,
+        unit: editForm.unit || null,
+        area: editForm.area || null,
+        access_needed: editForm.access_needed || null,
+        preferred_entry_time: editForm.preferred_entry_time || null,
+        priority: editForm.priority,
+        service_type: editForm.service_type,
+        description: editForm.description,
+        assigned_to: editForm.assigned_to || null,
+        scheduled_date: editForm.scheduled_date || null,
+        scheduled_time: editForm.scheduled_time || null,
+        time_in: editForm.time_in || null,
+        time_out: editForm.time_out || null,
+        total_labor_hours: editForm.total_labor_hours ? parseFloat(editForm.total_labor_hours) : null,
+        work_completed: editForm.work_completed,
+        completed_date: editForm.completed_date || null,
+        completed_time: editForm.completed_time || null,
+        work_summary: editForm.work_summary || null,
+        project_id: editForm.project_id || null,
+        date: editForm.date || null,
+        time_received: editForm.time_received || null,
+      };
+
+      if (editForm.work_completed === "completed" && !editForm.completed_date) {
+        const now = new Date();
+        payload.completed_date = now.toISOString().slice(0, 10);
+        payload.completed_time = now.toTimeString().slice(0, 5);
+      }
+
+      const res = await fetch(`/api/work-orders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setEditError(data.error || "Failed to update work order.");
+        return;
+      }
+
+      setWorkOrder(data.workOrder);
+      setShowEditWorkOrder(false);
+    } catch (error) {
+      console.error("Failed to update work order:", error);
+      setEditError("Failed to update work order.");
+    } finally {
+      setSavingEdits(false);
+    }
+  }
+
   async function handleSaveSignature(signatureData: string) {
     if (!showSignatureCapture || !signatureForm.signer_name.trim()) return;
 
@@ -325,12 +487,22 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
               </p>
             </div>
           </div>
-          <button
-            onClick={() => setShowStatusChange(true)}
-            className="tl-btn px-4 py-2 text-sm"
-          >
-            Change Status
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {userRole === "admin" && (
+              <button
+                onClick={() => setShowEditWorkOrder(true)}
+                className="tl-btn px-4 py-2 text-sm"
+              >
+                Edit Work Order
+              </button>
+            )}
+            <button
+              onClick={() => setShowStatusChange(true)}
+              className="tl-btn px-4 py-2 text-sm"
+            >
+              Change Status
+            </button>
+          </div>
         </div>
 
         {/* Success Banner (shown after creation) */}
@@ -562,7 +734,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
 
       {/* Status Change Modal */}
       {showStatusChange && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10000] p-4" onClick={() => setShowStatusChange(false)}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-10000 p-4" onClick={() => setShowStatusChange(false)}>
           <div className="tl-card p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-(--text) mb-4">Change Status</h3>
             <div className="space-y-2">
@@ -592,9 +764,334 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
         </div>
       )}
 
+      {/* Edit Work Order Modal */}
+      {showEditWorkOrder && userRole === "admin" && (
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-10000 p-0 md:p-4" onClick={() => setShowEditWorkOrder(false)}>
+          <div className="tl-card p-4 md:p-6 w-full max-w-3xl rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-(--text)">Edit Work Order</h3>
+              <button
+                onClick={() => setShowEditWorkOrder(false)}
+                className="p-1 rounded-lg hover:bg-(--bg)"
+              >
+                <svg className="w-5 h-5 text-(--text)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleUpdateWorkOrder} className="space-y-6">
+              {editError && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+                  {editError}
+                </div>
+              )}
+
+              <div className="tl-card p-4 space-y-4">
+                <h4 className="text-sm font-semibold text-(--text)">Contact Information</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Phone</label>
+                    <input
+                      type="tel"
+                      value={editForm.phone}
+                      onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Email</label>
+                    <input
+                      type="email"
+                      value={editForm.email}
+                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Company</label>
+                    <input
+                      type="text"
+                      value={editForm.company}
+                      onChange={(e) => setEditForm({ ...editForm, company: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Department</label>
+                    <input
+                      type="text"
+                      value={editForm.department}
+                      onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="tl-card p-4 space-y-4">
+                <h4 className="text-sm font-semibold text-(--text)">Location</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Location / Building</label>
+                    <input
+                      type="text"
+                      value={editForm.location}
+                      onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Unit</label>
+                    <input
+                      type="text"
+                      value={editForm.unit}
+                      onChange={(e) => setEditForm({ ...editForm, unit: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Area</label>
+                    <input
+                      type="text"
+                      value={editForm.area}
+                      onChange={(e) => setEditForm({ ...editForm, area: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Access Needed</label>
+                    <input
+                      type="text"
+                      value={editForm.access_needed}
+                      onChange={(e) => setEditForm({ ...editForm, access_needed: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Preferred Entry Time</label>
+                    <input
+                      type="text"
+                      value={editForm.preferred_entry_time}
+                      onChange={(e) => setEditForm({ ...editForm, preferred_entry_time: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="tl-card p-4 space-y-4">
+                <h4 className="text-sm font-semibold text-(--text)">Work Details</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Priority *</label>
+                    <select
+                      value={editForm.priority}
+                      onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as WorkOrder["priority"] })}
+                      required
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    >
+                      <option value="emergency">Emergency</option>
+                      <option value="high">High</option>
+                      <option value="normal">Normal</option>
+                      <option value="low">Low</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Service Type *</label>
+                    <select
+                      value={editForm.service_type}
+                      onChange={(e) => setEditForm({ ...editForm, service_type: e.target.value as WorkOrder["service_type"] })}
+                      required
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    >
+                      {SERVICE_TYPES.map((type) => (
+                        <option key={type.value} value={type.value}>
+                          {type.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Date</label>
+                    <input
+                      type="date"
+                      value={editForm.date}
+                      onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Time Received</label>
+                    <input
+                      type="text"
+                      value={editForm.time_received}
+                      onChange={(e) => setEditForm({ ...editForm, time_received: e.target.value })}
+                      placeholder="e.g., 9:15 AM"
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-(--text) mb-1">Description *</label>
+                  <textarea
+                    value={editForm.description}
+                    onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                    required
+                    rows={5}
+                    className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                  />
+                </div>
+              </div>
+
+              <div className="tl-card p-4 space-y-4">
+                <h4 className="text-sm font-semibold text-(--text)">Assignment & Execution</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Assign To</label>
+                    <select
+                      value={editForm.assigned_to}
+                      onChange={(e) => setEditForm({ ...editForm, assigned_to: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    >
+                      <option value="">Unassigned</option>
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.first_name} {u.last_name} ({u.role})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Linked Project</label>
+                    <select
+                      value={editForm.project_id}
+                      onChange={(e) => setEditForm({ ...editForm, project_id: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    >
+                      <option value="">No Project</option>
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Scheduled Date</label>
+                    <input
+                      type="date"
+                      value={editForm.scheduled_date}
+                      onChange={(e) => setEditForm({ ...editForm, scheduled_date: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Scheduled Time</label>
+                    <input
+                      type="time"
+                      value={editForm.scheduled_time}
+                      onChange={(e) => setEditForm({ ...editForm, scheduled_time: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Time In</label>
+                    <input
+                      type="time"
+                      value={editForm.time_in}
+                      onChange={(e) => setEditForm({ ...editForm, time_in: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Time Out</label>
+                    <input
+                      type="time"
+                      value={editForm.time_out}
+                      onChange={(e) => setEditForm({ ...editForm, time_out: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Total Labor Hours</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={editForm.total_labor_hours}
+                      onChange={(e) => setEditForm({ ...editForm, total_labor_hours: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Status</label>
+                    <select
+                      value={editForm.work_completed}
+                      onChange={(e) => setEditForm({ ...editForm, work_completed: e.target.value as WorkOrder["work_completed"] })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="completed">Completed</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Completed Date</label>
+                    <input
+                      type="date"
+                      value={editForm.completed_date}
+                      onChange={(e) => setEditForm({ ...editForm, completed_date: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Completed Time</label>
+                    <input
+                      type="time"
+                      value={editForm.completed_time}
+                      onChange={(e) => setEditForm({ ...editForm, completed_time: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-(--text) mb-1">Work Summary</label>
+                  <textarea
+                    value={editForm.work_summary}
+                    onChange={(e) => setEditForm({ ...editForm, work_summary: e.target.value })}
+                    rows={4}
+                    className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowEditWorkOrder(false)}
+                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdits}
+                  className="flex-1 tl-btn px-4 py-2.5 text-sm disabled:opacity-50"
+                >
+                  {savingEdits ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Add Material Modal */}
       {showAddMaterial && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10000] p-4" onClick={() => setShowAddMaterial(false)}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-10000 p-4" onClick={() => setShowAddMaterial(false)}>
           <div className="tl-card p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-(--text) mb-4">Add Material</h3>
             <form onSubmit={handleAddMaterial} className="space-y-4">
@@ -663,7 +1160,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
 
       {/* Signature Name Modal */}
       {showSignatureCapture && !signatureForm.signer_name && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10000] p-4" onClick={() => setShowSignatureCapture(null)}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-10000 p-4" onClick={() => setShowSignatureCapture(null)}>
           <div className="tl-card p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-(--text) mb-4">
               {showSignatureCapture === "tl_corp_rep" ? "TL Corp Representative" : "Building Representative"}

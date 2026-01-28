@@ -65,13 +65,13 @@ export async function POST(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only workers and admins can add updates
+    // Only employees and admins can add updates
     if (user.role === "client") {
       return Response.json({ error: "Clients cannot add updates" }, { status: 403 });
     }
 
     // Workers can only add updates to assigned projects
-    if (user.role === "worker") {
+    if (user.role === "employee") {
       const assignedProjects = await getProjectsByUserId(user.id);
       const isAssigned = assignedProjects.some((p) => p.id === id);
       if (!isAssigned) {

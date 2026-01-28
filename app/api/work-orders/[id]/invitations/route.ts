@@ -31,7 +31,7 @@ export async function GET(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admin and worker can view invitations
+    // Only admin and employee can view invitations
     if (user.role === "client") {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
@@ -42,7 +42,7 @@ export async function GET(
     }
 
     // Workers can only see invitations for work orders assigned to them
-    if (user.role === "worker" && workOrder.assigned_to !== user.id) {
+    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
 
@@ -81,7 +81,7 @@ export async function POST(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admin and worker can invite customers
+    // Only admin and employee can invite customers
     if (user.role === "client") {
       return Response.json(
         { error: "Clients cannot invite customers" },
@@ -95,7 +95,7 @@ export async function POST(
     }
 
     // Workers can only invite for work orders assigned to them
-    if (user.role === "worker" && workOrder.assigned_to !== user.id) {
+    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
 

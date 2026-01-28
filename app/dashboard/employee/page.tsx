@@ -28,7 +28,7 @@ interface ProjectUpdate {
   user_name?: string;
 }
 
-export default function WorkerDashboard() {
+export default function EmployeeDashboard() {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -154,7 +154,7 @@ export default function WorkerDashboard() {
     <div className="space-y-4 md:space-y-8">
       <div>
         <h2 className="text-xl md:text-2xl font-semibold text-(--text)">
-          Worker Dashboard
+          Employee Dashboard
         </h2>
         <p className="text-xs md:text-sm text-(--text) mt-1">
           Update progress on your assigned projects
@@ -446,11 +446,10 @@ export default function WorkerDashboard() {
         <ProjectDetailsModal
           project={selectedProject}
           onClose={() => setShowDetailsModal(false)}
-          userRole="worker"
+          userRole="employee"
           onProjectUpdate={handleProjectUpdate}
         />
       )}
     </div>
   );
 }
-

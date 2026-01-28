@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   first_name TEXT NOT NULL,
   last_name TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'client' CHECK (role IN ('admin', 'worker', 'client')),
+  role TEXT NOT NULL DEFAULT 'client' CHECK (role IN ('admin', 'employee', 'client')),
   phone TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -264,3 +264,50 @@ CREATE TABLE IF NOT EXISTS work_order_invitations (
 CREATE INDEX IF NOT EXISTS idx_work_order_invitations_order ON work_order_invitations(work_order_id);
 CREATE INDEX IF NOT EXISTS idx_work_order_invitations_email ON work_order_invitations(email);
 CREATE INDEX IF NOT EXISTS idx_work_order_invitations_token ON work_order_invitations(token);
+
+-- ============ PROJECT CHANGE REQUESTS ============
+
+CREATE TABLE IF NOT EXISTS project_change_requests (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  requested_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+
+  -- Request details
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'completed')),
+  message TEXT,
+
+  -- Sections requested to edit (stored as JSON array)
+  requested_sections TEXT NOT NULL,
+
+  -- Admin response
+  approved_sections TEXT,
+  admin_notes TEXT,
+  reviewed_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at TEXT,
+
+  -- Timestamps
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_change_requests_project ON project_change_requests(project_id);
+CREATE INDEX IF NOT EXISTS idx_change_requests_requester ON project_change_requests(requested_by);
+CREATE INDEX IF NOT EXISTS idx_change_requests_status ON project_change_requests(status);
+
+-- ============ CHANGE REQUEST EDITS ============
+
+CREATE TABLE IF NOT EXISTS project_change_edits (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  change_request_id TEXT NOT NULL REFERENCES project_change_requests(id) ON DELETE CASCADE,
+
+  -- Edit details
+  section TEXT NOT NULL,
+  field_name TEXT NOT NULL,
+  old_value TEXT,
+  new_value TEXT,
+
+  -- Timestamps
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_change_edits_request ON project_change_edits(change_request_id);

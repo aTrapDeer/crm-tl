@@ -41,7 +41,7 @@ interface DocumentShare {
 }
 
 interface DocumentManagerProps {
-  userRole: "admin" | "worker";
+  userRole: "admin" | "employee";
 }
 
 const FILE_TYPE_ICONS: Record<string, string> = {
@@ -363,7 +363,7 @@ export default function DocumentManager({ userRole }: DocumentManagerProps) {
 
       {/* Upload Modal */}
       {showUploadModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10000] p-4" onClick={() => setShowUploadModal(false)}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-10000 p-4" onClick={() => setShowUploadModal(false)}>
           <div className="tl-card p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-(--text) mb-4">Add Document</h3>
             <form onSubmit={handleUpload} className="space-y-4">
@@ -439,7 +439,7 @@ export default function DocumentManager({ userRole }: DocumentManagerProps) {
 
       {/* Share Modal */}
       {showShareModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10000] p-4" onClick={() => setShowShareModal(null)}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-10000 p-4" onClick={() => setShowShareModal(null)}>
           <div className="tl-card p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-(--text) mb-2">Share Document</h3>
             <p className="text-sm text-(--text)/70 mb-4">{showShareModal.display_name}</p>

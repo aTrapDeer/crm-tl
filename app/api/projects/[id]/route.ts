@@ -69,12 +69,12 @@ export async function PATCH(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Workers can update assigned projects, admins can update any
+    // Employees can update assigned projects, admins can update any
     if (user.role === "client") {
       return Response.json({ error: "Clients cannot update projects" }, { status: 403 });
     }
 
-    if (user.role === "worker") {
+    if (user.role === "employee") {
       const assignedProjects = await getProjectsByUserId(user.id);
       const isAssigned = assignedProjects.some((p) => p.id === id);
       if (!isAssigned) {

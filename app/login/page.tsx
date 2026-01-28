@@ -33,8 +33,8 @@ export default function LoginPage() {
       // Redirect based on role
       if (data.user.role === "admin") {
         router.push("/dashboard/admin");
-      } else if (data.user.role === "worker") {
-        router.push("/dashboard/worker");
+      } else if (data.user.role === "employee") {
+        router.push("/dashboard/employee");
       } else {
         router.push("/dashboard/client");
       }
@@ -46,7 +46,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-(--tl-navy) via-(--tl-deep) to-(--tl-navy) text-white flex items-center justify-center px-4">
+    <div className="relative min-h-screen bg-linear-to-br from-(--tl-navy) via-(--tl-deep) to-(--tl-navy) text-white flex items-center justify-center px-4">
       <div className="pointer-events-none absolute -top-32 right-0 h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle_at_30%_30%,rgba(1,183,231,0.25),rgba(1,183,231,0))] blur-2xl" />
       <div className="pointer-events-none absolute left-[-120px] top-[320px] h-[360px] w-[360px] rounded-full bg-[radial-gradient(circle_at_30%_30%,rgba(123,168,179,0.25),rgba(123,168,179,0))] blur-2xl" />
 

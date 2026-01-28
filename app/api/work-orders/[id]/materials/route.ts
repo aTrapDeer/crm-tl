@@ -29,7 +29,7 @@ export async function GET(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admin and worker can access work order materials
+    // Only admin and employee can access work order materials
     if (user.role === "client") {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
@@ -42,7 +42,7 @@ export async function GET(
     }
 
     // Workers can only see materials for work orders assigned to them
-    if (user.role === "worker" && workOrder.assigned_to !== user.id) {
+    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
 
@@ -77,7 +77,7 @@ export async function POST(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admin and worker can add materials
+    // Only admin and employee can add materials
     if (user.role === "client") {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
@@ -90,7 +90,7 @@ export async function POST(
     }
 
     // Workers can only add materials to work orders assigned to them
-    if (user.role === "worker" && workOrder.assigned_to !== user.id) {
+    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
 
@@ -138,7 +138,7 @@ export async function DELETE(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admin and worker can delete materials
+    // Only admin and employee can delete materials
     if (user.role === "client") {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
@@ -151,7 +151,7 @@ export async function DELETE(
     }
 
     // Workers can only delete materials from work orders assigned to them
-    if (user.role === "worker" && workOrder.assigned_to !== user.id) {
+    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
 

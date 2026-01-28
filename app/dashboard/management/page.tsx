@@ -54,7 +54,7 @@ interface Stats {
 
 export default function ManagementPage() {
   const router = useRouter();
-  const [user, setUser] = useState<{ role: "admin" | "worker" } | null>(null);
+  const [user, setUser] = useState<{ role: "admin" | "employee" } | null>(null);
   const [activeTab, setActiveTab] = useState<"work-orders" | "documents">("work-orders");
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -237,6 +237,23 @@ export default function ManagementPage() {
               // Find the full work order from our state
               const fullWO = workOrders.find((w) => w.id === wo.id);
               if (fullWO) setSelectedWorkOrder(fullWO);
+            }}
+            onEditWorkOrder={(wo) => {
+              // Find the full work order and open the modal (edit mode would be handled in modal)
+              const fullWO = workOrders.find((w) => w.id === wo.id);
+              if (fullWO) setSelectedWorkOrder(fullWO);
+            }}
+            onDeleteWorkOrder={async (wo) => {
+              if (confirm(`Are you sure you want to delete work order ${wo.work_order_number}?`)) {
+                try {
+                  const res = await fetch(`/api/work-orders/${wo.id}`, { method: "DELETE" });
+                  if (res.ok) {
+                    handleWorkOrderDelete(wo.id);
+                  }
+                } catch (error) {
+                  console.error("Failed to delete work order:", error);
+                }
+              }
             }}
             loading={loading}
           />
