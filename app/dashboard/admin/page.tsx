@@ -46,15 +46,32 @@ export default function AdminDashboard() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  interface EstimateItem {
+    category: string;
+    customName: string;
+    description: string;
+    priceRate: string;
+    quantity: string;
+  }
+
+  const PREDEFINED_CATEGORIES = [
+    "Demo",
+    "Carpentry",
+    "Electrical",
+    "Plumbing",
+    "Drywall/Mud/Taping",
+    "Coatings",
+  ];
+
   const [newProject, setNewProject] = useState({
     name: "",
     description: "",
     status: "planning",
     address: "",
-    budget_amount: "",
-    is_funded: false,
-    funding_notes: "",
   });
+  const [estimateItems, setEstimateItems] = useState<EstimateItem[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [hasCustomCategory, setHasCustomCategory] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -78,31 +95,97 @@ export default function AdminDashboard() {
     }
   }
 
+  function toggleCategory(cat: string) {
+    if (selectedCategories.includes(cat)) {
+      setSelectedCategories((prev) => prev.filter((c) => c !== cat));
+      setEstimateItems((prev) => prev.filter((item) => item.category !== cat));
+    } else {
+      setSelectedCategories((prev) => [...prev, cat]);
+      setEstimateItems((prev) => [
+        ...prev,
+        { category: cat, customName: "", description: "", priceRate: "", quantity: "1" },
+      ]);
+    }
+  }
+
+  function toggleCustomCategory() {
+    if (hasCustomCategory) {
+      setHasCustomCategory(false);
+      setEstimateItems((prev) => prev.filter((item) => item.category !== "custom"));
+      setSelectedCategories((prev) => prev.filter((c) => c !== "custom"));
+    } else {
+      setHasCustomCategory(true);
+      setSelectedCategories((prev) => [...prev, "custom"]);
+      setEstimateItems((prev) => [
+        ...prev,
+        { category: "custom", customName: "", description: "", priceRate: "", quantity: "1" },
+      ]);
+    }
+  }
+
+  function updateEstimateItem(index: number, field: keyof EstimateItem, value: string) {
+    setEstimateItems((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  }
+
+  function getItemTotal(item: EstimateItem): number {
+    const rate = parseFloat(item.priceRate) || 0;
+    const qty = parseFloat(item.quantity) || 0;
+    return rate * qty;
+  }
+
+  function getEstimateGrandTotal(): number {
+    return estimateItems.reduce((sum, item) => sum + getItemTotal(item), 0);
+  }
+
   async function handleCreateProject(e: React.FormEvent) {
     e.preventDefault();
     try {
+      // Calculate budget from estimate
+      const budgetTotal = getEstimateGrandTotal();
+
       const res = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...newProject,
-          budget_amount: newProject.budget_amount
-            ? parseFloat(newProject.budget_amount)
-            : null,
+          budget_amount: budgetTotal > 0 ? budgetTotal : null,
+          funding_notes: budgetTotal > 0 ? `Estimate Total: $${budgetTotal.toLocaleString()}` : null,
         }),
       });
 
       if (res.ok) {
+        const data = await res.json();
+        const projectId = data.project.id;
+
+        // Create estimate line items for the new project
+        for (const item of estimateItems) {
+          await fetch(`/api/projects/${projectId}/estimate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              category: item.category,
+              custom_category_name: item.category === "custom" ? item.customName : undefined,
+              description: item.description,
+              price_rate: parseFloat(item.priceRate) || 0,
+              quantity: parseFloat(item.quantity) || 1,
+            }),
+          });
+        }
+
         setShowNewProject(false);
         setNewProject({
           name: "",
           description: "",
           status: "planning",
           address: "",
-          budget_amount: "",
-          is_funded: false,
-          funding_notes: "",
         });
+        setEstimateItems([]);
+        setSelectedCategories([]);
+        setHasCustomCategory(false);
         fetchData();
       }
     } catch (error) {
@@ -628,70 +711,136 @@ export default function AdminDashboard() {
                 </select>
               </div>
 
-              {/* Budget Section */}
+              {/* Estimate Builder */}
               <div className="pt-4 border-t border-(--border)">
-                <p className="text-sm font-semibold text-(--text) mb-4">
-                  Budget & Funding
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-semibold text-(--text)">
+                    Estimate Builder
+                  </p>
+                  {getEstimateGrandTotal() > 0 && (
+                    <p className="text-lg font-bold text-(--text)">
+                      {formatCurrency(getEstimateGrandTotal())}
+                    </p>
+                  )}
+                </div>
+                <p className="text-xs text-(--text) mb-4">
+                  Select line items to build the project estimate
                 </p>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-(--text) mb-2">
-                      Budget Amount
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-(--text)">
-                        $
-                      </span>
-                      <input
-                        type="number"
-                        value={newProject.budget_amount}
-                        onChange={(e) =>
-                          setNewProject({
-                            ...newProject,
-                            budget_amount: e.target.value,
-                          })
-                        }
-                        placeholder="0"
-                        className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="flex items-center gap-3 cursor-pointer">
+
+                {/* Category Checkboxes */}
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  {PREDEFINED_CATEGORIES.map((cat) => (
+                    <label
+                      key={cat}
+                      className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm cursor-pointer transition ${
+                        selectedCategories.includes(cat)
+                          ? "border-blue-400 bg-blue-50"
+                          : "border-(--border) hover:bg-(--bg)"
+                      }`}
+                    >
                       <input
                         type="checkbox"
-                        checked={newProject.is_funded}
-                        onChange={(e) =>
-                          setNewProject({
-                            ...newProject,
-                            is_funded: e.target.checked,
-                          })
-                        }
-                        className="w-5 h-5 rounded border-(--border) text-(--text) focus:ring-(--ring)"
+                        checked={selectedCategories.includes(cat)}
+                        onChange={() => toggleCategory(cat)}
+                        className="h-4 w-4"
                       />
-                      <span className="text-sm font-medium text-(--text)">
-                        Project is funded
-                      </span>
+                      <span className="text-(--text)">{cat}</span>
                     </label>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-(--text) mb-2">
-                      Funding Notes
-                    </label>
-                    <textarea
-                      value={newProject.funding_notes}
-                      onChange={(e) =>
-                        setNewProject({
-                          ...newProject,
-                          funding_notes: e.target.value,
-                        })
-                      }
-                      rows={2}
-                      placeholder="Notes about funding status, payment terms, etc."
-                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                  ))}
+                  <label
+                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm cursor-pointer transition ${
+                      hasCustomCategory
+                        ? "border-purple-400 bg-purple-50"
+                        : "border-(--border) hover:bg-(--bg)"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={hasCustomCategory}
+                      onChange={toggleCustomCategory}
+                      className="h-4 w-4"
                     />
-                  </div>
+                    <span className="text-(--text)">Custom</span>
+                  </label>
                 </div>
+
+                {/* Line Items */}
+                {estimateItems.length > 0 && (
+                  <div className="space-y-4">
+                    {estimateItems.map((item, idx) => (
+                      <div
+                        key={`${item.category}-${idx}`}
+                        className="p-3 rounded-xl border border-(--border) bg-(--bg) space-y-3"
+                      >
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold text-(--text)">
+                            {item.category === "custom" ? (
+                              <input
+                                type="text"
+                                value={item.customName}
+                                onChange={(e) => updateEstimateItem(idx, "customName", e.target.value)}
+                                placeholder="Custom category name"
+                                className="px-2 py-1 rounded-lg border border-(--border) bg-white text-(--text) text-sm focus:outline-none focus:ring-2 focus:ring-(--ring) w-48"
+                              />
+                            ) : (
+                              item.category
+                            )}
+                          </p>
+                          <p className="text-sm font-bold text-(--text)">
+                            {formatCurrency(getItemTotal(item))}
+                          </p>
+                        </div>
+                        <div>
+                          <textarea
+                            value={item.description}
+                            onChange={(e) => updateEstimateItem(idx, "description", e.target.value)}
+                            rows={2}
+                            placeholder="Description - details about this line item..."
+                            className="w-full px-3 py-2 rounded-lg border border-(--border) bg-white text-(--text) text-sm focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-(--text) mb-1">
+                              Price Rate ($)
+                            </label>
+                            <input
+                              type="number"
+                              value={item.priceRate}
+                              onChange={(e) => updateEstimateItem(idx, "priceRate", e.target.value)}
+                              placeholder="0.00"
+                              step="0.01"
+                              min="0"
+                              className="w-full px-3 py-2 rounded-lg border border-(--border) bg-white text-(--text) text-sm focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-(--text) mb-1">
+                              Quantity
+                            </label>
+                            <input
+                              type="number"
+                              value={item.quantity}
+                              onChange={(e) => updateEstimateItem(idx, "quantity", e.target.value)}
+                              placeholder="1"
+                              step="0.01"
+                              min="0"
+                              className="w-full px-3 py-2 rounded-lg border border-(--border) bg-white text-(--text) text-sm focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Grand Total */}
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-gray-900 text-white">
+                      <p className="text-sm font-semibold">Estimate Total</p>
+                      <p className="text-xl font-bold">
+                        {formatCurrency(getEstimateGrandTotal())}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3 mt-6">

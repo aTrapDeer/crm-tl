@@ -311,3 +311,21 @@ CREATE TABLE IF NOT EXISTS project_change_edits (
 );
 
 CREATE INDEX IF NOT EXISTS idx_change_edits_request ON project_change_edits(change_request_id);
+
+-- ============ ESTIMATE LINE ITEMS ============
+
+CREATE TABLE IF NOT EXISTS estimate_line_items (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  category TEXT NOT NULL,
+  custom_category_name TEXT,
+  description TEXT,
+  price_rate REAL NOT NULL DEFAULT 0,
+  quantity REAL NOT NULL DEFAULT 1,
+  total REAL NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_estimate_line_items_project ON estimate_line_items(project_id);

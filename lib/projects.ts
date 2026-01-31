@@ -471,6 +471,167 @@ export async function getProjectAssignmentsPublic(
   }));
 }
 
+// ============ ESTIMATE LINE ITEMS ============
+
+export interface EstimateLineItem {
+  id: string;
+  project_id: string;
+  category: string;
+  custom_category_name: string | null;
+  description: string | null;
+  price_rate: number;
+  quantity: number;
+  total: number;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+function mapRowToEstimateLineItem(row: Record<string, unknown>): EstimateLineItem {
+  return {
+    id: row.id as string,
+    project_id: row.project_id as string,
+    category: row.category as string,
+    custom_category_name: row.custom_category_name as string | null,
+    description: row.description as string | null,
+    price_rate: (row.price_rate as number) || 0,
+    quantity: (row.quantity as number) || 1,
+    total: (row.total as number) || 0,
+    sort_order: (row.sort_order as number) || 0,
+    created_at: row.created_at as string,
+    updated_at: row.updated_at as string,
+  };
+}
+
+export async function getEstimateLineItems(projectId: string): Promise<EstimateLineItem[]> {
+  const result = await turso.execute({
+    sql: `SELECT * FROM estimate_line_items WHERE project_id = ? ORDER BY sort_order ASC, created_at ASC`,
+    args: [projectId],
+  });
+  return result.rows.map(mapRowToEstimateLineItem);
+}
+
+export async function createEstimateLineItem(data: {
+  project_id: string;
+  category: string;
+  custom_category_name?: string;
+  description?: string;
+  price_rate: number;
+  quantity: number;
+}): Promise<EstimateLineItem> {
+  const id = crypto.randomUUID().replace(/-/g, "");
+  const total = data.price_rate * data.quantity;
+
+  const maxResult = await turso.execute({
+    sql: `SELECT MAX(sort_order) as max_order FROM estimate_line_items WHERE project_id = ?`,
+    args: [data.project_id],
+  });
+  const maxOrder = (maxResult.rows[0]?.max_order as number) || 0;
+
+  await turso.execute({
+    sql: `INSERT INTO estimate_line_items (id, project_id, category, custom_category_name, description, price_rate, quantity, total, sort_order)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      id,
+      data.project_id,
+      data.category,
+      data.custom_category_name || null,
+      data.description || null,
+      data.price_rate,
+      data.quantity,
+      total,
+      maxOrder + 1,
+    ],
+  });
+
+  const result = await turso.execute({
+    sql: `SELECT * FROM estimate_line_items WHERE id = ?`,
+    args: [id],
+  });
+  return mapRowToEstimateLineItem(result.rows[0]);
+}
+
+export async function updateEstimateLineItem(
+  itemId: string,
+  data: Partial<Pick<EstimateLineItem, "category" | "custom_category_name" | "description" | "price_rate" | "quantity">>
+): Promise<EstimateLineItem | null> {
+  const updates: string[] = [];
+  const args: (string | number | null)[] = [];
+
+  if (data.category !== undefined) {
+    updates.push("category = ?");
+    args.push(data.category);
+  }
+  if (data.custom_category_name !== undefined) {
+    updates.push("custom_category_name = ?");
+    args.push(data.custom_category_name);
+  }
+  if (data.description !== undefined) {
+    updates.push("description = ?");
+    args.push(data.description);
+  }
+  if (data.price_rate !== undefined) {
+    updates.push("price_rate = ?");
+    args.push(data.price_rate);
+  }
+  if (data.quantity !== undefined) {
+    updates.push("quantity = ?");
+    args.push(data.quantity);
+  }
+
+  // Recalculate total if price_rate or quantity changed
+  if (data.price_rate !== undefined || data.quantity !== undefined) {
+    // Fetch current values to compute new total
+    const current = await turso.execute({
+      sql: `SELECT price_rate, quantity FROM estimate_line_items WHERE id = ?`,
+      args: [itemId],
+    });
+    if (current.rows.length === 0) return null;
+
+    const rate = data.price_rate !== undefined ? data.price_rate : (current.rows[0].price_rate as number);
+    const qty = data.quantity !== undefined ? data.quantity : (current.rows[0].quantity as number);
+    updates.push("total = ?");
+    args.push(rate * qty);
+  }
+
+  if (updates.length === 0) {
+    const result = await turso.execute({
+      sql: `SELECT * FROM estimate_line_items WHERE id = ?`,
+      args: [itemId],
+    });
+    return result.rows.length > 0 ? mapRowToEstimateLineItem(result.rows[0]) : null;
+  }
+
+  updates.push("updated_at = datetime('now')");
+  args.push(itemId);
+
+  await turso.execute({
+    sql: `UPDATE estimate_line_items SET ${updates.join(", ")} WHERE id = ?`,
+    args,
+  });
+
+  const result = await turso.execute({
+    sql: `SELECT * FROM estimate_line_items WHERE id = ?`,
+    args: [itemId],
+  });
+  return result.rows.length > 0 ? mapRowToEstimateLineItem(result.rows[0]) : null;
+}
+
+export async function deleteEstimateLineItem(itemId: string): Promise<void> {
+  await turso.execute({
+    sql: `DELETE FROM estimate_line_items WHERE id = ?`,
+    args: [itemId],
+  });
+}
+
+export async function getEstimateTotal(projectId: string): Promise<number> {
+  const result = await turso.execute({
+    sql: `SELECT COALESCE(SUM(total), 0) as estimate_total FROM estimate_line_items WHERE project_id = ?`,
+    args: [projectId],
+  });
+  return (result.rows[0].estimate_total as number) || 0;
+}
+
 // ============ IMAGE FUNCTIONS ============
 
 function mapRowToImage(row: Record<string, unknown>): ProjectImage {

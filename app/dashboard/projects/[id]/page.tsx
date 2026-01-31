@@ -87,6 +87,30 @@ export default function ProjectPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Estimate builder state
+  interface EstimateLineItem {
+    id: string;
+    category: string;
+    custom_category_name: string | null;
+    description: string | null;
+    price_rate: number;
+    quantity: number;
+    total: number;
+  }
+  const [estimateItems, setEstimateItems] = useState<EstimateLineItem[]>([]);
+  const [estimateTotal, setEstimateTotal] = useState(0);
+  const [showAddEstimateItem, setShowAddEstimateItem] = useState(false);
+  const [newEstimateItem, setNewEstimateItem] = useState({
+    category: "Demo",
+    customName: "",
+    description: "",
+    priceRate: "",
+    quantity: "1",
+  });
+  const PREDEFINED_CATEGORIES = [
+    "Demo", "Carpentry", "Electrical", "Plumbing", "Drywall/Mud/Taping", "Coatings", "Custom",
+  ];
+
   const [showAddTask, setShowAddTask] = useState(false);
   const [showAddImage, setShowAddImage] = useState(false);
   const [showAddUpdate, setShowAddUpdate] = useState(false);
@@ -99,6 +123,8 @@ export default function ProjectPage() {
   const [newImage, setNewImage] = useState({ filename: "", caption: "" });
   const [newUpdate, setNewUpdate] = useState({ title: "", content: "" });
   const [inviteEmail, setInviteEmail] = useState("");
+  const [generatingTasks, setGeneratingTasks] = useState(false);
+  const [generateError, setGenerateError] = useState("");
   const [editForm, setEditForm] = useState({
     status: "",
     budget_amount: "",
@@ -139,7 +165,7 @@ export default function ProjectPage() {
       });
 
       // Fetch related data
-      const [tasksRes, teamRes, imagesRes, updatesRes, invitationsRes] = await Promise.all([
+      const [tasksRes, teamRes, imagesRes, updatesRes, invitationsRes, estimateRes] = await Promise.all([
         fetch(`/api/projects/${projectId}/tasks`),
         fetch(`/api/projects/${projectId}/team`),
         fetch(`/api/projects/${projectId}/images`),
@@ -147,6 +173,7 @@ export default function ProjectPage() {
         sessionData.user?.role !== "client"
           ? fetch(`/api/projects/${projectId}/invitations`)
           : Promise.resolve({ json: () => Promise.resolve({ invitations: [] }) }),
+        fetch(`/api/projects/${projectId}/estimate`),
       ]);
 
       const tasksData = await tasksRes.json();
@@ -154,6 +181,7 @@ export default function ProjectPage() {
       const imagesData = await imagesRes.json();
       const updatesData = await updatesRes.json();
       const invitationsData = await invitationsRes.json();
+      const estimateData = await estimateRes.json();
 
       setTasks(tasksData.tasks || []);
       setStats(tasksData.stats || { total: 0, completed: 0 });
@@ -161,6 +189,8 @@ export default function ProjectPage() {
       setImages(imagesData.images || []);
       setUpdates(updatesData.updates || []);
       setInvitations(invitationsData.invitations || []);
+      setEstimateItems(estimateData.items || []);
+      setEstimateTotal(estimateData.total || 0);
     } catch (error) {
       console.error("Failed to fetch project:", error);
       router.push("/dashboard");
@@ -234,6 +264,88 @@ export default function ProjectPage() {
       }
     } catch (error) {
       console.error("Failed to delete task:", error);
+    }
+  }
+
+  async function handleGenerateTasks() {
+    setGeneratingTasks(true);
+    setGenerateError("");
+    try {
+      const res = await fetch(`/api/projects/${projectId}/generate-tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        fetchData();
+      } else {
+        setGenerateError(data.error || "Failed to generate tasks");
+      }
+    } catch (error) {
+      console.error("Failed to generate tasks:", error);
+      setGenerateError("Failed to generate tasks. Please try again.");
+    } finally {
+      setGeneratingTasks(false);
+    }
+  }
+
+  async function handleAddEstimateItem(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      const res = await fetch(`/api/projects/${projectId}/estimate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: newEstimateItem.category === "Custom" ? "custom" : newEstimateItem.category,
+          custom_category_name: newEstimateItem.category === "Custom" ? newEstimateItem.customName : undefined,
+          description: newEstimateItem.description,
+          price_rate: parseFloat(newEstimateItem.priceRate) || 0,
+          quantity: parseFloat(newEstimateItem.quantity) || 1,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setEstimateItems((prev) => [...prev, data.item]);
+        setEstimateTotal(data.total);
+        setShowAddEstimateItem(false);
+        setNewEstimateItem({ category: "Demo", customName: "", description: "", priceRate: "", quantity: "1" });
+        // Update project budget to match
+        await fetch(`/api/projects/${projectId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ budget_amount: data.total, funding_notes: `Estimate Total: $${data.total.toLocaleString()}` }),
+        });
+        if (project) setProject({ ...project, budget_amount: data.total, funding_notes: `Estimate Total: $${data.total.toLocaleString()}` });
+      }
+    } catch (error) {
+      console.error("Failed to add estimate item:", error);
+    }
+  }
+
+  async function handleDeleteEstimateItem(itemId: string) {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/estimate`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setEstimateItems((prev) => prev.filter((item) => item.id !== itemId));
+        setEstimateTotal(data.total);
+        await fetch(`/api/projects/${projectId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ budget_amount: data.total, funding_notes: `Estimate Total: $${data.total.toLocaleString()}` }),
+        });
+        if (project) setProject({ ...project, budget_amount: data.total, funding_notes: `Estimate Total: $${data.total.toLocaleString()}` });
+      }
+    } catch (error) {
+      console.error("Failed to delete estimate item:", error);
     }
   }
 
@@ -549,40 +661,98 @@ export default function ProjectPage() {
                   </p>
                 </div>
               )}
-              <div className="p-4 rounded-xl bg-(--bg)">
-                <p className="text-xs uppercase tracking-wider text-(--text)">
-                  Budget
+            </div>
+          </div>
+
+          {/* Estimate Builder */}
+          <div className="tl-card p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-(--text)">
+                Estimate Builder
+              </h2>
+              <div className="flex items-center gap-3">
+                <p className="text-2xl font-bold text-(--text)">
+                  {formatCurrency(estimateTotal)}
                 </p>
-                <p className="text-lg font-semibold text-(--text) mt-1">
-                  {project.budget_amount
-                    ? formatCurrency(project.budget_amount)
-                    : "Not set"}
-                </p>
-              </div>
-              <div className="p-4 rounded-xl bg-(--bg)">
-                <p className="text-xs uppercase tracking-wider text-(--text)">
-                  Funding Status
-                </p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span
-                    className={`w-3 h-3 rounded-full ${
-                      project.is_funded ? "bg-green-500" : "bg-yellow-500"
-                    }`}
-                  />
-                  <span className="text-sm font-medium text-(--text)">
-                    {project.is_funded ? "Funded" : "Pending Funding"}
-                  </span>
-                </div>
+                {userRole === "admin" && (
+                  <button
+                    onClick={() => setShowAddEstimateItem(true)}
+                    className="tl-btn px-4 py-2 text-sm"
+                  >
+                    + Add Item
+                  </button>
+                )}
               </div>
             </div>
-            {project.funding_notes && (
-              <div className="mt-4 p-4 rounded-xl bg-(--bg)">
-                <p className="text-xs uppercase tracking-wider text-(--text)">
-                  Funding Notes
-                </p>
-                <p className="text-sm text-(--text) mt-1">
-                  {project.funding_notes}
-                </p>
+
+            {estimateItems.length === 0 ? (
+              <div className="text-center py-10 border-2 border-dashed border-(--border) rounded-xl">
+                <svg className="w-12 h-12 mx-auto text-(--text)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                <p className="text-(--text) mt-3">No estimate items yet</p>
+                {userRole === "admin" && (
+                  <p className="text-sm text-(--text)">Add line items to build the project estimate</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {/* Table Header */}
+                <div className="hidden md:grid grid-cols-12 gap-3 px-4 py-2 text-xs font-semibold text-(--text) uppercase tracking-wider">
+                  <div className="col-span-3">Category</div>
+                  <div className="col-span-4">Description</div>
+                  <div className="col-span-1 text-right">Rate</div>
+                  <div className="col-span-1 text-right">Qty</div>
+                  <div className="col-span-2 text-right">Total</div>
+                  {userRole === "admin" && <div className="col-span-1"></div>}
+                </div>
+                {estimateItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="grid grid-cols-1 md:grid-cols-12 gap-1 md:gap-3 p-4 rounded-xl bg-(--bg) items-center"
+                  >
+                    <div className="md:col-span-3">
+                      <span className="md:hidden text-xs font-semibold text-(--text) uppercase">Category: </span>
+                      <span className="font-medium text-(--text)">
+                        {item.category === "custom" ? item.custom_category_name || "Custom" : item.category}
+                      </span>
+                    </div>
+                    <div className="md:col-span-4">
+                      <p className="text-sm text-(--text) line-clamp-2">
+                        {item.description || "No description"}
+                      </p>
+                    </div>
+                    <div className="md:col-span-1 md:text-right">
+                      <span className="md:hidden text-xs font-semibold text-(--text)">Rate: </span>
+                      <span className="text-sm text-(--text)">${item.price_rate.toLocaleString()}</span>
+                    </div>
+                    <div className="md:col-span-1 md:text-right">
+                      <span className="md:hidden text-xs font-semibold text-(--text)">Qty: </span>
+                      <span className="text-sm text-(--text)">{item.quantity}</span>
+                    </div>
+                    <div className="md:col-span-2 md:text-right">
+                      <span className="md:hidden text-xs font-semibold text-(--text)">Total: </span>
+                      <span className="font-semibold text-(--text)">{formatCurrency(item.total)}</span>
+                    </div>
+                    {userRole === "admin" && (
+                      <div className="md:col-span-1 text-right">
+                        <button
+                          onClick={() => handleDeleteEstimateItem(item.id)}
+                          className="text-red-400 hover:text-red-600 transition"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {/* Grand Total */}
+                <div className="flex items-center justify-between p-4 rounded-xl bg-gray-900 text-white">
+                  <p className="font-semibold">Estimate Total</p>
+                  <p className="text-2xl font-bold">{formatCurrency(estimateTotal)}</p>
+                </div>
               </div>
             )}
           </div>
@@ -660,15 +830,46 @@ export default function ProjectPage() {
               <h2 className="text-lg font-semibold text-(--text)">
                 Tasks ({tasks.length})
               </h2>
-              {canManageTasks && (
-                <button
-                  onClick={() => setShowAddTask(true)}
-                  className="tl-btn px-4 py-2 text-sm"
-                >
-                  + Add Task
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {userRole === "admin" && (
+                  <button
+                    onClick={handleGenerateTasks}
+                    disabled={generatingTasks}
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition disabled:opacity-50"
+                  >
+                    {generatingTasks ? (
+                      <>
+                        <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        AI Generate
+                      </>
+                    )}
+                  </button>
+                )}
+                {canManageTasks && (
+                  <button
+                    onClick={() => setShowAddTask(true)}
+                    className="tl-btn px-4 py-2 text-sm"
+                  >
+                    + Add Task
+                  </button>
+                )}
+              </div>
             </div>
+            {generateError && (
+              <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+                {generateError}
+              </div>
+            )}
             {tasks.length === 0 ? (
               <p className="text-center text-(--text) py-8">
                 No tasks yet
@@ -1209,6 +1410,127 @@ export default function ProjectPage() {
                   className="flex-1 tl-btn px-4 py-2.5 text-sm disabled:opacity-50"
                 >
                   {inviteLoading ? "Sending..." : "Send Invitation"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Estimate Item Modal */}
+      {showAddEstimateItem && (
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
+          <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-(--text) mb-4">
+              Add Estimate Line Item
+            </h3>
+            <form onSubmit={handleAddEstimateItem} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-(--text) mb-1">
+                  Category
+                </label>
+                <select
+                  value={newEstimateItem.category}
+                  onChange={(e) =>
+                    setNewEstimateItem({ ...newEstimateItem, category: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text)"
+                >
+                  {PREDEFINED_CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+              {newEstimateItem.category === "Custom" && (
+                <div>
+                  <label className="block text-sm font-medium text-(--text) mb-1">
+                    Custom Category Name
+                  </label>
+                  <input
+                    type="text"
+                    value={newEstimateItem.customName}
+                    onChange={(e) =>
+                      setNewEstimateItem({ ...newEstimateItem, customName: e.target.value })
+                    }
+                    required
+                    placeholder="e.g., HVAC, Landscaping..."
+                    className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text)"
+                  />
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-(--text) mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={newEstimateItem.description}
+                  onChange={(e) =>
+                    setNewEstimateItem({ ...newEstimateItem, description: e.target.value })
+                  }
+                  rows={3}
+                  placeholder="Details about this line item..."
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text)"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-(--text) mb-1">
+                    Price Rate ($)
+                  </label>
+                  <input
+                    type="number"
+                    value={newEstimateItem.priceRate}
+                    onChange={(e) =>
+                      setNewEstimateItem({ ...newEstimateItem, priceRate: e.target.value })
+                    }
+                    placeholder="0.00"
+                    step="0.01"
+                    min="0"
+                    required
+                    className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-(--text) mb-1">
+                    Quantity
+                  </label>
+                  <input
+                    type="number"
+                    value={newEstimateItem.quantity}
+                    onChange={(e) =>
+                      setNewEstimateItem({ ...newEstimateItem, quantity: e.target.value })
+                    }
+                    placeholder="1"
+                    step="0.01"
+                    min="0"
+                    required
+                    className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text)"
+                  />
+                </div>
+              </div>
+              {/* Preview total */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-(--bg)">
+                <span className="text-sm text-(--text)">Line Total:</span>
+                <span className="text-lg font-bold text-(--text)">
+                  {formatCurrency(
+                    (parseFloat(newEstimateItem.priceRate) || 0) *
+                    (parseFloat(newEstimateItem.quantity) || 0)
+                  )}
+                </span>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddEstimateItem(false)}
+                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 tl-btn px-4 py-2.5 text-sm"
+                >
+                  Add Item
                 </button>
               </div>
             </form>

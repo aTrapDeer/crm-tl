@@ -9,13 +9,15 @@
     "lint": "eslint",
     "db:init": "tsx scripts/init-db.ts",
     "db:seed-admin": "tsx scripts/seed-admin.ts",
-    "db:fix-work-orders": "tsx scripts/fix-work-orders-schema.ts"
+    "db:fix-work-orders": "tsx scripts/fix-work-orders-schema.ts",
+    "db:migrate-estimate": "tsx scripts/migrate-estimate-builder.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.15.12",
     "bcryptjs": "^2.4.3",
     "next": "16.1.3",
     "nodemailer": "^7.0.12",
+    "openai": "^6.17.0",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
