@@ -6,7 +6,8 @@
       "Bash(npm run db:init:*)",
       "Bash(npx tsx:*)",
       "Bash(npm run lint)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(grep:*)"
     ]
   }
 }

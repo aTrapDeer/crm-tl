@@ -46,6 +46,15 @@ h3 {
   background: rgba(1, 183, 231, 0.25);
 }
 
+@keyframes slide-in {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
 @keyframes fade-up {
   0% {
     opacity: 0;

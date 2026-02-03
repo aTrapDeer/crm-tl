@@ -888,9 +888,9 @@ export default function ProjectDetailsModal({
                     {stats.completed} / {stats.total} tasks
                   </span>
                 </div>
-                <div className="h-3 bg-(--bg) rounded-full overflow-hidden">
+                <div className="h-3 rounded-full overflow-hidden border-2 border-(--tl-slate-300) bg-(--tl-sand)">
                   <div
-                    className="h-full bg-linear-to-r from-(--tl-cyan) to-(--tl-royal) transition-all duration-500"
+                    className="h-full min-w-0 bg-linear-to-r from-(--tl-cyan) to-(--tl-royal) transition-all duration-500 rounded-full"
                     style={{ width: `${progressPercent}%` }}
                   />
                 </div>

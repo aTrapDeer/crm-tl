@@ -7,7 +7,13 @@ const GMAIL_PASSWORD = process.env.GMAIL_PW;
 // Use GMAIL_FROM for the "From" address display, authenticate with GMAIL_LOGIN
 const GMAIL_FROM = process.env.GMAIL_FROM || process.env.GMAIL_LOGIN || "no-reply@taylorleonard.com";
 const GMAIL_FROM_NAME = process.env.GMAIL_FROM_NAME || "Taylor Leonard CRM";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+// APP_URL priority: explicit APP_URL env > NEXT_PUBLIC_APP_URL > Vercel auto-set URL > localhost fallback
+const APP_URL = (
+  process.env.APP_URL ||
+  process.env.NEXT_PUBLIC_APP_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+  "http://localhost:3000"
+).replace(/\/+$/, ""); // strip trailing slash
 
 // Create reusable transporter
 const transporter = GMAIL_LOGIN && GMAIL_PASSWORD

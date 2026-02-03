@@ -72,6 +72,10 @@ export default function AdminDashboard() {
   const [estimateItems, setEstimateItems] = useState<EstimateItem[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [hasCustomCategory, setHasCustomCategory] = useState(false);
+  const [markupType, setMarkupType] = useState<"percentage" | "fixed">("percentage");
+  const [markupValue, setMarkupValue] = useState("");
+  const [taxRate, setTaxRate] = useState("");
+  const [onlineServicingFee, setOnlineServicingFee] = useState(true);
 
   useEffect(() => {
     fetchData();
@@ -141,11 +145,25 @@ export default function AdminDashboard() {
     return estimateItems.reduce((sum, item) => sum + getItemTotal(item), 0);
   }
 
+  function getEstimateBreakdown() {
+    const subtotal = getEstimateGrandTotal();
+    const markup = markupType === "percentage"
+      ? subtotal * ((parseFloat(markupValue) || 0) / 100)
+      : (parseFloat(markupValue) || 0);
+    const afterMarkup = subtotal + markup;
+    const tax = afterMarkup * ((parseFloat(taxRate) || 0) / 100);
+    const afterTax = afterMarkup + tax;
+    const servicingFee = onlineServicingFee ? afterTax * 0.035 : 0;
+    const total = afterTax + servicingFee;
+    return { subtotal, markup, afterMarkup, tax, afterTax, servicingFee, total };
+  }
+
   async function handleCreateProject(e: React.FormEvent) {
     e.preventDefault();
     try {
-      // Calculate budget from estimate
-      const budgetTotal = getEstimateGrandTotal();
+      // Calculate budget from estimate (including markup, tax, servicing fee)
+      const breakdown = getEstimateBreakdown();
+      const budgetTotal = breakdown.total > 0 ? breakdown.total : getEstimateGrandTotal();
 
       const res = await fetch("/api/projects", {
         method: "POST",
@@ -186,6 +204,10 @@ export default function AdminDashboard() {
         setEstimateItems([]);
         setSelectedCategories([]);
         setHasCustomCategory(false);
+        setMarkupType("percentage");
+        setMarkupValue("");
+        setTaxRate("");
+        setOnlineServicingFee(true);
         fetchData();
       }
     } catch (error) {
@@ -719,7 +741,7 @@ export default function AdminDashboard() {
                   </p>
                   {getEstimateGrandTotal() > 0 && (
                     <p className="text-lg font-bold text-(--text)">
-                      {formatCurrency(getEstimateGrandTotal())}
+                      {formatCurrency(getEstimateBreakdown().total)}
                     </p>
                   )}
                 </div>
@@ -832,11 +854,89 @@ export default function AdminDashboard() {
                       </div>
                     ))}
 
+                    {/* Subtotal */}
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-(--tl-sand)">
+                      <p className="text-sm font-semibold text-(--tl-navy)">Subtotal</p>
+                      <p className="text-lg font-bold text-(--tl-navy)">
+                        {formatCurrency(getEstimateGrandTotal())}
+                      </p>
+                    </div>
+
+                    {/* Markup */}
+                    <div className="p-3 rounded-xl border border-(--border) space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-(--tl-navy)">Markup</p>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={markupType}
+                            onChange={(e) => setMarkupType(e.target.value as "percentage" | "fixed")}
+                            className="text-xs px-2 py-1 rounded-lg border border-(--border) bg-white text-(--tl-navy)"
+                          >
+                            <option value="percentage">%</option>
+                            <option value="fixed">$</option>
+                          </select>
+                          <input
+                            type="number"
+                            value={markupValue}
+                            onChange={(e) => setMarkupValue(e.target.value)}
+                            placeholder="0"
+                            step="0.01"
+                            min="0"
+                            className="w-20 text-right text-sm px-2 py-1 rounded-lg border border-(--border) bg-white text-(--tl-navy)"
+                          />
+                        </div>
+                      </div>
+                      {(parseFloat(markupValue) || 0) > 0 && (
+                        <p className="text-xs text-right text-(--tl-teal)">
+                          +{formatCurrency(getEstimateBreakdown().markup)}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Tax */}
+                    <div className="p-3 rounded-xl border border-(--border) space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-(--tl-navy)">Tax (%)</p>
+                        <input
+                          type="number"
+                          value={taxRate}
+                          onChange={(e) => setTaxRate(e.target.value)}
+                          placeholder="0"
+                          step="0.01"
+                          min="0"
+                          className="w-20 text-right text-sm px-2 py-1 rounded-lg border border-(--border) bg-white text-(--tl-navy)"
+                        />
+                      </div>
+                      {(parseFloat(taxRate) || 0) > 0 && (
+                        <p className="text-xs text-right text-(--tl-teal)">
+                          +{formatCurrency(getEstimateBreakdown().tax)}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Online Servicing Fee */}
+                    <div className="p-3 rounded-xl border border-(--border)">
+                      <label className="flex items-center justify-between cursor-pointer">
+                        <span className="text-sm font-medium text-(--tl-navy)">Online Servicing Fee (3.5%)</span>
+                        <input
+                          type="checkbox"
+                          checked={onlineServicingFee}
+                          onChange={(e) => setOnlineServicingFee(e.target.checked)}
+                          className="h-4 w-4"
+                        />
+                      </label>
+                      {onlineServicingFee && getEstimateBreakdown().servicingFee > 0 && (
+                        <p className="text-xs text-right text-(--tl-teal) mt-1">
+                          +{formatCurrency(getEstimateBreakdown().servicingFee)}
+                        </p>
+                      )}
+                    </div>
+
                     {/* Grand Total */}
                     <div className="flex items-center justify-between p-3 rounded-xl bg-gray-900 text-white">
                       <p className="text-sm font-semibold">Estimate Total</p>
                       <p className="text-xl font-bold">
-                        {formatCurrency(getEstimateGrandTotal())}
+                        {formatCurrency(getEstimateBreakdown().total)}
                       </p>
                     </div>
                   </div>
