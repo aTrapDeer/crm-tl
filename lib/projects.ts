@@ -139,6 +139,8 @@ function mapRowToProjectSignature(row: Record<string, unknown>): ProjectSignatur
 }
 
 let projectSignaturesTableReady = false;
+let estimateCustomEntriesTableReady = false;
+let estimateCustomEntriesTableReadyPromise: Promise<void> | null = null;
 
 async function ensureProjectSignaturesTable(): Promise<void> {
   if (projectSignaturesTableReady) return;
@@ -163,6 +165,41 @@ async function ensureProjectSignaturesTable(): Promise<void> {
   );
 
   projectSignaturesTableReady = true;
+}
+
+async function ensureEstimateCustomEntriesTable(): Promise<void> {
+  if (estimateCustomEntriesTableReady) return;
+  if (estimateCustomEntriesTableReadyPromise) {
+    await estimateCustomEntriesTableReadyPromise;
+    return;
+  }
+
+  estimateCustomEntriesTableReadyPromise = (async () => {
+    await turso.execute(`
+      CREATE TABLE IF NOT EXISTS estimate_custom_entries (
+        id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+        name TEXT NOT NULL,
+        description TEXT,
+        default_price_rate REAL NOT NULL DEFAULT 0,
+        default_quantity REAL NOT NULL DEFAULT 1,
+        created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+
+    await turso.execute(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_estimate_custom_entries_name_unique ON estimate_custom_entries(lower(name))"
+    );
+
+    estimateCustomEntriesTableReady = true;
+  })();
+
+  try {
+    await estimateCustomEntriesTableReadyPromise;
+  } finally {
+    estimateCustomEntriesTableReadyPromise = null;
+  }
 }
 
 export async function deleteProjectById(id: string): Promise<boolean> {
@@ -525,7 +562,7 @@ export async function getProjectAssignmentsPublic(
     sql: `SELECT u.id as user_id, u.first_name, u.last_name, u.role 
           FROM users u 
           INNER JOIN project_assignments pa ON u.id = pa.user_id 
-          WHERE pa.project_id = ? AND u.role != 'admin'`,
+          WHERE pa.project_id = ? AND u.role = 'employee'`,
     args: [projectId],
   });
   return result.rows.map((row) => ({
@@ -627,6 +664,7 @@ function mapRowToEstimateCustomEntry(
 }
 
 export async function getEstimateCustomEntries(): Promise<EstimateCustomEntry[]> {
+  await ensureEstimateCustomEntriesTable();
   const result = await turso.execute({
     sql: `SELECT ece.*, u.first_name || ' ' || u.last_name as created_by_name
           FROM estimate_custom_entries ece
@@ -644,6 +682,7 @@ export async function createEstimateCustomEntry(data: {
   default_quantity?: number;
   created_by?: string;
 }): Promise<EstimateCustomEntry> {
+  await ensureEstimateCustomEntriesTable();
   const normalizedName = data.name.trim();
 
   const existing = await turso.execute({

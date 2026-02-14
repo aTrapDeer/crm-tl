@@ -1373,95 +1373,97 @@ export default function ProjectPage() {
         {/* Right Column */}
         <div className="space-y-6">
           {/* Team */}
-          <div className="tl-card p-6">
-            <h2 className="text-lg font-semibold text-(--text) mb-4">
-              Project Team
-            </h2>
-            {team.length === 0 ? (
-              <p className="text-sm text-(--text)">
-                No team members assigned
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {team.map((member) => (
-                  <div
-                    key={member.user_id}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-(--bg)"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-(--bg) flex items-center justify-center text-white font-medium">
-                      {member.first_name[0]}
-                      {member.last_name[0]}
-                    </div>
-                    <div>
-                      <p className="font-medium text-(--text)">
-                        {member.first_name} {member.last_name}
-                      </p>
-                      <p className="text-xs text-(--text) capitalize">
-                        {member.role}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {canEdit && (
-              <div className="mt-5 pt-5 border-t border-(--border) space-y-3">
-                <p className="text-xs uppercase tracking-[0.18em] text-(--text)">
-                  Assign Employees
+          {userRole !== "employee" && (
+            <div className="tl-card p-6">
+              <h2 className="text-lg font-semibold text-(--text) mb-4">
+                Project Team
+              </h2>
+              {team.length === 0 ? (
+                <p className="text-sm text-(--text)">
+                  No team members assigned
                 </p>
-                {employeeAssignments.length === 0 ? (
-                  <p className="text-sm text-(--text)">No employees assigned yet.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {employeeAssignments.map((assignment) => (
-                      <div
-                        key={assignment.user_id}
-                        className="flex items-center justify-between rounded-xl border border-(--border) bg-(--bg) px-3 py-2"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-(--text)">
-                            {assignment.first_name} {assignment.last_name}
-                          </p>
-                          <p className="text-xs text-(--text)">{assignment.email}</p>
-                        </div>
-                        <button
-                          onClick={() => handleUnassignEmployee(assignment.user_id)}
-                          className="text-xs text-red-600 hover:underline"
-                        >
-                          Remove
-                        </button>
+              ) : (
+                <div className="space-y-3">
+                  {team.map((member) => (
+                    <div
+                      key={member.user_id}
+                      className="flex items-center gap-3 p-3 rounded-xl bg-(--bg)"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-(--bg) flex items-center justify-center text-white font-medium">
+                        {member.first_name[0]}
+                        {member.last_name[0]}
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <div>
+                        <p className="font-medium text-(--text)">
+                          {member.first_name} {member.last_name}
+                        </p>
+                        <p className="text-xs text-(--text) capitalize">
+                          {member.role}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-                {availableEmployees.length > 0 && (
-                  <div className="space-y-2">
-                    {availableEmployees.map((employee) => (
-                      <div
-                        key={employee.id}
-                        className="flex items-center justify-between rounded-xl border border-(--border) px-3 py-2"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-(--text)">
-                            {employee.first_name} {employee.last_name}
-                          </p>
-                          <p className="text-xs text-(--text)">{employee.email}</p>
-                        </div>
-                        <button
-                          onClick={() => handleAssignEmployee(employee.id)}
-                          className="text-xs rounded-full bg-(--bg) px-3 py-1.5 text-(--text) hover:bg-(--bg)/70"
+              {canEdit && (
+                <div className="mt-5 pt-5 border-t border-(--border) space-y-3">
+                  <p className="text-xs uppercase tracking-[0.18em] text-(--text)">
+                    Assign Employees
+                  </p>
+                  {employeeAssignments.length === 0 ? (
+                    <p className="text-sm text-(--text)">No employees assigned yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {employeeAssignments.map((assignment) => (
+                        <div
+                          key={assignment.user_id}
+                          className="flex items-center justify-between rounded-xl border border-(--border) bg-(--bg) px-3 py-2"
                         >
-                          + Assign
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+                          <div>
+                            <p className="text-sm font-medium text-(--text)">
+                              {assignment.first_name} {assignment.last_name}
+                            </p>
+                            <p className="text-xs text-(--text)">{assignment.email}</p>
+                          </div>
+                          <button
+                            onClick={() => handleUnassignEmployee(assignment.user_id)}
+                            className="text-xs text-red-600 hover:underline"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {availableEmployees.length > 0 && (
+                    <div className="space-y-2">
+                      {availableEmployees.map((employee) => (
+                        <div
+                          key={employee.id}
+                          className="flex items-center justify-between rounded-xl border border-(--border) px-3 py-2"
+                        >
+                          <div>
+                            <p className="text-sm font-medium text-(--text)">
+                              {employee.first_name} {employee.last_name}
+                            </p>
+                            <p className="text-xs text-(--text)">{employee.email}</p>
+                          </div>
+                          <button
+                            onClick={() => handleAssignEmployee(employee.id)}
+                            className="text-xs rounded-full bg-(--bg) px-3 py-1.5 text-(--text) hover:bg-(--bg)/70"
+                          >
+                            + Assign
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {canSignProject && (
             <div className="tl-card p-6">

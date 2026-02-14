@@ -15,6 +15,60 @@ export interface EmployeeInvitation {
   accepted_user_id: string | null;
 }
 
+let employeeTablesReady = false;
+let employeeTablesReadyPromise: Promise<void> | null = null;
+
+async function ensureEmployeeTables(): Promise<void> {
+  if (employeeTablesReady) return;
+  if (employeeTablesReadyPromise) {
+    await employeeTablesReadyPromise;
+    return;
+  }
+
+  employeeTablesReadyPromise = (async () => {
+    await turso.execute(`
+      CREATE TABLE IF NOT EXISTS employee_invitations (
+        id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+        email TEXT NOT NULL,
+        first_name TEXT,
+        last_name TEXT,
+        token TEXT NOT NULL UNIQUE,
+        invited_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'expired')),
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        accepted_at TEXT,
+        accepted_user_id TEXT REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    await turso.execute(
+      "CREATE INDEX IF NOT EXISTS idx_employee_invitations_email ON employee_invitations(email)"
+    );
+    await turso.execute(
+      "CREATE INDEX IF NOT EXISTS idx_employee_invitations_token ON employee_invitations(token)"
+    );
+    await turso.execute(
+      "CREATE INDEX IF NOT EXISTS idx_employee_invitations_status ON employee_invitations(status)"
+    );
+
+    await turso.execute(`
+      CREATE TABLE IF NOT EXISTS employee_onboarding (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        completed_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+
+    employeeTablesReady = true;
+  })();
+
+  try {
+    await employeeTablesReadyPromise;
+  } finally {
+    employeeTablesReadyPromise = null;
+  }
+}
+
 function mapRowToEmployeeInvitation(row: Record<string, unknown>): EmployeeInvitation {
   return {
     id: row.id as string,
@@ -35,6 +89,7 @@ function mapRowToEmployeeInvitation(row: Record<string, unknown>): EmployeeInvit
 export async function getEmployeeInvitations(
   status?: EmployeeInvitation["status"]
 ): Promise<EmployeeInvitation[]> {
+  await ensureEmployeeTables();
   const hasStatus = Boolean(status);
   const result = await turso.execute({
     sql: `SELECT ei.*, u.first_name || ' ' || u.last_name as inviter_name
@@ -50,6 +105,7 @@ export async function getEmployeeInvitations(
 export async function getEmployeeInvitationByToken(
   token: string
 ): Promise<EmployeeInvitation | null> {
+  await ensureEmployeeTables();
   const result = await turso.execute({
     sql: `SELECT ei.*, u.first_name || ' ' || u.last_name as inviter_name
           FROM employee_invitations ei
@@ -68,6 +124,7 @@ export async function createEmployeeInvitation(data: {
   last_name?: string;
   invited_by: string;
 }): Promise<EmployeeInvitation> {
+  await ensureEmployeeTables();
   const id = crypto.randomUUID().replace(/-/g, "");
   const token = crypto.randomUUID().replace(/-/g, "");
   const expiresAt = new Date();
@@ -95,6 +152,7 @@ export async function acceptEmployeeInvitation(
   token: string,
   userId: string
 ): Promise<boolean> {
+  await ensureEmployeeTables();
   const invitation = await getEmployeeInvitationByToken(token);
   if (!invitation || invitation.status !== "pending") return false;
 
@@ -121,6 +179,7 @@ export async function acceptEmployeeInvitation(
 export async function getEmployeeOnboardingStatus(
   userId: string
 ): Promise<{ completed: boolean; completed_at: string | null }> {
+  await ensureEmployeeTables();
   const result = await turso.execute({
     sql: "SELECT completed_at FROM employee_onboarding WHERE user_id = ?",
     args: [userId],
@@ -139,6 +198,7 @@ export async function getEmployeeOnboardingStatus(
 export async function completeEmployeeOnboarding(
   userId: string
 ): Promise<{ completed: boolean; completed_at: string | null }> {
+  await ensureEmployeeTables();
   await turso.execute({
     sql: `INSERT INTO employee_onboarding (user_id, completed_at)
           VALUES (?, datetime('now'))

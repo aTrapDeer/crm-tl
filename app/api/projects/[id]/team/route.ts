@@ -38,8 +38,8 @@ export async function GET(
       }
     }
 
-    // Admins see all assigned users including other admins
-    // Non-admins see only employees and clients (no admins)
+    // Admins see all assigned users including other admins.
+    // Non-admins see employee teammates only.
     const team = user.role === "admin" 
       ? await getProjectAssignments(id)
       : await getProjectAssignmentsPublic(id);
@@ -50,4 +50,3 @@ export async function GET(
     return Response.json({ error: "Failed to fetch team" }, { status: 500 });
   }
 }
-

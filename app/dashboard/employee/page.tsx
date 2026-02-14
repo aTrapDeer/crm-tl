@@ -169,7 +169,7 @@ export default function EmployeeDashboard() {
           Employee Dashboard
         </h2>
         <p className="text-xs md:text-sm text-(--text) mt-1">
-          Update progress on your assigned projects
+          View your assigned projects, scope, tasks, and updates
         </p>
       </div>
 
@@ -220,20 +220,6 @@ export default function EmployeeDashboard() {
                         }`}
                       >
                         {project.status.replace("_", " ")}
-                      </span>
-                    </div>
-                    {/* Budget & Funding Mini Display */}
-                    <div className="flex items-center gap-3 md:gap-4 mt-3 text-xs text-(--text)">
-                      {project.budget_amount && (
-                        <span className="font-medium">${project.budget_amount.toLocaleString()}</span>
-                      )}
-                      <span className="flex items-center gap-1">
-                        <span
-                          className={`w-2.5 h-2.5 rounded-full ${
-                            project.is_funded ? "bg-green-500" : "bg-yellow-500"
-                          }`}
-                        />
-                        <span className="font-medium">{project.is_funded ? "Funded" : "Pending"}</span>
                       </span>
                     </div>
                   </div>

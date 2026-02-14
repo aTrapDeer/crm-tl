@@ -1103,38 +1103,40 @@ export default function ProjectDetailsModal({
               </div>
 
               {/* Team Members */}
-              <div className="p-3 md:p-4 rounded-xl border border-(--border)">
-                <h3 className="text-sm font-semibold text-(--text) mb-3">
-                  Project Team
-                </h3>
-                {team.length === 0 ? (
-                  <p className="text-sm text-(--text)">
-                    No team members assigned yet
-                  </p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {team.map((member) => (
-                      <div
-                        key={member.user_id}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-(--bg)"
-                      >
-                        <div className="w-8 h-8 rounded-full bg-(--bg) flex items-center justify-center text-white text-xs font-medium">
-                          {member.first_name[0]}
-                          {member.last_name[0]}
+              {userRole !== "employee" && (
+                <div className="p-3 md:p-4 rounded-xl border border-(--border)">
+                  <h3 className="text-sm font-semibold text-(--text) mb-3">
+                    Project Team
+                  </h3>
+                  {team.length === 0 ? (
+                    <p className="text-sm text-(--text)">
+                      No team members assigned yet
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {team.map((member) => (
+                        <div
+                          key={member.user_id}
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-(--bg)"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-(--bg) flex items-center justify-center text-white text-xs font-medium">
+                            {member.first_name[0]}
+                            {member.last_name[0]}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-(--text)">
+                              {member.first_name} {member.last_name}
+                            </p>
+                            <p className="text-xs text-(--text) capitalize">
+                              {member.role}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-medium text-(--text)">
-                            {member.first_name} {member.last_name}
-                          </p>
-                          <p className="text-xs text-(--text) capitalize">
-                            {member.role}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Tasks */}
               <div className="p-3 md:p-4 rounded-xl border border-(--border)">

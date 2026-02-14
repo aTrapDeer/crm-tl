@@ -163,15 +163,23 @@ export default function ManagementPage() {
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-2xl font-bold text-(--text)">Management Portal</h1>
-            <p className="text-sm text-(--text)/60">Manage work orders and documents</p>
+            <p className="text-sm text-(--text)/60">Manage change orders and documents</p>
           </div>
           {activeTab === "work-orders" && (
-            <Link
-              href="/dashboard/management/work-orders/new"
-              className="tl-btn px-4 py-2.5 text-sm"
-            >
-              + New Work Order
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/dashboard/management/work-orders/new"
+                className="tl-btn px-4 py-2.5 text-sm"
+              >
+                + New Change Order
+              </Link>
+              <Link
+                href="/dashboard/management/work-orders/new?orderType=bonan"
+                className="rounded-full border border-(--border)/50 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
+              >
+                Bonan Order
+              </Link>
+            </div>
           )}
         </div>
 
@@ -215,7 +223,7 @@ export default function ManagementPage() {
                 : "border-transparent text-(--text)/60 hover:text-(--text)"
             }`}
           >
-            Work Orders
+            Change Orders
           </button>
           <button
             onClick={() => setActiveTab("documents")}
@@ -244,7 +252,7 @@ export default function ManagementPage() {
               if (fullWO) setSelectedWorkOrder(fullWO);
             }}
             onDeleteWorkOrder={async (wo) => {
-              if (confirm(`Are you sure you want to delete work order ${wo.work_order_number}?`)) {
+              if (confirm(`Are you sure you want to delete change order ${wo.work_order_number}?`)) {
                 try {
                   const res = await fetch(`/api/work-orders/${wo.id}`, { method: "DELETE" });
                   if (res.ok) {

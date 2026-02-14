@@ -165,7 +165,7 @@ export default function WorkOrderListView({
           </svg>
           <input
             type="text"
-            placeholder="Search work orders..."
+            placeholder="Search change orders..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-12 pr-4 py-3 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
@@ -240,7 +240,7 @@ export default function WorkOrderListView({
 
       {/* Results Count */}
       <p className="text-sm text-(--text)/60">
-        {filteredAndSortedWorkOrders.length} work order{filteredAndSortedWorkOrders.length !== 1 ? "s" : ""}
+        {filteredAndSortedWorkOrders.length} change order{filteredAndSortedWorkOrders.length !== 1 ? "s" : ""}
         {hasActiveFilters && ` (filtered from ${workOrders.length})`}
       </p>
 
@@ -261,7 +261,7 @@ export default function WorkOrderListView({
             />
           </svg>
           <p className="text-(--text)/60">
-            {hasActiveFilters ? "No work orders match your filters" : "No work orders yet"}
+            {hasActiveFilters ? "No change orders match your filters" : "No change orders yet"}
           </p>
         </div>
       ) : (
@@ -315,7 +315,7 @@ export default function WorkOrderListView({
                         onEditWorkOrder(workOrder);
                       }}
                       className="p-2 rounded-lg hover:bg-(--bg) text-(--text)/50 hover:text-(--text) transition"
-                      title="Edit work order"
+                      title="Edit change order"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -330,7 +330,7 @@ export default function WorkOrderListView({
                         onDeleteWorkOrder(workOrder);
                       }}
                       className="p-2 rounded-lg hover:bg-red-50 text-(--text)/50 hover:text-red-600 transition"
-                      title="Delete work order"
+                      title="Delete change order"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

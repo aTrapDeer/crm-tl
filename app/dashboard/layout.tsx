@@ -34,7 +34,7 @@ const adminNavItems = [
     ),
   },
   {
-    label: "Work Orders",
+    label: "Management",
     href: "/dashboard/management",
     matchPrefix: "/dashboard/management",
     icon: (

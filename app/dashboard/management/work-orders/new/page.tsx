@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 interface User {
@@ -32,6 +32,8 @@ const SERVICE_TYPES = [
 
 export default function NewWorkOrderPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isBonanOrder = searchParams.get("orderType") === "bonan";
   const [users, setUsers] = useState<User[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,16 +123,16 @@ export default function NewWorkOrderPage() {
 
       if (!res.ok) {
         const data = await res.json();
-        setError(data.error || "Failed to create work order");
+        setError(data.error || "Failed to create change order");
         return;
       }
 
       const data = await res.json();
-      // Redirect to the new work order page
+      // Redirect to the new change order page
       router.push(`/dashboard/management/work-orders/${data.workOrder.id}`);
     } catch (err) {
-      console.error("Failed to create work order:", err);
-      setError("An error occurred while creating the work order");
+      console.error("Failed to create change order:", err);
+      setError("An error occurred while creating the change order");
     } finally {
       setCreating(false);
     }
@@ -158,8 +160,12 @@ export default function NewWorkOrderPage() {
             </svg>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-(--text)">New Work Order</h1>
-            <p className="text-sm text-(--text)/60">Fill in the details below to create a work order</p>
+            <h1 className="text-2xl font-bold text-(--text)">
+              {isBonanOrder ? "New Bonan Order" : "New Change Order"}
+            </h1>
+            <p className="text-sm text-(--text)/60">
+              Fill in the details below to create a {isBonanOrder ? "Bonan Order" : "change order"}
+            </p>
           </div>
         </div>
 
@@ -397,7 +403,7 @@ export default function NewWorkOrderPage() {
               disabled={creating}
               className="flex-1 tl-btn px-6 py-3 text-sm disabled:opacity-50"
             >
-              {creating ? "Creating..." : "Create Work Order"}
+              {creating ? "Creating..." : isBonanOrder ? "Create Bonan Order" : "Create Change Order"}
             </button>
           </div>
         </form>
