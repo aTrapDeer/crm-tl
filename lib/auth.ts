@@ -22,6 +22,12 @@ export interface Session {
 const SALT_ROUNDS = 12;
 const SESSION_DURATION_DAYS = 7;
 
+function normalizeUserRole(role: unknown): UserRole {
+  if (role === "worker") return "employee";
+  if (role === "admin" || role === "employee" || role === "client") return role;
+  return "client";
+}
+
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, SALT_ROUNDS);
 }
@@ -42,16 +48,36 @@ export async function createUser(
 ): Promise<User> {
   const passwordHash = await hashPassword(password);
   const id = crypto.randomUUID().replace(/-/g, "");
+  const normalizedEmail = email.toLowerCase();
+  const roleToInsert = role;
 
-  await turso.execute({
-    sql: `INSERT INTO users (id, email, password_hash, first_name, last_name, role) 
-          VALUES (?, ?, ?, ?, ?, ?)`,
-    args: [id, email.toLowerCase(), passwordHash, firstName, lastName, role],
-  });
+  try {
+    await turso.execute({
+      sql: `INSERT INTO users (id, email, password_hash, first_name, last_name, role) 
+            VALUES (?, ?, ?, ?, ?, ?)`,
+      args: [id, normalizedEmail, passwordHash, firstName, lastName, roleToInsert],
+    });
+  } catch (error) {
+    // Compatibility fallback for older schemas that still enforce 'worker' role.
+    const errMessage = String(error);
+    const oldWorkerConstraint =
+      errMessage.includes("CHECK constraint failed") &&
+      errMessage.includes("role IN ('admin', 'worker', 'client')");
+
+    if (roleToInsert === "employee" && oldWorkerConstraint) {
+      await turso.execute({
+        sql: `INSERT INTO users (id, email, password_hash, first_name, last_name, role) 
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [id, normalizedEmail, passwordHash, firstName, lastName, "worker"],
+      });
+    } else {
+      throw error;
+    }
+  }
 
   return {
     id,
-    email: email.toLowerCase(),
+    email: normalizedEmail,
     first_name: firstName,
     last_name: lastName,
     role,
@@ -76,7 +102,7 @@ export async function getUserByEmail(email: string): Promise<(User & { password_
     password_hash: row.password_hash as string,
     first_name: row.first_name as string,
     last_name: row.last_name as string,
-    role: row.role as UserRole,
+    role: normalizeUserRole(row.role),
     phone: row.phone as string | null,
     created_at: row.created_at as string,
   };
@@ -97,7 +123,7 @@ export async function getUserById(id: string): Promise<User | null> {
     email: row.email as string,
     first_name: row.first_name as string,
     last_name: row.last_name as string,
-    role: row.role as UserRole,
+    role: normalizeUserRole(row.role),
     phone: row.phone as string | null,
     created_at: row.created_at as string,
   };
@@ -160,4 +186,3 @@ export async function login(
   const { password_hash: _omit, ...userWithoutPassword } = user;
   return { user: userWithoutPassword, session };
 }
-

@@ -12,6 +12,7 @@
     "db:fix-work-orders": "tsx scripts/fix-work-orders-schema.ts",
     "db:migrate-estimate": "tsx scripts/migrate-estimate-builder.ts",
     "db:migrate-employee": "tsx scripts/migrate-employee-invites-and-estimate-custom-entries.ts",
+    "db:migrate-user-roles": "tsx scripts/migrate-user-role-worker-to-employee.ts",
     "db:migrate-project-signatures": "tsx scripts/migrate-project-signatures.ts"
   },
   "dependencies": {

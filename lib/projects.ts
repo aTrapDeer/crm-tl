@@ -78,6 +78,10 @@ export interface ProjectSignature {
   created_at: string;
 }
 
+function normalizeVisibleRole(role: unknown): string {
+  return role === "worker" ? "employee" : String(role || "");
+}
+
 function mapRowToProject(row: Record<string, unknown>): Project {
   return {
     id: row.id as string,
@@ -350,7 +354,7 @@ export async function getProjectAssignments(
     email: row.email as string,
     first_name: row.first_name as string,
     last_name: row.last_name as string,
-    role: row.role as string,
+    role: normalizeVisibleRole(row.role),
   }));
 }
 
@@ -410,7 +414,7 @@ export async function getAllUsers(): Promise<{
     email: row.email as string,
     first_name: row.first_name as string,
     last_name: row.last_name as string,
-    role: row.role as string,
+    role: normalizeVisibleRole(row.role),
   }));
 }
 
@@ -562,14 +566,14 @@ export async function getProjectAssignmentsPublic(
     sql: `SELECT u.id as user_id, u.first_name, u.last_name, u.role 
           FROM users u 
           INNER JOIN project_assignments pa ON u.id = pa.user_id 
-          WHERE pa.project_id = ? AND u.role = 'employee'`,
+          WHERE pa.project_id = ? AND u.role IN ('employee', 'worker')`,
     args: [projectId],
   });
   return result.rows.map((row) => ({
     user_id: row.user_id as string,
     first_name: row.first_name as string,
     last_name: row.last_name as string,
-    role: row.role as string,
+    role: normalizeVisibleRole(row.role),
   }));
 }
 
