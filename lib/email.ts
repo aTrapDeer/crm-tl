@@ -196,6 +196,49 @@ export async function sendInvitationEmail(data: {
   });
 }
 
+export async function sendEmployeeInvitationEmail(data: {
+  to: string;
+  inviterName: string;
+  inviteToken: string;
+  employeeName?: string;
+}): Promise<boolean> {
+  const signupUrl = `${APP_URL}/register?employeeInvite=${data.inviteToken}`;
+  const greeting = data.employeeName ? `Hi ${data.employeeName},` : "Hello,";
+
+  const content = `
+    <h2 style="margin: 0 0 16px; color: #01224f; font-size: 20px; font-weight: 600;">
+      You&apos;ve been invited as an employee
+    </h2>
+    <p style="margin: 0 0 16px; color: #0d3e8d; font-size: 16px; line-height: 1.6;">
+      ${greeting}
+    </p>
+    <p style="margin: 0 0 24px; color: #0d3e8d; font-size: 16px; line-height: 1.6;">
+      <strong>${data.inviterName}</strong> invited you to join Taylor Leonard CRM as an employee.
+    </p>
+    <p style="margin: 0 0 24px; color: #0d3e8d; font-size: 16px; line-height: 1.6;">
+      Use the button below to complete your account setup and onboarding.
+    </p>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td align="center">
+          <a href="${signupUrl}" style="display: inline-block; padding: 16px 32px; background-color: #01224f; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; border-radius: 12px;">
+            Accept Employee Invite
+          </a>
+        </td>
+      </tr>
+    </table>
+    <p style="margin: 32px 0 0; color: #7ba8b3; font-size: 14px; line-height: 1.6;">
+      This invitation will expire in 7 days. If you did not expect this invite, you can ignore this email.
+    </p>
+  `;
+
+  return sendEmail({
+    to: data.to,
+    subject: "Employee Invitation - Taylor Leonard CRM",
+    html: getEmailTemplate(content, "Employee Invitation"),
+  });
+}
+
 // ============ MANAGEMENT INVITATION EMAIL ============
 
 export async function sendManagementInvitationEmail(data: {

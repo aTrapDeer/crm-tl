@@ -36,12 +36,19 @@ export default function EmployeeDashboard() {
   const [updates, setUpdates] = useState<ProjectUpdate[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddUpdate, setShowAddUpdate] = useState(false);
-  const [showEditProject, setShowEditProject] = useState(false);
   const [newUpdate, setNewUpdate] = useState({ title: "", content: "" });
-  const [editStatus, setEditStatus] = useState("");
+  const [onboardingLoading, setOnboardingLoading] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [completingOnboarding, setCompletingOnboarding] = useState(false);
+  const [onboardingChecklist, setOnboardingChecklist] = useState({
+    reviewedProjects: false,
+    postedUpdate: false,
+    understandsCommunication: false,
+  });
 
   useEffect(() => {
     fetchProjects();
+    fetchOnboardingStatus();
   }, []);
 
   async function fetchProjects() {
@@ -56,9 +63,22 @@ export default function EmployeeDashboard() {
     }
   }
 
+  async function fetchOnboardingStatus() {
+    try {
+      const res = await fetch("/api/employees/onboarding");
+      const data = await res.json();
+      if (res.ok) {
+        setShowOnboarding(!data.onboarding?.completed);
+      }
+    } catch (error) {
+      console.error("Failed to fetch onboarding status:", error);
+    } finally {
+      setOnboardingLoading(false);
+    }
+  }
+
   async function handleSelectProject(project: Project) {
     setSelectedProject(project);
-    setEditStatus(project.status);
     try {
       const res = await fetch(`/api/projects/${project.id}/updates`);
       const data = await res.json();
@@ -108,25 +128,17 @@ export default function EmployeeDashboard() {
     }
   }
 
-  async function handleUpdateStatus(e: React.FormEvent) {
-    e.preventDefault();
-    if (!selectedProject) return;
-
+  async function handleCompleteOnboarding() {
+    setCompletingOnboarding(true);
     try {
-      const res = await fetch(`/api/projects/${selectedProject.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: editStatus }),
-      });
-
+      const res = await fetch("/api/employees/onboarding", { method: "POST" });
       if (res.ok) {
-        setShowEditProject(false);
-        const updatedProject = { ...selectedProject, status: editStatus };
-        setSelectedProject(updatedProject);
-        fetchProjects();
+        setShowOnboarding(false);
       }
     } catch (error) {
-      console.error("Failed to update project:", error);
+      console.error("Failed to complete onboarding:", error);
+    } finally {
+      setCompletingOnboarding(false);
     }
   }
 
@@ -146,7 +158,7 @@ export default function EmployeeDashboard() {
     });
   }
 
-  if (loading) {
+  if (loading || onboardingLoading) {
     return <div className="text-(--text)">Loading...</div>;
   }
 
@@ -253,12 +265,6 @@ export default function EmployeeDashboard() {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setShowEditProject(true)}
-                        className="text-sm text-(--text) hover:underline"
-                      >
-                        Edit Status
-                      </button>
                       <button
                         onClick={() => handleOpenDetails(selectedProject)}
                         className="p-2 rounded-lg hover:bg-(--bg) transition"
@@ -398,45 +404,80 @@ export default function EmployeeDashboard() {
         </div>
       )}
 
-      {/* Edit Status Modal */}
-      {showEditProject && selectedProject && (
+      {showOnboarding && (
         <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-9999 p-0 md:p-4">
-          <div className="tl-card p-4 md:p-8 w-full max-w-md rounded-t-3xl md:rounded-3xl rounded-b-none md:rounded-b-3xl">
-            <h3 className="text-lg md:text-xl font-semibold text-(--text) mb-4 md:mb-6">
-              Update Project Status
+          <div className="tl-card p-4 md:p-8 w-full max-w-lg rounded-t-3xl md:rounded-3xl rounded-b-none md:rounded-b-3xl">
+            <h3 className="text-lg md:text-xl font-semibold text-(--text) mb-2">
+              Employee Onboarding
             </h3>
-            <form onSubmit={handleUpdateStatus} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-(--text) mb-2">
-                  Status
-                </label>
-                <select
-                  value={editStatus}
-                  onChange={(e) => setEditStatus(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                >
-                  <option value="planning">Planning</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="on_hold">On Hold</option>
-                  <option value="completed">Completed</option>
-                </select>
-              </div>
-              <div className="flex gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setShowEditProject(false)}
-                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 tl-btn px-4 py-2.5 text-sm"
-                >
-                  Update Status
-                </button>
-              </div>
-            </form>
+            <p className="text-sm text-(--text) mb-5">
+              Complete this quick checklist before you start working in projects.
+            </p>
+
+            <div className="space-y-3">
+              <label className="flex items-start gap-3 p-3 rounded-xl border border-(--border) bg-(--bg)">
+                <input
+                  type="checkbox"
+                  checked={onboardingChecklist.reviewedProjects}
+                  onChange={(e) =>
+                    setOnboardingChecklist((prev) => ({
+                      ...prev,
+                      reviewedProjects: e.target.checked,
+                    }))
+                  }
+                  className="mt-1 h-4 w-4"
+                />
+                <span className="text-sm text-(--text)">
+                  I reviewed my assigned projects and current statuses.
+                </span>
+              </label>
+              <label className="flex items-start gap-3 p-3 rounded-xl border border-(--border) bg-(--bg)">
+                <input
+                  type="checkbox"
+                  checked={onboardingChecklist.postedUpdate}
+                  onChange={(e) =>
+                    setOnboardingChecklist((prev) => ({
+                      ...prev,
+                      postedUpdate: e.target.checked,
+                    }))
+                  }
+                  className="mt-1 h-4 w-4"
+                />
+                <span className="text-sm text-(--text)">
+                  I know how to add updates and keep project notes clear.
+                </span>
+              </label>
+              <label className="flex items-start gap-3 p-3 rounded-xl border border-(--border) bg-(--bg)">
+                <input
+                  type="checkbox"
+                  checked={onboardingChecklist.understandsCommunication}
+                  onChange={(e) =>
+                    setOnboardingChecklist((prev) => ({
+                      ...prev,
+                      understandsCommunication: e.target.checked,
+                    }))
+                  }
+                  className="mt-1 h-4 w-4"
+                />
+                <span className="text-sm text-(--text)">
+                  I understand communication expectations and escalation flow.
+                </span>
+              </label>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleCompleteOnboarding}
+              disabled={
+                completingOnboarding ||
+                !onboardingChecklist.reviewedProjects ||
+                !onboardingChecklist.postedUpdate ||
+                !onboardingChecklist.understandsCommunication
+              }
+              className="mt-6 w-full tl-btn px-4 py-2.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {completingOnboarding ? "Saving..." : "Complete Onboarding"}
+            </button>
           </div>
         </div>
       )}

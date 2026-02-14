@@ -105,6 +105,50 @@ CREATE INDEX IF NOT EXISTS idx_project_invitations_project ON project_invitation
 CREATE INDEX IF NOT EXISTS idx_project_invitations_email ON project_invitations(email);
 CREATE INDEX IF NOT EXISTS idx_project_invitations_token ON project_invitations(token);
 
+-- ============ PROJECT SIGNATURES ============
+
+CREATE TABLE IF NOT EXISTS project_signatures (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  signer_role TEXT NOT NULL CHECK (signer_role IN ('admin', 'client')),
+  signer_name TEXT NOT NULL,
+  signature_data TEXT NOT NULL,
+  signed_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  ip_address TEXT,
+  signed_at TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(project_id, signer_role)
+);
+
+CREATE INDEX IF NOT EXISTS idx_project_signatures_project ON project_signatures(project_id);
+
+-- ============ EMPLOYEE INVITATIONS ============ 
+
+CREATE TABLE IF NOT EXISTS employee_invitations (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  email TEXT NOT NULL,
+  first_name TEXT,
+  last_name TEXT,
+  token TEXT NOT NULL UNIQUE,
+  invited_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'expired')),
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  accepted_at TEXT,
+  accepted_user_id TEXT REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_employee_invitations_email ON employee_invitations(email);
+CREATE INDEX IF NOT EXISTS idx_employee_invitations_token ON employee_invitations(token);
+CREATE INDEX IF NOT EXISTS idx_employee_invitations_status ON employee_invitations(status);
+
+-- ============ EMPLOYEE ONBOARDING ============ 
+
+CREATE TABLE IF NOT EXISTS employee_onboarding (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  completed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- ============ WORK ORDERS ============
 
 CREATE TABLE IF NOT EXISTS work_orders (
@@ -329,3 +373,19 @@ CREATE TABLE IF NOT EXISTS estimate_line_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_estimate_line_items_project ON estimate_line_items(project_id);
+
+-- ============ REUSABLE ESTIMATE CUSTOM ENTRIES ============
+
+CREATE TABLE IF NOT EXISTS estimate_custom_entries (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  name TEXT NOT NULL,
+  description TEXT,
+  default_price_rate REAL NOT NULL DEFAULT 0,
+  default_quantity REAL NOT NULL DEFAULT 1,
+  created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_estimate_custom_entries_name_unique
+  ON estimate_custom_entries(lower(name));

@@ -7,6 +7,7 @@ import {
   getProjectsByUserId,
   getProjectTaskStats,
   getProjectById,
+  clearProjectSignatures,
 } from "@/lib/projects";
 import { sendTaskChangeNotification } from "@/lib/email";
 import { cookies } from "next/headers";
@@ -76,18 +77,9 @@ export async function POST(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Clients cannot create tasks
-    if (user.role === "client") {
-      return Response.json({ error: "Clients cannot create tasks" }, { status: 403 });
-    }
-
-    // Workers can only add tasks to assigned projects
-    if (user.role === "employee") {
-      const assignedProjects = await getProjectsByUserId(user.id);
-      const isAssigned = assignedProjects.some((p) => p.id === id);
-      if (!isAssigned) {
-        return Response.json({ error: "Access denied" }, { status: 403 });
-      }
+    // Only admins can create tasks. Employees can only complete existing tasks.
+    if (user.role !== "admin") {
+      return Response.json({ error: "Only admins can create tasks" }, { status: 403 });
     }
 
     const body = await request.json();
@@ -103,6 +95,7 @@ export async function POST(
       description: description?.trim() || undefined,
       created_by: user.id,
     });
+    await clearProjectSignatures(id);
 
     // Send email notification to admins
     const project = await getProjectById(id);
@@ -167,6 +160,13 @@ export async function PATCH(
       return Response.json({ error: "Task ID is required" }, { status: 400 });
     }
 
+    if (user.role === "employee" && (title !== undefined || description !== undefined)) {
+      return Response.json(
+        { error: "Employees can only update task completion" },
+        { status: 403 }
+      );
+    }
+
     const task = await updateProjectTask(
       taskId,
       {
@@ -176,6 +176,7 @@ export async function PATCH(
       },
       user.id
     );
+    await clearProjectSignatures(projectId);
 
     if (!task) {
       return Response.json({ error: "Task not found" }, { status: 404 });
@@ -239,6 +240,7 @@ export async function DELETE(
     }
 
     await deleteProjectTask(taskId);
+    await clearProjectSignatures(projectId);
 
     // Send email notification for task deletion
     if (taskTitle) {
@@ -261,4 +263,3 @@ export async function DELETE(
     return Response.json({ error: "Failed to delete task" }, { status: 500 });
   }
 }
-

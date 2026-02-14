@@ -1,7 +1,6 @@
 import { getSession, getUserById } from "@/lib/auth";
 import {
   getProjectById,
-  getProjectsByUserId,
   createProjectInvitation,
   getProjectInvitations,
 } from "@/lib/projects";
@@ -31,18 +30,8 @@ export async function GET(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admins and employees can view invitations
-    if (user.role === "client") {
-      return Response.json({ error: "Access denied" }, { status: 403 });
-    }
-
-    // Workers can only view for assigned projects
-    if (user.role === "employee") {
-      const assignedProjects = await getProjectsByUserId(user.id);
-      const isAssigned = assignedProjects.some((p) => p.id === id);
-      if (!isAssigned) {
-        return Response.json({ error: "Access denied" }, { status: 403 });
-      }
+    if (user.role !== "admin") {
+      return Response.json({ error: "Only admins can view invitations" }, { status: 403 });
     }
 
     const invitations = await getProjectInvitations(id);
@@ -80,21 +69,11 @@ export async function POST(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admins and employees can invite clients
-    if (user.role === "client") {
+    if (user.role !== "admin") {
       return Response.json(
-        { error: "Clients cannot invite other users" },
+        { error: "Only admins can invite clients" },
         { status: 403 }
       );
-    }
-
-    // Workers can only invite for assigned projects
-    if (user.role === "employee") {
-      const assignedProjects = await getProjectsByUserId(user.id);
-      const isAssigned = assignedProjects.some((p) => p.id === id);
-      if (!isAssigned) {
-        return Response.json({ error: "Access denied" }, { status: 403 });
-      }
     }
 
     const project = await getProjectById(id);

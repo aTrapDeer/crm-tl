@@ -3,6 +3,7 @@ import {
   getProjectAssignments,
   assignUserToProject,
   unassignUserFromProject,
+  clearProjectSignatures,
 } from "@/lib/projects";
 import { cookies } from "next/headers";
 
@@ -68,6 +69,7 @@ export async function POST(
     }
 
     await assignUserToProject(id, userId);
+    await clearProjectSignatures(id);
     return Response.json({ success: true });
   } catch (error) {
     console.error("Error assigning user:", error);
@@ -106,6 +108,7 @@ export async function DELETE(
     }
 
     await unassignUserFromProject(id, userId);
+    await clearProjectSignatures(id);
     return Response.json({ success: true });
   } catch (error) {
     console.error("Error unassigning user:", error);

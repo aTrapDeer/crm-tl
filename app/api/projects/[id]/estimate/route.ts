@@ -5,6 +5,8 @@ import {
   updateEstimateLineItem,
   deleteEstimateLineItem,
   getEstimateTotal,
+  getProjectsByUserId,
+  clearProjectSignatures,
 } from "@/lib/projects";
 import { cookies } from "next/headers";
 
@@ -29,6 +31,21 @@ export async function GET(
     const user = await getUserById(session.user_id);
     if (!user) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (user.role === "employee") {
+      return Response.json(
+        { error: "Employees cannot view project estimates" },
+        { status: 403 }
+      );
+    }
+
+    if (user.role === "client") {
+      const assignedProjects = await getProjectsByUserId(user.id);
+      const isAssigned = assignedProjects.some((p) => p.id === id);
+      if (!isAssigned) {
+        return Response.json({ error: "Access denied" }, { status: 403 });
+      }
     }
 
     const items = await getEstimateLineItems(id);
@@ -81,6 +98,7 @@ export async function POST(
     });
 
     const total = await getEstimateTotal(id);
+    await clearProjectSignatures(id);
 
     return Response.json({ item, total });
   } catch (error) {
@@ -132,6 +150,7 @@ export async function PATCH(
     }
 
     const total = await getEstimateTotal(id);
+    await clearProjectSignatures(id);
 
     return Response.json({ item, total });
   } catch (error) {
@@ -172,6 +191,7 @@ export async function DELETE(
 
     await deleteEstimateLineItem(itemId);
     const total = await getEstimateTotal(id);
+    await clearProjectSignatures(id);
 
     return Response.json({ success: true, total });
   } catch (error) {

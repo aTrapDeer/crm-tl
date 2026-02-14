@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import SignatureCapture from "@/app/components/SignatureCapture";
 
 interface Project {
   id: string;
@@ -70,6 +71,25 @@ interface ProjectInvitation {
 interface User {
   id: string;
   role: "admin" | "employee" | "client";
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+}
+
+interface Assignment {
+  user_id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+}
+
+interface ProjectSignature {
+  id: string;
+  signer_role: "admin" | "client";
+  signer_name: string;
+  signature_data: string;
+  signed_at: string;
 }
 
 export default function ProjectPage() {
@@ -86,6 +106,19 @@ export default function ProjectPage() {
   const [invitations, setInvitations] = useState<ProjectInvitation[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [projectSignatures, setProjectSignatures] = useState<ProjectSignature[]>([]);
+  const [showSignatureCapture, setShowSignatureCapture] = useState<{
+    signerRole: "admin" | "client";
+  } | null>(null);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [editingEstimateId, setEditingEstimateId] = useState<string | null>(null);
+  const [estimateEditForm, setEstimateEditForm] = useState({
+    description: "",
+    price_rate: "",
+    quantity: "",
+  });
 
   // Estimate builder state
   interface EstimateLineItem {
@@ -153,8 +186,12 @@ export default function ProjectPage() {
 
   const userRole = currentUser?.role || "client";
   const canManageTasks = userRole === "admin" || userRole === "employee";
+  const canCreateTasks = userRole === "admin";
   const canManageImages = userRole === "admin" || userRole === "employee";
-  const canEdit = userRole === "admin" || userRole === "employee";
+  const canEdit = userRole === "admin";
+  const canAddUpdates = userRole === "admin";
+  const canViewEstimate = userRole !== "employee";
+  const canSignProject = userRole === "admin" || userRole === "client";
 
   const fetchData = useCallback(async () => {
     try {
@@ -182,15 +219,26 @@ export default function ProjectPage() {
       });
 
       // Fetch related data
-      const [tasksRes, teamRes, imagesRes, updatesRes, invitationsRes, estimateRes] = await Promise.all([
+      const [tasksRes, teamRes, imagesRes, updatesRes, invitationsRes, estimateRes, signaturesRes, usersRes, assignmentsRes] = await Promise.all([
         fetch(`/api/projects/${projectId}/tasks`),
         fetch(`/api/projects/${projectId}/team`),
         fetch(`/api/projects/${projectId}/images`),
         fetch(`/api/projects/${projectId}/updates`),
-        sessionData.user?.role !== "client"
+        sessionData.user?.role === "admin"
           ? fetch(`/api/projects/${projectId}/invitations`)
           : Promise.resolve({ json: () => Promise.resolve({ invitations: [] }) }),
-        fetch(`/api/projects/${projectId}/estimate`),
+        sessionData.user?.role !== "employee"
+          ? fetch(`/api/projects/${projectId}/estimate`)
+          : Promise.resolve({ ok: false, json: () => Promise.resolve({ items: [], total: 0 }) }),
+        sessionData.user?.role !== "employee"
+          ? fetch(`/api/projects/${projectId}/signatures`)
+          : Promise.resolve({ ok: false, json: () => Promise.resolve({ signatures: [] }) }),
+        sessionData.user?.role === "admin"
+          ? fetch("/api/users")
+          : Promise.resolve({ ok: false, json: () => Promise.resolve({ users: [] }) }),
+        sessionData.user?.role === "admin"
+          ? fetch(`/api/projects/${projectId}/assignments`)
+          : Promise.resolve({ ok: false, json: () => Promise.resolve({ assignments: [] }) }),
       ]);
 
       const tasksData = await tasksRes.json();
@@ -199,6 +247,9 @@ export default function ProjectPage() {
       const updatesData = await updatesRes.json();
       const invitationsData = await invitationsRes.json();
       const estimateData = await estimateRes.json();
+      const signaturesData = await signaturesRes.json();
+      const usersData = await usersRes.json();
+      const assignmentsData = await assignmentsRes.json();
 
       setTasks(tasksData.tasks || []);
       setStats(tasksData.stats || { total: 0, completed: 0 });
@@ -208,6 +259,9 @@ export default function ProjectPage() {
       setInvitations(invitationsData.invitations || []);
       setEstimateItems(estimateData.items || []);
       setEstimateTotal(estimateData.total || 0);
+      setProjectSignatures(signaturesData.signatures || []);
+      setAllUsers(usersData.users || []);
+      setAssignments(assignmentsData.assignments || []);
     } catch (error) {
       console.error("Failed to fetch project:", error);
       router.push("/dashboard");
@@ -222,6 +276,7 @@ export default function ProjectPage() {
 
   async function handleAddTask(e: React.FormEvent) {
     e.preventDefault();
+    if (!canCreateTasks) return;
     if (!newTask.title.trim()) return;
 
     try {
@@ -336,6 +391,7 @@ export default function ProjectPage() {
           body: JSON.stringify({ budget_amount: data.total, funding_notes: `Estimate Total: $${data.total.toLocaleString()}` }),
         });
         if (project) setProject({ ...project, budget_amount: data.total, funding_notes: `Estimate Total: $${data.total.toLocaleString()}` });
+        setProjectSignatures([]);
       }
     } catch (error) {
       console.error("Failed to add estimate item:", error);
@@ -360,9 +416,156 @@ export default function ProjectPage() {
           body: JSON.stringify({ budget_amount: data.total, funding_notes: `Estimate Total: $${data.total.toLocaleString()}` }),
         });
         if (project) setProject({ ...project, budget_amount: data.total, funding_notes: `Estimate Total: $${data.total.toLocaleString()}` });
+        setProjectSignatures([]);
       }
     } catch (error) {
       console.error("Failed to delete estimate item:", error);
+    }
+  }
+
+  function startEditEstimateItem(item: EstimateLineItem) {
+    setEditingEstimateId(item.id);
+    setEstimateEditForm({
+      description: item.description || "",
+      price_rate: String(item.price_rate),
+      quantity: String(item.quantity),
+    });
+  }
+
+  function cancelEditEstimateItem() {
+    setEditingEstimateId(null);
+    setEstimateEditForm({ description: "", price_rate: "", quantity: "" });
+  }
+
+  async function handleSaveEstimateItem(itemId: string) {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/estimate`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          itemId,
+          description: estimateEditForm.description,
+          price_rate: parseFloat(estimateEditForm.price_rate) || 0,
+          quantity: parseFloat(estimateEditForm.quantity) || 0,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setEstimateItems((prev) =>
+          prev.map((item) => (item.id === itemId ? data.item : item))
+        );
+        setEstimateTotal(data.total);
+        cancelEditEstimateItem();
+        setProjectSignatures([]);
+        await fetch(`/api/projects/${projectId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            budget_amount: data.total,
+            funding_notes: `Estimate Total: $${data.total.toLocaleString()}`,
+          }),
+        });
+        if (project) {
+          setProject({
+            ...project,
+            budget_amount: data.total,
+            funding_notes: `Estimate Total: $${data.total.toLocaleString()}`,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to update estimate item:", error);
+    }
+  }
+
+  async function handleAssignEmployee(userId: string) {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/assignments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+
+      if (res.ok) {
+        fetchData();
+      } else {
+        const data = await res.json();
+        window.alert(data.error || "Failed to assign employee");
+      }
+    } catch (error) {
+      console.error("Failed to assign employee:", error);
+    }
+  }
+
+  async function handleUnassignEmployee(userId: string) {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/assignments`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+
+      if (res.ok) {
+        fetchData();
+      } else {
+        const data = await res.json();
+        window.alert(data.error || "Failed to unassign employee");
+      }
+    } catch (error) {
+      console.error("Failed to unassign employee:", error);
+    }
+  }
+
+  async function handleSaveProjectSignature(signatureData: string) {
+    if (!showSignatureCapture || !currentUser) return;
+
+    try {
+      const signerName = `${currentUser.first_name || ""} ${currentUser.last_name || ""}`.trim() || "Signer";
+      const res = await fetch(`/api/projects/${projectId}/signatures`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          signer_name: signerName,
+          signature_data: signatureData,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setProjectSignatures(data.signatures || []);
+        setShowSignatureCapture(null);
+      } else {
+        window.alert(data.error || "Failed to save signature");
+      }
+    } catch (error) {
+      console.error("Failed to save signature:", error);
+    }
+  }
+
+  async function handleExportPdf() {
+    setExportingPdf(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/export-pdf`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        window.alert(data.error || "Failed to export PDF");
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${project?.name || "project"}-summary.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Failed to export PDF:", error);
+    } finally {
+      setExportingPdf(false);
     }
   }
 
@@ -436,6 +639,7 @@ export default function ProjectPage() {
 
   async function handleAddUpdate(e: React.FormEvent) {
     e.preventDefault();
+    if (!canAddUpdates) return;
     if (!newUpdate.title.trim()) return;
 
     try {
@@ -475,6 +679,7 @@ export default function ProjectPage() {
       if (res.ok) {
         const data = await res.json();
         setProject(data.project);
+        setProjectSignatures([]);
         setShowEditProject(false);
       }
     } catch (error) {
@@ -576,6 +781,15 @@ export default function ProjectPage() {
     );
   }
 
+  const employeeAssignments = assignments.filter((a) => a.role === "employee");
+  const availableEmployees = allUsers.filter(
+    (u) =>
+      u.role === "employee" &&
+      !employeeAssignments.some((assignment) => assignment.user_id === u.id)
+  );
+  const adminSignature = projectSignatures.find((s) => s.signer_role === "admin");
+  const clientSignature = projectSignatures.find((s) => s.signer_role === "client");
+
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       {/* Header */}
@@ -618,14 +832,25 @@ export default function ProjectPage() {
             </p>
           )}
         </div>
-        {canEdit && (
-          <button
-            onClick={() => setShowEditProject(true)}
-            className="tl-btn px-5 py-2.5 text-sm"
-          >
-            Edit Project
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {canViewEstimate && (
+            <button
+              onClick={handleExportPdf}
+              disabled={exportingPdf}
+              className="rounded-full border border-(--border)/30 px-4 py-2 text-sm font-medium text-(--text) hover:bg-(--bg) disabled:opacity-60"
+            >
+              {exportingPdf ? "Exporting..." : "Export PDF"}
+            </button>
+          )}
+          {canEdit && (
+            <button
+              onClick={() => setShowEditProject(true)}
+              className="tl-btn px-5 py-2.5 text-sm"
+            >
+              Edit Project
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Progress Section */}
@@ -682,20 +907,24 @@ export default function ProjectPage() {
           </div>
 
           {/* Estimate Builder */}
+          {canViewEstimate && (
           <div className="tl-card p-6">
-            <div className="flex items-center justify-between mb-4">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-lg font-semibold text-(--text)">
                 Estimate Builder
               </h2>
-              <div className="flex items-center gap-3">
-                <p className="text-2xl font-bold text-(--text)">
-                  {formatCurrency(estimateTotal)}
-                </p>
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="rounded-full border border-(--border) bg-(--bg) px-4 py-1.5">
+                  <p className="text-lg font-bold text-(--text) sm:text-xl">
+                    {formatCurrency(estimateTotal)}
+                  </p>
+                </div>
                 {userRole === "admin" && (
                   <button
                     onClick={() => setShowAddEstimateItem(true)}
-                    className="tl-btn px-4 py-2 text-sm"
+                    className="inline-flex items-center gap-2 rounded-full bg-(--tl-navy) px-4 py-2 text-sm font-semibold text-white transition hover:bg-(--tl-royal)"
                   >
+                    <span className="text-base leading-none">+</span>
                     + Add Item
                   </button>
                 )}
@@ -713,9 +942,9 @@ export default function ProjectPage() {
                 )}
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {/* Table Header */}
-                <div className="hidden md:grid grid-cols-12 gap-3 px-4 py-2 text-xs font-semibold text-(--text) uppercase tracking-wider">
+                <div className="hidden rounded-xl border border-(--border) bg-(--bg) md:grid grid-cols-12 gap-3 px-4 py-2 text-xs font-semibold text-(--text) uppercase tracking-wider">
                   <div className="col-span-3">Category</div>
                   <div className="col-span-4">Description</div>
                   <div className="col-span-1 text-right">Rate</div>
@@ -723,48 +952,136 @@ export default function ProjectPage() {
                   <div className="col-span-2 text-right">Total</div>
                   {userRole === "admin" && <div className="col-span-1"></div>}
                 </div>
-                {estimateItems.map((item) => (
+                {estimateItems.map((item) => {
+                  const isEditing = editingEstimateId === item.id;
+                  const previewTotal =
+                    (parseFloat(estimateEditForm.price_rate) || 0) *
+                    (parseFloat(estimateEditForm.quantity) || 0);
+
+                  return (
                   <div
                     key={item.id}
-                    className="grid grid-cols-1 md:grid-cols-12 gap-1 md:gap-3 p-4 rounded-xl bg-(--bg) items-center"
+                    className={`grid grid-cols-1 items-center gap-2 rounded-xl border p-4 transition md:grid-cols-12 md:gap-3 ${
+                      isEditing
+                        ? "border-(--tl-royal)/40 bg-white shadow-sm"
+                        : "border-(--border) bg-(--bg)"
+                    }`}
                   >
                     <div className="md:col-span-3">
                       <span className="md:hidden text-xs font-semibold text-(--text) uppercase">Category: </span>
-                      <span className="font-medium text-(--text)">
+                      <span className="inline-flex rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-(--text)">
                         {item.category === "custom" ? item.custom_category_name || "Custom" : item.category}
                       </span>
                     </div>
                     <div className="md:col-span-4">
-                      <p className="text-sm text-(--text) line-clamp-2">
-                        {item.description || "No description"}
-                      </p>
+                      {isEditing ? (
+                        <textarea
+                          value={estimateEditForm.description}
+                          onChange={(e) =>
+                            setEstimateEditForm((prev) => ({
+                              ...prev,
+                              description: e.target.value,
+                            }))
+                          }
+                          rows={2}
+                          className="w-full rounded-lg border border-(--border) bg-white px-2 py-1.5 text-sm text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
+                        />
+                      ) : (
+                        <p className="text-sm text-(--text) line-clamp-2">
+                          {item.description || "No description"}
+                        </p>
+                      )}
                     </div>
                     <div className="md:col-span-1 md:text-right">
                       <span className="md:hidden text-xs font-semibold text-(--text)">Rate: </span>
-                      <span className="text-sm text-(--text)">${item.price_rate.toLocaleString()}</span>
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={estimateEditForm.price_rate}
+                          onChange={(e) =>
+                            setEstimateEditForm((prev) => ({
+                              ...prev,
+                              price_rate: e.target.value,
+                            }))
+                          }
+                          className="w-full rounded-lg border border-(--border) bg-white px-2 py-1.5 text-right text-sm text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
+                        />
+                      ) : (
+                        <span className="text-sm text-(--text)">${item.price_rate.toLocaleString()}</span>
+                      )}
                     </div>
                     <div className="md:col-span-1 md:text-right">
                       <span className="md:hidden text-xs font-semibold text-(--text)">Qty: </span>
-                      <span className="text-sm text-(--text)">{item.quantity}</span>
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={estimateEditForm.quantity}
+                          onChange={(e) =>
+                            setEstimateEditForm((prev) => ({
+                              ...prev,
+                              quantity: e.target.value,
+                            }))
+                          }
+                          className="w-full rounded-lg border border-(--border) bg-white px-2 py-1.5 text-right text-sm text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
+                        />
+                      ) : (
+                        <span className="text-sm text-(--text)">{item.quantity}</span>
+                      )}
                     </div>
                     <div className="md:col-span-2 md:text-right">
                       <span className="md:hidden text-xs font-semibold text-(--text)">Total: </span>
-                      <span className="font-semibold text-(--text)">{formatCurrency(item.total)}</span>
+                      <span className="font-semibold text-(--tl-navy)">
+                        {formatCurrency(isEditing ? previewTotal : item.total)}
+                      </span>
                     </div>
                     {userRole === "admin" && (
-                      <div className="md:col-span-1 text-right">
-                        <button
-                          onClick={() => handleDeleteEstimateItem(item.id)}
-                          className="text-red-400 hover:text-red-600 transition"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                      <div className="md:col-span-1 flex flex-wrap gap-2 md:justify-end">
+                        {isEditing ? (
+                          <>
+                            <button
+                              onClick={() => handleSaveEstimateItem(item.id)}
+                              className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700"
+                            >
+                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                              </svg>
+                              Save
+                            </button>
+                            <button
+                              onClick={cancelEditEstimateItem}
+                              className="rounded-full border border-(--border) px-3 py-1.5 text-xs font-semibold text-(--text) transition hover:bg-(--bg)"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => startEditEstimateItem(item)}
+                              className="rounded-full border border-(--border) px-3 py-1.5 text-xs font-semibold text-(--text) transition hover:border-(--tl-royal) hover:text-(--tl-royal)"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteEstimateItem(item.id)}
+                              className="inline-flex items-center justify-center rounded-full border border-red-200 bg-red-50 p-2 text-red-500 transition hover:bg-red-100 hover:text-red-700"
+                              aria-label="Delete line item"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
                 {/* Subtotal */}
                 <div className="flex items-center justify-between p-3 rounded-xl bg-(--tl-sand)">
                   <p className="text-sm font-semibold text-(--tl-navy)">Subtotal</p>
@@ -855,6 +1172,7 @@ export default function ProjectPage() {
               </div>
             )}
           </div>
+          )}
 
           {/* Photos */}
           <div className="tl-card p-6">
@@ -954,7 +1272,7 @@ export default function ProjectPage() {
                     )}
                   </button>
                 )}
-                {canManageTasks && (
+                {canCreateTasks && (
                   <button
                     onClick={() => setShowAddTask(true)}
                     className="tl-btn px-4 py-2 text-sm"
@@ -1086,7 +1404,129 @@ export default function ProjectPage() {
                 ))}
               </div>
             )}
+
+            {canEdit && (
+              <div className="mt-5 pt-5 border-t border-(--border) space-y-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-(--text)">
+                  Assign Employees
+                </p>
+                {employeeAssignments.length === 0 ? (
+                  <p className="text-sm text-(--text)">No employees assigned yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {employeeAssignments.map((assignment) => (
+                      <div
+                        key={assignment.user_id}
+                        className="flex items-center justify-between rounded-xl border border-(--border) bg-(--bg) px-3 py-2"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-(--text)">
+                            {assignment.first_name} {assignment.last_name}
+                          </p>
+                          <p className="text-xs text-(--text)">{assignment.email}</p>
+                        </div>
+                        <button
+                          onClick={() => handleUnassignEmployee(assignment.user_id)}
+                          className="text-xs text-red-600 hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {availableEmployees.length > 0 && (
+                  <div className="space-y-2">
+                    {availableEmployees.map((employee) => (
+                      <div
+                        key={employee.id}
+                        className="flex items-center justify-between rounded-xl border border-(--border) px-3 py-2"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-(--text)">
+                            {employee.first_name} {employee.last_name}
+                          </p>
+                          <p className="text-xs text-(--text)">{employee.email}</p>
+                        </div>
+                        <button
+                          onClick={() => handleAssignEmployee(employee.id)}
+                          className="text-xs rounded-full bg-(--bg) px-3 py-1.5 text-(--text) hover:bg-(--bg)/70"
+                        >
+                          + Assign
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+
+          {canSignProject && (
+            <div className="tl-card p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-(--text)">
+                  Signatures
+                </h2>
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-xl bg-(--bg) p-3">
+                  <p className="text-xs uppercase tracking-[0.18em] text-(--text)">Admin Approval</p>
+                  {adminSignature ? (
+                    <div className="mt-2">
+                      <p className="text-sm font-medium text-(--text)">{adminSignature.signer_name}</p>
+                      <p className="text-xs text-(--text)">{formatDateTime(adminSignature.signed_at)}</p>
+                      <img
+                        src={adminSignature.signature_data}
+                        alt="Admin signature"
+                        className="mt-2 h-14 rounded border border-(--border) bg-white p-1"
+                      />
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm text-(--text)">Not signed yet</p>
+                  )}
+                  {userRole === "admin" && (
+                    <button
+                      onClick={() => setShowSignatureCapture({ signerRole: "admin" })}
+                      className="mt-3 text-xs rounded-full border border-(--border) px-3 py-1.5 text-(--text) hover:bg-white"
+                    >
+                      {adminSignature ? "Re-sign as Admin" : "Sign as Admin"}
+                    </button>
+                  )}
+                </div>
+
+                <div className="rounded-xl bg-(--bg) p-3">
+                  <p className="text-xs uppercase tracking-[0.18em] text-(--text)">Client Approval</p>
+                  {clientSignature ? (
+                    <div className="mt-2">
+                      <p className="text-sm font-medium text-(--text)">{clientSignature.signer_name}</p>
+                      <p className="text-xs text-(--text)">{formatDateTime(clientSignature.signed_at)}</p>
+                      <img
+                        src={clientSignature.signature_data}
+                        alt="Client signature"
+                        className="mt-2 h-14 rounded border border-(--border) bg-white p-1"
+                      />
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm text-(--text)">Not signed yet</p>
+                  )}
+                  {userRole === "client" && (
+                    <button
+                      onClick={() => setShowSignatureCapture({ signerRole: "client" })}
+                      className="mt-3 text-xs rounded-full border border-(--border) px-3 py-1.5 text-(--text) hover:bg-white"
+                    >
+                      {clientSignature ? "Re-sign as Client" : "Sign as Client"}
+                    </button>
+                  )}
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-(--text)">
+                Signatures reset automatically when project details or estimate line items change.
+              </p>
+            </div>
+          )}
 
           {/* Invitations */}
           {canEdit && (
@@ -1151,7 +1591,7 @@ export default function ProjectPage() {
               <h2 className="text-lg font-semibold text-(--text)">
                 Updates
               </h2>
-              {canEdit && (
+              {canAddUpdates && (
                 <button
                   onClick={() => setShowAddUpdate(true)}
                   className="tl-btn px-3 py-1.5 text-xs"
@@ -1712,6 +2152,19 @@ export default function ProjectPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showSignatureCapture && currentUser && (
+        <SignatureCapture
+          signerName={`${currentUser.first_name || ""} ${currentUser.last_name || ""}`.trim() || "Signer"}
+          signerType={
+            showSignatureCapture.signerRole === "admin"
+              ? "tl_corp_rep"
+              : "building_rep"
+          }
+          onSave={handleSaveProjectSignature}
+          onCancel={() => setShowSignatureCapture(null)}
+        />
       )}
     </div>
   );

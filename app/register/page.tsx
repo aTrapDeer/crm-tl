@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const [employeeInviteToken, setEmployeeInviteToken] = useState<string | null>(null);
+
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -16,6 +18,74 @@ export default function RegisterPage() {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [employeeInviteLoading, setEmployeeInviteLoading] = useState(false);
+  const [employeeInviteError, setEmployeeInviteError] = useState("");
+  const [employeeInviteMeta, setEmployeeInviteMeta] = useState<{
+    inviter_name: string | null;
+    expires_at: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get("employeeInvite");
+    setEmployeeInviteToken(token);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function validateEmployeeInvite(token: string) {
+      setEmployeeInviteLoading(true);
+      setEmployeeInviteError("");
+      setEmployeeInviteMeta(null);
+
+      try {
+        const res = await fetch(`/api/employees/invitations/${token}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          if (!cancelled) {
+            setEmployeeInviteError(data.error || "Invalid employee invitation");
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          setFormData((prev) => ({
+            ...prev,
+            role: "employee",
+            email: data.invitation.email || prev.email,
+            firstName: prev.firstName || data.invitation.first_name || "",
+            lastName: prev.lastName || data.invitation.last_name || "",
+          }));
+          setEmployeeInviteMeta({
+            inviter_name: data.invitation.inviter_name || null,
+            expires_at: data.invitation.expires_at || null,
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setEmployeeInviteError("Unable to validate employee invitation");
+        }
+      } finally {
+        if (!cancelled) {
+          setEmployeeInviteLoading(false);
+        }
+      }
+    }
+
+    if (!employeeInviteToken) {
+      setFormData((prev) => ({ ...prev, role: "client" }));
+      setEmployeeInviteError("");
+      setEmployeeInviteMeta(null);
+      return;
+    }
+
+    validateEmployeeInvite(employeeInviteToken);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [employeeInviteToken]);
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -49,6 +119,8 @@ export default function RegisterPage() {
           firstName: formData.firstName,
           lastName: formData.lastName,
           role: formData.role,
+          employeeInviteToken:
+            formData.role === "employee" ? employeeInviteToken : undefined,
         }),
       });
 
@@ -59,7 +131,6 @@ export default function RegisterPage() {
         return;
       }
 
-      // Redirect based on role
       if (data.user.role === "admin") {
         router.push("/dashboard/admin");
       } else if (data.user.role === "employee") {
@@ -85,11 +156,32 @@ export default function RegisterPage() {
             Taylor Leonard Corp
           </p>
           <h1 className="text-3xl font-semibold text-white mt-2">
-            Create Account
+            {formData.role === "employee" ? "Employee Setup" : "Create Account"}
           </h1>
         </div>
 
         <form onSubmit={handleSubmit} className="glass rounded-3xl p-8 shadow-2xl">
+          {employeeInviteLoading && (
+            <div className="mb-6 p-4 bg-blue-500/10 border border-blue-300/40 rounded-2xl text-blue-100 text-sm">
+              Validating employee invitation...
+            </div>
+          )}
+
+          {employeeInviteMeta && (
+            <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-300/40 rounded-2xl text-emerald-100 text-sm">
+              <p className="font-medium">Employee invitation confirmed</p>
+              {employeeInviteMeta.inviter_name && (
+                <p className="mt-1">Invited by: {employeeInviteMeta.inviter_name}</p>
+              )}
+            </div>
+          )}
+
+          {employeeInviteError && (
+            <div className="mb-6 p-4 bg-amber-500/10 border border-amber-300/40 rounded-2xl text-amber-100 text-sm">
+              {employeeInviteError}
+            </div>
+          )}
+
           {error && (
             <div className="mb-6 p-4 bg-red-500/10 border border-red-400/40 rounded-2xl text-red-100 text-sm">
               {error}
@@ -148,12 +240,12 @@ export default function RegisterPage() {
                 value={formData.email}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-3 rounded-full border border-white/20 bg-white/10 text-white placeholder:text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) focus:border-transparent transition"
+                disabled={formData.role === "employee" && !!employeeInviteMeta}
+                className="w-full px-4 py-3 rounded-full border border-white/20 bg-white/10 text-white placeholder:text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) focus:border-transparent transition disabled:opacity-70"
                 placeholder="you@example.com"
               />
             </div>
 
-            {/* Account Type - fixed as Client for public registration */}
             <div>
               <label
                 htmlFor="role"
@@ -163,11 +255,11 @@ export default function RegisterPage() {
               </label>
               <input
                 type="text"
-                value="Client"
+                value={formData.role === "employee" ? "Employee" : "Client"}
                 disabled
                 className="w-full px-4 py-3 rounded-full border border-white/20 bg-white/5 text-white/70 cursor-not-allowed"
               />
-              <input type="hidden" name="role" value="client" />
+              <input type="hidden" name="role" value={formData.role} />
             </div>
 
             <div>
@@ -212,7 +304,7 @@ export default function RegisterPage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || employeeInviteLoading}
             className="mt-6 w-full tl-btn px-6 py-3 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Creating account..." : "Create Account"}
@@ -220,10 +312,7 @@ export default function RegisterPage() {
 
           <p className="mt-6 text-center text-sm text-(--text)">
             Already have an account?{" "}
-            <Link
-              href="/login"
-              className="text-(--text) font-medium hover:underline"
-            >
+            <Link href="/login" className="text-(--text) font-medium hover:underline">
               Sign in
             </Link>
           </p>
@@ -238,5 +327,3 @@ export default function RegisterPage() {
     </div>
   );
 }
-
-

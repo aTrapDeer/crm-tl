@@ -37,6 +37,22 @@ interface Assignment {
   role: string;
 }
 
+interface EstimateItem {
+  category: string;
+  customName: string;
+  description: string;
+  priceRate: string;
+  quantity: string;
+}
+
+interface EstimateCustomEntry {
+  id: string;
+  name: string;
+  description: string | null;
+  default_price_rate: number;
+  default_quantity: number;
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -46,13 +62,9 @@ export default function AdminDashboard() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  interface EstimateItem {
-    category: string;
-    customName: string;
-    description: string;
-    priceRate: string;
-    quantity: string;
-  }
+  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
+  const [customEntries, setCustomEntries] = useState<EstimateCustomEntry[]>([]);
+  const [savingCustomEntryIndex, setSavingCustomEntryIndex] = useState<number | null>(null);
 
   const PREDEFINED_CATEGORIES = [
     "Demo",
@@ -71,7 +83,6 @@ export default function AdminDashboard() {
   });
   const [estimateItems, setEstimateItems] = useState<EstimateItem[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [hasCustomCategory, setHasCustomCategory] = useState(false);
   const [markupType, setMarkupType] = useState<"percentage" | "fixed">("percentage");
   const [markupValue, setMarkupValue] = useState("");
   const [taxRate, setTaxRate] = useState("");
@@ -83,15 +94,18 @@ export default function AdminDashboard() {
 
   async function fetchData() {
     try {
-      const [projectsRes, usersRes] = await Promise.all([
+      const [projectsRes, usersRes, customEntriesRes] = await Promise.all([
         fetch("/api/projects"),
         fetch("/api/users"),
+        fetch("/api/estimate/custom-entries"),
       ]);
       const projectsData = await projectsRes.json();
       const usersData = await usersRes.json();
+      const customEntriesData = customEntriesRes.ok ? await customEntriesRes.json() : { entries: [] };
 
       setProjects(projectsData.projects || []);
       setUsers(usersData.users || []);
+      setCustomEntries(customEntriesData.entries || []);
     } catch (error) {
       console.error("Failed to fetch data:", error);
     } finally {
@@ -112,18 +126,80 @@ export default function AdminDashboard() {
     }
   }
 
-  function toggleCustomCategory() {
-    if (hasCustomCategory) {
-      setHasCustomCategory(false);
-      setEstimateItems((prev) => prev.filter((item) => item.category !== "custom"));
-      setSelectedCategories((prev) => prev.filter((c) => c !== "custom"));
-    } else {
-      setHasCustomCategory(true);
-      setSelectedCategories((prev) => [...prev, "custom"]);
-      setEstimateItems((prev) => [
-        ...prev,
-        { category: "custom", customName: "", description: "", priceRate: "", quantity: "1" },
-      ]);
+  function addCustomLineItem(template?: EstimateCustomEntry) {
+    setEstimateItems((prev) => [
+      ...prev,
+      {
+        category: "custom",
+        customName: template?.name || "",
+        description: template?.description || "",
+        priceRate:
+          template?.default_price_rate !== undefined
+            ? String(template.default_price_rate)
+            : "",
+        quantity:
+          template?.default_quantity !== undefined
+            ? String(template.default_quantity)
+            : "1",
+      },
+    ]);
+  }
+
+  function removeEstimateItem(index: number) {
+    setEstimateItems((prev) => {
+      const item = prev[index];
+      const next = prev.filter((_, idx) => idx !== index);
+
+      if (item && item.category !== "custom") {
+        setSelectedCategories((current) =>
+          current.filter((category) => category !== item.category)
+        );
+      }
+
+      return next;
+    });
+  }
+
+  async function handleSaveCustomEntry(index: number) {
+    const item = estimateItems[index];
+    if (!item || item.category !== "custom") return;
+
+    const trimmedName = item.customName.trim();
+    if (!trimmedName) {
+      window.alert("Custom entry name is required before saving.");
+      return;
+    }
+
+    setSavingCustomEntryIndex(index);
+    try {
+      const res = await fetch("/api/estimate/custom-entries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: trimmedName,
+          description: item.description.trim(),
+          default_price_rate: parseFloat(item.priceRate) || 0,
+          default_quantity: parseFloat(item.quantity) || 1,
+        }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        window.alert(data.error || "Failed to save custom entry");
+        return;
+      }
+
+      setCustomEntries((prev) => {
+        const withoutCurrent = prev.filter((entry) => entry.id !== data.entry.id);
+        return [...withoutCurrent, data.entry].sort((a, b) =>
+          a.name.localeCompare(b.name)
+        );
+      });
+    } catch (error) {
+      console.error("Failed to save custom entry:", error);
+      window.alert("Failed to save custom entry");
+    } finally {
+      setSavingCustomEntryIndex(null);
     }
   }
 
@@ -160,6 +236,15 @@ export default function AdminDashboard() {
 
   async function handleCreateProject(e: React.FormEvent) {
     e.preventDefault();
+
+    const hasUnnamedCustomItem = estimateItems.some(
+      (item) => item.category === "custom" && !item.customName.trim()
+    );
+    if (hasUnnamedCustomItem) {
+      window.alert("Every custom budget entry needs a name.");
+      return;
+    }
+
     try {
       // Calculate budget from estimate (including markup, tax, servicing fee)
       const breakdown = getEstimateBreakdown();
@@ -203,7 +288,6 @@ export default function AdminDashboard() {
         });
         setEstimateItems([]);
         setSelectedCategories([]);
-        setHasCustomCategory(false);
         setMarkupType("percentage");
         setMarkupValue("");
         setTaxRate("");
@@ -212,6 +296,36 @@ export default function AdminDashboard() {
       }
     } catch (error) {
       console.error("Failed to create project:", error);
+    }
+  }
+
+  async function handleDeleteProject(projectId: string) {
+    if (!window.confirm("Delete this project? This cannot be undone.")) {
+      return;
+    }
+
+    setDeletingProjectId(projectId);
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        window.alert(data.error || "Failed to delete project");
+        return;
+      }
+
+      setProjects((prev) => prev.filter((project) => project.id !== projectId));
+      if (selectedProject?.id === projectId) {
+        setSelectedProject(null);
+        setAssignments([]);
+      }
+    } catch (error) {
+      console.error("Failed to delete project:", error);
+      window.alert("Failed to delete project");
+    } finally {
+      setDeletingProjectId(null);
     }
   }
 
@@ -381,7 +495,7 @@ export default function AdminDashboard() {
               {projects.map((project) => (
                 <div
                   key={project.id}
-                  className={`p-3 md:p-4 rounded-xl border-2 transition shadow-sm ${
+                  className={`relative p-3 md:p-4 rounded-xl border-2 transition shadow-sm ${
                     statusCardStyles[project.status] || statusCardStyles.planning
                   } ${
                     selectedProject?.id === project.id
@@ -389,9 +503,19 @@ export default function AdminDashboard() {
                       : "border-(--border) hover:border-(--border) hover:shadow-md bg-white"
                   }`}
                 >
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteProject(project.id)}
+                    disabled={deletingProjectId === project.id}
+                    className="absolute right-2 top-2 h-7 w-7 rounded-full border border-red-200 bg-white text-red-600 hover:bg-red-50 disabled:opacity-60"
+                    title="Delete project"
+                    aria-label={`Delete ${project.name}`}
+                  >
+                    {deletingProjectId === project.id ? "..." : "X"}
+                  </button>
                   <div
                     onClick={() => handleSelectProject(project)}
-                    className="cursor-pointer"
+                    className="cursor-pointer pr-8"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
@@ -769,21 +893,27 @@ export default function AdminDashboard() {
                       <span className="text-(--text)">{cat}</span>
                     </label>
                   ))}
-                  <label
-                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm cursor-pointer transition ${
-                      hasCustomCategory
-                        ? "border-purple-400 bg-purple-50"
-                        : "border-(--border) hover:bg-(--bg)"
-                    }`}
+                </div>
+
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => addCustomLineItem()}
+                    className="rounded-xl border border-purple-300 bg-purple-50 px-3 py-2 text-xs font-medium text-purple-700 hover:bg-purple-100"
                   >
-                    <input
-                      type="checkbox"
-                      checked={hasCustomCategory}
-                      onChange={toggleCustomCategory}
-                      className="h-4 w-4"
-                    />
-                    <span className="text-(--text)">Custom</span>
-                  </label>
+                    + Add Custom Budget Entry
+                  </button>
+                  {customEntries.map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      onClick={() => addCustomLineItem(entry)}
+                      className="rounded-xl border border-(--border) bg-white px-3 py-2 text-xs text-(--text) hover:bg-(--bg)"
+                      title={entry.description || entry.name}
+                    >
+                      + {entry.name}
+                    </button>
+                  ))}
                 </div>
 
                 {/* Line Items */}
@@ -808,9 +938,20 @@ export default function AdminDashboard() {
                               item.category
                             )}
                           </p>
-                          <p className="text-sm font-bold text-(--text)">
-                            {formatCurrency(getItemTotal(item))}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-bold text-(--text)">
+                              {formatCurrency(getItemTotal(item))}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => removeEstimateItem(idx)}
+                              className="h-7 w-7 rounded-full border border-red-200 bg-white text-red-600 hover:bg-red-50"
+                              title="Remove line item"
+                              aria-label="Remove line item"
+                            >
+                              X
+                            </button>
+                          </div>
                         </div>
                         <div>
                           <textarea
@@ -851,6 +992,18 @@ export default function AdminDashboard() {
                             />
                           </div>
                         </div>
+                        {item.category === "custom" && (
+                          <button
+                            type="button"
+                            onClick={() => handleSaveCustomEntry(idx)}
+                            disabled={savingCustomEntryIndex === idx}
+                            className="rounded-lg border border-(--border) bg-white px-3 py-1.5 text-xs font-medium text-(--text) hover:bg-(--bg) disabled:opacity-60"
+                          >
+                            {savingCustomEntryIndex === idx
+                              ? "Saving..."
+                              : "Save Entry for Future Projects"}
+                          </button>
+                        )}
                       </div>
                     ))}
 
@@ -975,5 +1128,3 @@ export default function AdminDashboard() {
     </div>
   );
 }
-
-

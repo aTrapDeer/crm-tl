@@ -171,10 +171,12 @@ export default function ProjectDetailsModal({
   }, []);
 
   const canManageTasks = userRole === "admin" || userRole === "employee";
+  const canCreateTasks = userRole === "admin";
   const canManageImages = userRole === "admin" || userRole === "employee";
   const canEditBudget = userRole === "admin";
-  const canChangeStatus = userRole === "admin" || userRole === "employee";
-  const canInviteClients = userRole === "admin" || userRole === "employee";
+  const canChangeStatus = userRole === "admin";
+  const canInviteClients = userRole === "admin";
+  const canViewEstimate = userRole !== "employee";
   const changeRequestOptions = [
     { id: "name", label: "Project name" },
     { id: "description", label: "Description" },
@@ -191,7 +193,9 @@ export default function ProjectDetailsModal({
         fetch(`/api/projects/${project.id}/tasks`),
         fetch(`/api/projects/${project.id}/team`),
         fetch(`/api/projects/${project.id}/images`),
-        fetch(`/api/projects/${project.id}/estimate`),
+        canViewEstimate
+          ? fetch(`/api/projects/${project.id}/estimate`)
+          : Promise.resolve({ json: () => Promise.resolve({ items: [], total: 0 }) }),
       ]);
 
       const tasksData = await tasksRes.json();
@@ -210,7 +214,7 @@ export default function ProjectDetailsModal({
     } finally {
       setLoading(false);
     }
-  }, [project.id]);
+  }, [canViewEstimate, project.id]);
 
   useEffect(() => {
     fetchData();
@@ -218,6 +222,7 @@ export default function ProjectDetailsModal({
 
   async function handleAddTask(e: React.FormEvent) {
     e.preventDefault();
+    if (!canCreateTasks) return;
     if (!newTask.title.trim()) return;
 
     try {
@@ -900,6 +905,7 @@ export default function ProjectDetailsModal({
               </div>
 
               {/* Estimate Builder */}
+              {canViewEstimate && (
               <div className="p-3 md:p-4 rounded-xl border border-(--border)">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold text-(--text)">
@@ -995,6 +1001,7 @@ export default function ProjectDetailsModal({
                   </div>
                 )}
               </div>
+              )}
 
               {/* Project Info */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
@@ -1160,7 +1167,7 @@ export default function ProjectDetailsModal({
                         )}
                       </button>
                     )}
-                    {canManageTasks && (
+                    {canCreateTasks && (
                       <button
                         onClick={() => setShowAddTask(true)}
                         className="tl-btn px-2 md:px-3 py-1.5 text-xs"
@@ -2103,4 +2110,3 @@ export default function ProjectDetailsModal({
   // Use portal to render modal at document body level
   return createPortal(modalContent, document.body);
 }
-

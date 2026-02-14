@@ -5,6 +5,7 @@ import {
   updateProjectImage,
   deleteProjectImage,
   getProjectsByUserId,
+  clearProjectSignatures,
 } from "@/lib/projects";
 import { uploadToS3, deleteFromS3, generateS3Key, isS3Configured } from "@/lib/s3";
 import { cookies } from "next/headers";
@@ -113,6 +114,7 @@ export async function POST(
         caption: caption || undefined,
         uploaded_by: user.id,
       });
+      await clearProjectSignatures(projectId);
 
       return Response.json({ 
         image, 
@@ -143,6 +145,7 @@ export async function POST(
       caption,
       uploaded_by: user.id,
     });
+    await clearProjectSignatures(projectId);
 
     return Response.json({ 
       image, 
@@ -204,6 +207,7 @@ export async function PATCH(
     if (!image) {
       return Response.json({ error: "Image not found" }, { status: 404 });
     }
+    await clearProjectSignatures(projectId);
 
     return Response.json({ image });
   } catch (error) {
@@ -257,6 +261,7 @@ export async function DELETE(
     if (deletedImage.s3_key) {
       await deleteFromS3(deletedImage.s3_key);
     }
+    await clearProjectSignatures(deletedImage.project_id);
 
     return Response.json({ 
       success: true, 
@@ -269,4 +274,3 @@ export async function DELETE(
     return Response.json({ error: "Failed to delete image" }, { status: 500 });
   }
 }
-

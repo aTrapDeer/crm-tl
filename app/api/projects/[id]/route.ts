@@ -1,5 +1,11 @@
 import { getSession, getUserById } from "@/lib/auth";
-import { getProjectById, updateProject, getProjectsByUserId } from "@/lib/projects";
+import {
+  getProjectById,
+  updateProject,
+  getProjectsByUserId,
+  deleteProjectById,
+  clearProjectSignatures,
+} from "@/lib/projects";
 import { cookies } from "next/headers";
 
 export async function GET(
@@ -69,17 +75,8 @@ export async function PATCH(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Employees can update assigned projects, admins can update any
-    if (user.role === "client") {
-      return Response.json({ error: "Clients cannot update projects" }, { status: 403 });
-    }
-
-    if (user.role === "employee") {
-      const assignedProjects = await getProjectsByUserId(user.id);
-      const isAssigned = assignedProjects.some((p) => p.id === id);
-      if (!isAssigned) {
-        return Response.json({ error: "Access denied" }, { status: 403 });
-      }
+    if (user.role !== "admin") {
+      return Response.json({ error: "Only admins can update projects" }, { status: 403 });
     }
 
     const body = await request.json();
@@ -110,6 +107,8 @@ export async function PATCH(
       return Response.json({ error: "Project not found" }, { status: 404 });
     }
 
+    await clearProjectSignatures(id);
+
     return Response.json({ project });
   } catch (error) {
     console.error("Error updating project:", error);
@@ -117,3 +116,40 @@ export async function PATCH(
   }
 }
 
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const cookieStore = await cookies();
+    const sessionId = cookieStore.get("session_id")?.value;
+
+    if (!sessionId) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const session = await getSession(sessionId);
+    if (!session) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await getUserById(session.user_id);
+    if (!user || user.role !== "admin") {
+      return Response.json(
+        { error: "Only admins can delete projects" },
+        { status: 403 }
+      );
+    }
+
+    const deleted = await deleteProjectById(id);
+    if (!deleted) {
+      return Response.json({ error: "Project not found" }, { status: 404 });
+    }
+
+    return Response.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting project:", error);
+    return Response.json({ error: "Failed to delete project" }, { status: 500 });
+  }
+}

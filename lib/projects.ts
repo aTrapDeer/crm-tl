@@ -66,6 +66,18 @@ export interface ProjectImage {
   created_at: string;
 }
 
+export interface ProjectSignature {
+  id: string;
+  project_id: string;
+  signer_role: "admin" | "client";
+  signer_name: string;
+  signature_data: string;
+  signed_by: string | null;
+  ip_address: string | null;
+  signed_at: string;
+  created_at: string;
+}
+
 function mapRowToProject(row: Record<string, unknown>): Project {
   return {
     id: row.id as string,
@@ -110,6 +122,59 @@ export async function getProjectById(id: string): Promise<Project | null> {
   });
   if (result.rows.length === 0) return null;
   return mapRowToProject(result.rows[0]);
+}
+
+function mapRowToProjectSignature(row: Record<string, unknown>): ProjectSignature {
+  return {
+    id: row.id as string,
+    project_id: row.project_id as string,
+    signer_role: row.signer_role as ProjectSignature["signer_role"],
+    signer_name: row.signer_name as string,
+    signature_data: row.signature_data as string,
+    signed_by: row.signed_by as string | null,
+    ip_address: row.ip_address as string | null,
+    signed_at: row.signed_at as string,
+    created_at: row.created_at as string,
+  };
+}
+
+let projectSignaturesTableReady = false;
+
+async function ensureProjectSignaturesTable(): Promise<void> {
+  if (projectSignaturesTableReady) return;
+
+  await turso.execute(`
+    CREATE TABLE IF NOT EXISTS project_signatures (
+      id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      signer_role TEXT NOT NULL CHECK (signer_role IN ('admin', 'client')),
+      signer_name TEXT NOT NULL,
+      signature_data TEXT NOT NULL,
+      signed_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      ip_address TEXT,
+      signed_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(project_id, signer_role)
+    )
+  `);
+
+  await turso.execute(
+    "CREATE INDEX IF NOT EXISTS idx_project_signatures_project ON project_signatures(project_id)"
+  );
+
+  projectSignaturesTableReady = true;
+}
+
+export async function deleteProjectById(id: string): Promise<boolean> {
+  const existing = await getProjectById(id);
+  if (!existing) return false;
+
+  await turso.execute({
+    sql: "DELETE FROM projects WHERE id = ?",
+    args: [id],
+  });
+
+  return true;
 }
 
 export async function createProject(data: {
@@ -471,7 +536,176 @@ export async function getProjectAssignmentsPublic(
   }));
 }
 
+// ============ PROJECT SIGNATURES ============
+
+export async function getProjectSignatures(projectId: string): Promise<ProjectSignature[]> {
+  await ensureProjectSignaturesTable();
+  const result = await turso.execute({
+    sql: `SELECT * FROM project_signatures
+          WHERE project_id = ?
+          ORDER BY created_at ASC`,
+    args: [projectId],
+  });
+  return result.rows.map(mapRowToProjectSignature);
+}
+
+export async function upsertProjectSignature(data: {
+  project_id: string;
+  signer_role: ProjectSignature["signer_role"];
+  signer_name: string;
+  signature_data: string;
+  signed_by?: string;
+  ip_address?: string;
+}): Promise<ProjectSignature> {
+  await ensureProjectSignaturesTable();
+  await turso.execute({
+    sql: `DELETE FROM project_signatures
+          WHERE project_id = ? AND signer_role = ?`,
+    args: [data.project_id, data.signer_role],
+  });
+
+  const id = crypto.randomUUID().replace(/-/g, "");
+  await turso.execute({
+    sql: `INSERT INTO project_signatures
+          (id, project_id, signer_role, signer_name, signature_data, signed_by, ip_address, signed_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+    args: [
+      id,
+      data.project_id,
+      data.signer_role,
+      data.signer_name,
+      data.signature_data,
+      data.signed_by || null,
+      data.ip_address || null,
+    ],
+  });
+
+  const result = await turso.execute({
+    sql: "SELECT * FROM project_signatures WHERE id = ?",
+    args: [id],
+  });
+
+  return mapRowToProjectSignature(result.rows[0]);
+}
+
+export async function clearProjectSignatures(projectId: string): Promise<void> {
+  await ensureProjectSignaturesTable();
+  await turso.execute({
+    sql: "DELETE FROM project_signatures WHERE project_id = ?",
+    args: [projectId],
+  });
+}
+
 // ============ ESTIMATE LINE ITEMS ============
+
+export interface EstimateCustomEntry {
+  id: string;
+  name: string;
+  description: string | null;
+  default_price_rate: number;
+  default_quantity: number;
+  created_by: string | null;
+  created_by_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+function mapRowToEstimateCustomEntry(
+  row: Record<string, unknown>
+): EstimateCustomEntry {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    description: row.description as string | null,
+    default_price_rate: (row.default_price_rate as number) || 0,
+    default_quantity: (row.default_quantity as number) || 1,
+    created_by: row.created_by as string | null,
+    created_by_name: row.created_by_name as string | undefined,
+    created_at: row.created_at as string,
+    updated_at: row.updated_at as string,
+  };
+}
+
+export async function getEstimateCustomEntries(): Promise<EstimateCustomEntry[]> {
+  const result = await turso.execute({
+    sql: `SELECT ece.*, u.first_name || ' ' || u.last_name as created_by_name
+          FROM estimate_custom_entries ece
+          LEFT JOIN users u ON ece.created_by = u.id
+          ORDER BY ece.name COLLATE NOCASE ASC`,
+  });
+
+  return result.rows.map(mapRowToEstimateCustomEntry);
+}
+
+export async function createEstimateCustomEntry(data: {
+  name: string;
+  description?: string;
+  default_price_rate?: number;
+  default_quantity?: number;
+  created_by?: string;
+}): Promise<EstimateCustomEntry> {
+  const normalizedName = data.name.trim();
+
+  const existing = await turso.execute({
+    sql: `SELECT ece.*, u.first_name || ' ' || u.last_name as created_by_name
+          FROM estimate_custom_entries ece
+          LEFT JOIN users u ON ece.created_by = u.id
+          WHERE lower(ece.name) = lower(?)
+          LIMIT 1`,
+    args: [normalizedName],
+  });
+
+  if (existing.rows.length > 0) {
+    const existingId = existing.rows[0].id as string;
+    await turso.execute({
+      sql: `UPDATE estimate_custom_entries
+            SET description = ?,
+                default_price_rate = ?,
+                default_quantity = ?,
+                updated_at = datetime('now')
+            WHERE id = ?`,
+      args: [
+        data.description || null,
+        data.default_price_rate || 0,
+        data.default_quantity || 1,
+        existingId,
+      ],
+    });
+
+    const refreshed = await turso.execute({
+      sql: `SELECT ece.*, u.first_name || ' ' || u.last_name as created_by_name
+            FROM estimate_custom_entries ece
+            LEFT JOIN users u ON ece.created_by = u.id
+            WHERE ece.id = ?`,
+      args: [existingId],
+    });
+    return mapRowToEstimateCustomEntry(refreshed.rows[0]);
+  }
+
+  const id = crypto.randomUUID().replace(/-/g, "");
+  await turso.execute({
+    sql: `INSERT INTO estimate_custom_entries
+          (id, name, description, default_price_rate, default_quantity, created_by)
+          VALUES (?, ?, ?, ?, ?, ?)`,
+    args: [
+      id,
+      normalizedName,
+      data.description || null,
+      data.default_price_rate || 0,
+      data.default_quantity || 1,
+      data.created_by || null,
+    ],
+  });
+
+  const result = await turso.execute({
+    sql: `SELECT ece.*, u.first_name || ' ' || u.last_name as created_by_name
+          FROM estimate_custom_entries ece
+          LEFT JOIN users u ON ece.created_by = u.id
+          WHERE ece.id = ?`,
+    args: [id],
+  });
+  return mapRowToEstimateCustomEntry(result.rows[0]);
+}
 
 export interface EstimateLineItem {
   id: string;

@@ -1,5 +1,10 @@
 import { getSession, getUserById } from "@/lib/auth";
-import { getProjectUpdates, addProjectUpdate, getProjectsByUserId } from "@/lib/projects";
+import {
+  getProjectUpdates,
+  addProjectUpdate,
+  getProjectsByUserId,
+  clearProjectSignatures,
+} from "@/lib/projects";
 import { cookies } from "next/headers";
 
 export async function GET(
@@ -65,18 +70,9 @@ export async function POST(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only employees and admins can add updates
-    if (user.role === "client") {
-      return Response.json({ error: "Clients cannot add updates" }, { status: 403 });
-    }
-
-    // Workers can only add updates to assigned projects
-    if (user.role === "employee") {
-      const assignedProjects = await getProjectsByUserId(user.id);
-      const isAssigned = assignedProjects.some((p) => p.id === id);
-      if (!isAssigned) {
-        return Response.json({ error: "Access denied" }, { status: 403 });
-      }
+    // Only admins can post updates. Employees can view updates only.
+    if (user.role !== "admin") {
+      return Response.json({ error: "Only admins can add updates" }, { status: 403 });
     }
 
     const body = await request.json();
@@ -87,10 +83,10 @@ export async function POST(
     }
 
     const update = await addProjectUpdate(id, user.id, title, content);
+    await clearProjectSignatures(id);
     return Response.json({ update });
   } catch (error) {
     console.error("Error adding update:", error);
     return Response.json({ error: "Failed to add update" }, { status: 500 });
   }
 }
-

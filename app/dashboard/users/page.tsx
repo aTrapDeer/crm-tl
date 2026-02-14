@@ -15,6 +15,16 @@ interface SessionUser {
   role: "admin" | "employee" | "client";
 }
 
+interface EmployeeInvitation {
+  id: string;
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  status: "pending" | "accepted" | "expired";
+  expires_at: string;
+  created_at: string;
+}
+
 const roleMeta = {
   admin: {
     label: "Admins",
@@ -42,6 +52,15 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
+  const [invitations, setInvitations] = useState<EmployeeInvitation[]>([]);
+  const [inviteForm, setInviteForm] = useState({
+    email: "",
+    firstName: "",
+    lastName: "",
+  });
+  const [inviteError, setInviteError] = useState("");
+  const [inviteSuccess, setInviteSuccess] = useState("");
+  const [inviteLoading, setInviteLoading] = useState(false);
 
   useEffect(() => {
     async function fetchUsers() {
@@ -59,6 +78,12 @@ export default function UsersPage() {
         }
         const usersData = await usersRes.json();
         setUsers(usersData.users || []);
+
+        const inviteRes = await fetch("/api/employees/invitations");
+        if (inviteRes.ok) {
+          const inviteData = await inviteRes.json();
+          setInvitations(inviteData.invitations || []);
+        }
       } catch (err) {
         console.error("Failed to fetch users:", err);
         setError("Unable to load users right now.");
@@ -100,6 +125,36 @@ export default function UsersPage() {
       clients: users.filter((u) => u.role === "client").length,
     };
   }, [users]);
+
+  async function handleInviteEmployee(e: React.FormEvent) {
+    e.preventDefault();
+    setInviteError("");
+    setInviteSuccess("");
+    setInviteLoading(true);
+
+    try {
+      const res = await fetch("/api/employees/invitations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(inviteForm),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setInviteError(data.error || "Failed to send invite");
+        return;
+      }
+
+      setInviteSuccess(`Invitation sent to ${inviteForm.email}`);
+      setInviteForm({ email: "", firstName: "", lastName: "" });
+      setInvitations((prev) => [data.invitation, ...prev]);
+    } catch (err) {
+      console.error("Failed to invite employee:", err);
+      setInviteError("Unable to send invite right now.");
+    } finally {
+      setInviteLoading(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -179,6 +234,90 @@ export default function UsersPage() {
       </section>
 
       <section className="tl-card p-4 md:p-6">
+        <div className="mb-6 pb-6 border-b border-(--border)">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.25em] text-(--text)/60">
+                Employee Onboarding
+              </p>
+              <h2 className="mt-1 text-lg font-semibold text-(--text)">
+                Invite Employee
+              </h2>
+              <p className="text-sm text-(--text) mt-1">
+                Send an employee invite link and onboarding access by email.
+              </p>
+            </div>
+            <p className="text-xs text-(--text)/70">
+              Pending invites: {invitations.length}
+            </p>
+          </div>
+
+          <form
+            onSubmit={handleInviteEmployee}
+            className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_1.4fr_auto]"
+          >
+            <input
+              type="text"
+              placeholder="First name (optional)"
+              value={inviteForm.firstName}
+              onChange={(e) =>
+                setInviteForm((prev) => ({ ...prev, firstName: e.target.value }))
+              }
+              className="px-3 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) text-sm focus:outline-none focus:ring-2 focus:ring-(--ring)"
+            />
+            <input
+              type="text"
+              placeholder="Last name (optional)"
+              value={inviteForm.lastName}
+              onChange={(e) =>
+                setInviteForm((prev) => ({ ...prev, lastName: e.target.value }))
+              }
+              className="px-3 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) text-sm focus:outline-none focus:ring-2 focus:ring-(--ring)"
+            />
+            <input
+              type="email"
+              placeholder="employee@company.com"
+              value={inviteForm.email}
+              onChange={(e) =>
+                setInviteForm((prev) => ({ ...prev, email: e.target.value }))
+              }
+              required
+              className="px-3 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) text-sm focus:outline-none focus:ring-2 focus:ring-(--ring)"
+            />
+            <button
+              type="submit"
+              disabled={inviteLoading}
+              className="tl-btn px-4 py-2.5 text-sm disabled:opacity-60"
+            >
+              {inviteLoading ? "Sending..." : "Send Invite"}
+            </button>
+          </form>
+
+          {inviteError && (
+            <p className="mt-3 text-sm text-red-600">{inviteError}</p>
+          )}
+          {inviteSuccess && (
+            <p className="mt-3 text-sm text-emerald-700">{inviteSuccess}</p>
+          )}
+
+          {invitations.length > 0 && (
+            <div className="mt-4 grid gap-2">
+              {invitations.slice(0, 5).map((invite) => (
+                <div
+                  key={invite.id}
+                  className="rounded-xl border border-(--border) bg-(--bg) px-3 py-2.5 text-sm text-(--text)"
+                >
+                  <span className="font-medium">{invite.email}</span>
+                  <span className="text-(--text)/70">
+                    {" "}
+                    • expires {new Date(invite.expires_at).toLocaleDateString("en-US")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="relative">
           <svg
             className="w-4 h-4 text-(--text)/60 absolute left-3 top-1/2 -translate-y-1/2"
