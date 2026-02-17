@@ -244,11 +244,6 @@ export default function EmployeeDashboard() {
                       <h3 className="text-lg font-semibold text-(--text)">
                         {selectedProject.name}
                       </h3>
-                      {selectedProject.description && (
-                        <p className="text-sm text-(--text) mt-1">
-                          {selectedProject.description}
-                        </p>
-                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <button

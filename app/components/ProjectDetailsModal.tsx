@@ -759,7 +759,7 @@ export default function ProjectDetailsModal({
                   </span>
                 )}
               </div>
-              {project.description && (
+              {userRole !== "employee" && project.description && (
                 <p className="text-sm text-(--text)">
                   {project.description}
                 </p>
@@ -858,7 +858,7 @@ export default function ProjectDetailsModal({
           ) : (
             <div className="space-y-4 md:space-y-6">
               {/* On Hold Alert */}
-              {project.status === "on_hold" && (
+              {userRole !== "employee" && project.status === "on_hold" && (
                 <div className="p-4 rounded-xl bg-yellow-50 border border-yellow-200">
                   <div className="flex items-start gap-3">
                     <div className="shrink-0">
@@ -1015,7 +1015,7 @@ export default function ProjectDetailsModal({
                     </p>
                   </div>
                 )}
-                {project.start_date && (
+                {userRole !== "employee" && project.start_date && (
                   <div className="p-3 rounded-xl bg-(--bg)">
                     <p className="text-xs uppercase tracking-wider text-(--text)">
                       Start Date

@@ -284,18 +284,18 @@ export default function ProjectsHubPage() {
                   aria-label={`Open ${project.name} in a new tab`}
                 >
                   <div className={`tl-card p-4 md:p-5 ring-1 ${status.ring} hover:shadow-[0_30px_60px_rgba(1,34,79,0.2)] transition`}>
-                    <div className="grid gap-4 md:grid-cols-[1.6fr_1.1fr_1fr_1.2fr_auto] md:items-center">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-3">
-                          <span className={`w-2.5 h-2.5 rounded-full ${status.dot}`} />
-                          <h3 className="text-base font-semibold text-(--text)">
+                    <div className="grid gap-5 md:grid-cols-[1.6fr_1.1fr_1fr_1.2fr_auto] md:items-start md:gap-6">
+                      <div className="space-y-3 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`w-2.5 h-2.5 shrink-0 rounded-full ${status.dot}`} aria-hidden />
+                          <h3 className="text-base font-semibold text-(--text) min-w-0 flex-1">
                             {project.name}
                           </h3>
-                          <span className={`text-[11px] px-2 py-1 rounded-full ${status.badge}`}>
+                          <span className={`shrink-0 text-[11px] leading-none px-2.5 py-1 rounded-full font-medium ${status.badge}`}>
                             {status.label}
                           </span>
                         </div>
-                        <p className="text-sm text-(--text) line-clamp-2">
+                        <p className="text-sm text-(--text) line-clamp-2 pt-0.5">
                           {project.description || "No description provided yet."}
                         </p>
                         {project.status === "on_hold" && project.on_hold_reason && (

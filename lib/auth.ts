@@ -129,6 +129,57 @@ export async function getUserById(id: string): Promise<User | null> {
   };
 }
 
+export async function getUserByIdWithPassword(
+  id: string
+): Promise<(User & { password_hash: string }) | null> {
+  const result = await turso.execute({
+    sql: `SELECT id, email, password_hash, first_name, last_name, role, phone, created_at
+          FROM users WHERE id = ?`,
+    args: [id],
+  });
+
+  if (result.rows.length === 0) return null;
+
+  const row = result.rows[0];
+  return {
+    id: row.id as string,
+    email: row.email as string,
+    password_hash: row.password_hash as string,
+    first_name: row.first_name as string,
+    last_name: row.last_name as string,
+    role: normalizeUserRole(row.role),
+    phone: row.phone as string | null,
+    created_at: row.created_at as string,
+  };
+}
+
+export async function updateUserPassword(
+  userId: string,
+  newPassword: string
+): Promise<void> {
+  const passwordHash = await hashPassword(newPassword);
+  await turso.execute({
+    sql: `UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`,
+    args: [passwordHash, userId],
+  });
+}
+
+export async function deleteUserById(userId: string): Promise<boolean> {
+  const existing = await turso.execute({
+    sql: `SELECT id FROM users WHERE id = ?`,
+    args: [userId],
+  });
+
+  if (existing.rows.length === 0) return false;
+
+  await turso.execute({
+    sql: `DELETE FROM users WHERE id = ?`,
+    args: [userId],
+  });
+
+  return true;
+}
+
 export async function createSession(userId: string): Promise<Session> {
   const id = crypto.randomUUID().replace(/-/g, "");
   const expiresAt = new Date();

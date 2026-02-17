@@ -14,6 +14,8 @@ interface Project {
   start_date: string | null;
   end_date: string | null;
   budget_amount: number | null;
+  hide_line_item_prices_for_client: boolean;
+  hide_markup_for_client: boolean;
   is_funded: boolean;
   funding_notes: string | null;
   on_hold_reason: string | null;
@@ -176,8 +178,11 @@ export default function ProjectPage() {
   const [generatingTasks, setGeneratingTasks] = useState(false);
   const [generateError, setGenerateError] = useState("");
   const [editForm, setEditForm] = useState({
+    name: "",
     status: "",
     budget_amount: "",
+    hide_line_item_prices_for_client: false,
+    hide_markup_for_client: false,
     is_funded: false,
     funding_notes: "",
   });
@@ -212,8 +217,12 @@ export default function ProjectPage() {
       setCurrentUser(sessionData.user);
 
       setEditForm({
+        name: projectData.project.name || "",
         status: projectData.project.status,
         budget_amount: projectData.project.budget_amount?.toString() || "",
+        hide_line_item_prices_for_client:
+          Boolean(projectData.project.hide_line_item_prices_for_client),
+        hide_markup_for_client: Boolean(projectData.project.hide_markup_for_client),
         is_funded: projectData.project.is_funded,
         funding_notes: projectData.project.funding_notes || "",
       });
@@ -661,16 +670,24 @@ export default function ProjectPage() {
 
   async function handleUpdateProject(e: React.FormEvent) {
     e.preventDefault();
+    const trimmedName = editForm.name.trim();
+    if (!trimmedName) {
+      window.alert("Project name is required.");
+      return;
+    }
 
     try {
       const res = await fetch(`/api/projects/${projectId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          name: trimmedName,
           status: editForm.status,
           budget_amount: editForm.budget_amount
             ? parseFloat(editForm.budget_amount)
             : null,
+          hide_line_item_prices_for_client: editForm.hide_line_item_prices_for_client,
+          hide_markup_for_client: editForm.hide_markup_for_client,
           is_funded: editForm.is_funded,
           funding_notes: editForm.funding_notes || null,
         }),
@@ -681,6 +698,9 @@ export default function ProjectPage() {
         setProject(data.project);
         setProjectSignatures([]);
         setShowEditProject(false);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        window.alert(data.error || "Failed to update project");
       }
     } catch (error) {
       console.error("Failed to update project:", error);
@@ -789,6 +809,9 @@ export default function ProjectPage() {
   );
   const adminSignature = projectSignatures.find((s) => s.signer_role === "admin");
   const clientSignature = projectSignatures.find((s) => s.signer_role === "client");
+  const hideClientLineItemPricing =
+    userRole === "client" && project.hide_line_item_prices_for_client;
+  const hideClientMarkup = userRole === "client" && project.hide_markup_for_client;
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
@@ -826,7 +849,7 @@ export default function ProjectPage() {
               {statusLabels[project.status] || project.status}
             </span>
           </div>
-          {project.description && (
+          {userRole !== "employee" && project.description && (
             <p className="text-(--text) mt-2 max-w-2xl">
               {project.description}
             </p>
@@ -893,7 +916,7 @@ export default function ProjectPage() {
                   </p>
                 </div>
               )}
-              {project.start_date && (
+              {userRole !== "employee" && project.start_date && (
                 <div className="p-4 rounded-xl bg-(--bg)">
                   <p className="text-xs uppercase tracking-wider text-(--text)">
                     Start Date
@@ -925,7 +948,7 @@ export default function ProjectPage() {
                     className="inline-flex items-center gap-2 rounded-full bg-(--tl-navy) px-4 py-2 text-sm font-semibold text-white transition hover:bg-(--tl-royal)"
                   >
                     <span className="text-base leading-none">+</span>
-                    + Add Item
+                    Add Item
                   </button>
                 )}
               </div>
@@ -943,13 +966,19 @@ export default function ProjectPage() {
               </div>
             ) : (
               <div className="space-y-2.5">
+                {(hideClientLineItemPricing || hideClientMarkup) && (
+                  <div className="rounded-xl border border-(--border) bg-white px-4 py-2.5 text-xs text-(--text)">
+                    {hideClientLineItemPricing && "Line-item pricing is hidden for client view."}{" "}
+                    {hideClientMarkup && "Markup is hidden for client view."}
+                  </div>
+                )}
                 {/* Table Header */}
                 <div className="hidden rounded-xl border border-(--border) bg-(--bg) md:grid grid-cols-12 gap-3 px-4 py-2 text-xs font-semibold text-(--text) uppercase tracking-wider">
                   <div className="col-span-3">Category</div>
-                  <div className="col-span-4">Description</div>
-                  <div className="col-span-1 text-right">Rate</div>
-                  <div className="col-span-1 text-right">Qty</div>
-                  <div className="col-span-2 text-right">Total</div>
+                  <div className={hideClientLineItemPricing ? "col-span-7" : "col-span-4"}>Description</div>
+                  {!hideClientLineItemPricing && <div className="col-span-1 text-right">Rate</div>}
+                  <div className={hideClientLineItemPricing ? "col-span-2 text-right" : "col-span-1 text-right"}>Qty</div>
+                  {!hideClientLineItemPricing && <div className="col-span-2 text-right">Total</div>}
                   {userRole === "admin" && <div className="col-span-1"></div>}
                 </div>
                 {estimateItems.map((item) => {
@@ -973,7 +1002,7 @@ export default function ProjectPage() {
                         {item.category === "custom" ? item.custom_category_name || "Custom" : item.category}
                       </span>
                     </div>
-                    <div className="md:col-span-4">
+                    <div className={hideClientLineItemPricing ? "md:col-span-7" : "md:col-span-4"}>
                       {isEditing ? (
                         <textarea
                           value={estimateEditForm.description}
@@ -992,27 +1021,29 @@ export default function ProjectPage() {
                         </p>
                       )}
                     </div>
-                    <div className="md:col-span-1 md:text-right">
-                      <span className="md:hidden text-xs font-semibold text-(--text)">Rate: </span>
-                      {isEditing ? (
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={estimateEditForm.price_rate}
-                          onChange={(e) =>
-                            setEstimateEditForm((prev) => ({
-                              ...prev,
-                              price_rate: e.target.value,
-                            }))
-                          }
-                          className="w-full rounded-lg border border-(--border) bg-white px-2 py-1.5 text-right text-sm text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
-                        />
-                      ) : (
-                        <span className="text-sm text-(--text)">${item.price_rate.toLocaleString()}</span>
-                      )}
-                    </div>
-                    <div className="md:col-span-1 md:text-right">
+                    {!hideClientLineItemPricing && (
+                      <div className="md:col-span-1 md:text-right">
+                        <span className="md:hidden text-xs font-semibold text-(--text)">Rate: </span>
+                        {isEditing ? (
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={estimateEditForm.price_rate}
+                            onChange={(e) =>
+                              setEstimateEditForm((prev) => ({
+                                ...prev,
+                                price_rate: e.target.value,
+                              }))
+                            }
+                            className="w-full rounded-lg border border-(--border) bg-white px-2 py-1.5 text-right text-sm text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
+                          />
+                        ) : (
+                          <span className="text-sm text-(--text)">${item.price_rate.toLocaleString()}</span>
+                        )}
+                      </div>
+                    )}
+                    <div className={hideClientLineItemPricing ? "md:col-span-2 md:text-right" : "md:col-span-1 md:text-right"}>
                       <span className="md:hidden text-xs font-semibold text-(--text)">Qty: </span>
                       {isEditing ? (
                         <input
@@ -1032,12 +1063,14 @@ export default function ProjectPage() {
                         <span className="text-sm text-(--text)">{item.quantity}</span>
                       )}
                     </div>
-                    <div className="md:col-span-2 md:text-right">
-                      <span className="md:hidden text-xs font-semibold text-(--text)">Total: </span>
-                      <span className="font-semibold text-(--tl-navy)">
-                        {formatCurrency(isEditing ? previewTotal : item.total)}
-                      </span>
-                    </div>
+                    {!hideClientLineItemPricing && (
+                      <div className="md:col-span-2 md:text-right">
+                        <span className="md:hidden text-xs font-semibold text-(--text)">Total: </span>
+                        <span className="font-semibold text-(--tl-navy)">
+                          {formatCurrency(isEditing ? previewTotal : item.total)}
+                        </span>
+                      </div>
+                    )}
                     {userRole === "admin" && (
                       <div className="md:col-span-1 flex flex-wrap gap-2 md:justify-end">
                         {isEditing ? (
@@ -1827,6 +1860,20 @@ export default function ProjectPage() {
             <form onSubmit={handleUpdateProject} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-(--text) mb-1">
+                  Project Name
+                </label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, name: e.target.value })
+                  }
+                  required
+                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text)"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-(--text) mb-1">
                   Status
                 </label>
                 <select
@@ -1862,6 +1909,38 @@ export default function ProjectPage() {
                       />
                     </div>
                   </div>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editForm.hide_line_item_prices_for_client}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          hide_line_item_prices_for_client: e.target.checked,
+                        })
+                      }
+                      className="w-5 h-5 rounded"
+                    />
+                    <span className="text-sm font-medium text-(--text)">
+                      Hide line-item prices for client users
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editForm.hide_markup_for_client}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          hide_markup_for_client: e.target.checked,
+                        })
+                      }
+                      className="w-5 h-5 rounded"
+                    />
+                    <span className="text-sm font-medium text-(--text)">
+                      Hide markup details for client users
+                    </span>
+                  </label>
                   <label className="flex items-center gap-3 cursor-pointer">
                     <input
                       type="checkbox"

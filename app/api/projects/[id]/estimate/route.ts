@@ -6,6 +6,7 @@ import {
   deleteEstimateLineItem,
   getEstimateTotal,
   getProjectsByUserId,
+  getProjectById,
   clearProjectSignatures,
 } from "@/lib/projects";
 import { cookies } from "next/headers";
@@ -48,10 +49,26 @@ export async function GET(
       }
     }
 
+    const project = await getProjectById(id);
+    if (!project) {
+      return Response.json({ error: "Project not found" }, { status: 404 });
+    }
+
     const items = await getEstimateLineItems(id);
     const total = await getEstimateTotal(id);
+    const hideClientLineItemPricing =
+      user.role === "client" && project.hide_line_item_prices_for_client;
 
-    return Response.json({ items, total });
+    const visibleItems = hideClientLineItemPricing
+      ? items.map((item) => ({ ...item, price_rate: 0, total: 0 }))
+      : items;
+
+    return Response.json({
+      items: visibleItems,
+      total,
+      hide_line_item_prices_for_client: hideClientLineItemPricing,
+      hide_markup_for_client: user.role === "client" && project.hide_markup_for_client,
+    });
   } catch (error) {
     console.error("Error fetching estimate:", error);
     return Response.json({ error: "Failed to fetch estimate" }, { status: 500 });

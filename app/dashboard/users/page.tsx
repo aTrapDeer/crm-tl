@@ -61,6 +61,8 @@ export default function UsersPage() {
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState("");
   const [inviteLoading, setInviteLoading] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [pendingDeleteUser, setPendingDeleteUser] = useState<User | null>(null);
 
   useEffect(() => {
     async function fetchUsers() {
@@ -153,6 +155,38 @@ export default function UsersPage() {
       setInviteError("Unable to send invite right now.");
     } finally {
       setInviteLoading(false);
+    }
+  }
+
+  function handleRequestDeleteUser(target: User) {
+    setPendingDeleteUser(target);
+  }
+
+  async function handleConfirmDeleteUser() {
+    if (deletingUserId || !pendingDeleteUser) return;
+    const target = pendingDeleteUser;
+    setError("");
+    setDeletingUserId(target.id);
+
+    try {
+      const res = await fetch("/api/users", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: target.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || "Failed to delete user.");
+        return;
+      }
+
+      setUsers((prev) => prev.filter((u) => u.id !== target.id));
+      setPendingDeleteUser(null);
+    } catch (err) {
+      console.error("Failed to delete user:", err);
+      setError("Unable to delete user right now.");
+    } finally {
+      setDeletingUserId(null);
     }
   }
 
@@ -310,7 +344,7 @@ export default function UsersPage() {
                   <span className="font-medium">{invite.email}</span>
                   <span className="text-(--text)/70">
                     {" "}
-                    • expires {new Date(invite.expires_at).toLocaleDateString("en-US")}
+                    - expires {new Date(invite.expires_at).toLocaleDateString("en-US")}
                   </span>
                 </div>
               ))}
@@ -320,7 +354,7 @@ export default function UsersPage() {
 
         <div className="relative">
           <svg
-            className="w-4 h-4 text-(--text)/60 absolute left-3 top-1/2 -translate-y-1/2"
+            className="pointer-events-none w-4 h-4 text-(--text)/60 absolute left-3.5 top-1/2 -translate-y-1/2"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -337,7 +371,7 @@ export default function UsersPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by name, email, or role"
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+            className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
           />
         </div>
       </section>
@@ -367,9 +401,23 @@ export default function UsersPage() {
                       key={user.id}
                       className="rounded-2xl border border-(--border) bg-white px-4 py-3 shadow-sm transition hover:shadow-md min-w-0 overflow-hidden"
                     >
-                      <p className="text-sm font-semibold text-(--text) truncate" title={`${user.first_name} ${user.last_name}`}>
-                        {user.first_name} {user.last_name}
-                      </p>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-semibold text-(--text) truncate" title={`${user.first_name} ${user.last_name}`}>
+                          {user.first_name} {user.last_name}
+                        </p>
+                        <button
+                          type="button"
+                          disabled={deletingUserId === user.id || currentUser?.id === user.id}
+                          onClick={() => handleRequestDeleteUser(user)}
+                          className="inline-flex items-center justify-center rounded-full border border-red-200 bg-red-50 p-1.5 text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label={`Delete ${user.first_name} ${user.last_name}`}
+                          title={currentUser?.id === user.id ? "You cannot delete your own account" : "Delete user"}
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
                       <p className="text-xs text-(--text) mt-1 truncate" title={user.email}>
                         {user.email}
                       </p>
@@ -384,6 +432,41 @@ export default function UsersPage() {
           );
         })}
       </section>
+
+      {pendingDeleteUser && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4">
+          <div className="tl-card w-full max-w-md rounded-none md:rounded-3xl p-5 md:p-6">
+            <h3 className="text-lg font-semibold text-(--text)">Delete User</h3>
+            <p className="mt-2 text-sm text-(--text)">
+              Are you sure you want to delete{" "}
+              <span className="font-semibold">
+                {pendingDeleteUser.first_name} {pendingDeleteUser.last_name}
+              </span>{" "}
+              ({pendingDeleteUser.email})?
+            </p>
+            <p className="mt-1 text-sm text-red-600">This action cannot be undone.</p>
+
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingDeleteUser(null)}
+                disabled={Boolean(deletingUserId)}
+                className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteUser}
+                disabled={Boolean(deletingUserId)}
+                className="flex-1 rounded-full bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 transition disabled:opacity-50"
+              >
+                {deletingUserId ? "Deleting..." : "Confirm Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

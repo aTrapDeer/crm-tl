@@ -81,6 +81,21 @@ export async function PATCH(
 
     const body = await request.json();
 
+    if (body.name !== undefined) {
+      if (typeof body.name !== "string" || !body.name.trim()) {
+        return Response.json({ error: "Project name is required" }, { status: 400 });
+      }
+      body.name = body.name.trim();
+    }
+
+    if (body.hide_line_item_prices_for_client !== undefined) {
+      body.hide_line_item_prices_for_client = Boolean(body.hide_line_item_prices_for_client);
+    }
+
+    if (body.hide_markup_for_client !== undefined) {
+      body.hide_markup_for_client = Boolean(body.hide_markup_for_client);
+    }
+
     // Validate on_hold status requires a reason
     if (body.status === "on_hold" && !body.on_hold_reason) {
       return Response.json(

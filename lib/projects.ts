@@ -9,6 +9,8 @@ export interface Project {
   start_date: string | null;
   end_date: string | null;
   budget_amount: number | null;
+  hide_line_item_prices_for_client: boolean;
+  hide_markup_for_client: boolean;
   is_funded: boolean;
   funding_notes: string | null;
   on_hold_reason: string | null;
@@ -92,6 +94,8 @@ function mapRowToProject(row: Record<string, unknown>): Project {
     start_date: row.start_date as string | null,
     end_date: row.end_date as string | null,
     budget_amount: row.budget_amount as number | null,
+    hide_line_item_prices_for_client: Boolean(row.hide_line_item_prices_for_client),
+    hide_markup_for_client: Boolean(row.hide_markup_for_client),
     is_funded: Boolean(row.is_funded),
     funding_notes: row.funding_notes as string | null,
     on_hold_reason: row.on_hold_reason as string | null,
@@ -102,6 +106,7 @@ function mapRowToProject(row: Record<string, unknown>): Project {
 }
 
 export async function getAllProjects(): Promise<Project[]> {
+  await ensureProjectClientVisibilityColumns();
   const result = await turso.execute(
     "SELECT * FROM projects ORDER BY created_at DESC"
   );
@@ -109,6 +114,7 @@ export async function getAllProjects(): Promise<Project[]> {
 }
 
 export async function getProjectsByUserId(userId: string): Promise<Project[]> {
+  await ensureProjectClientVisibilityColumns();
   const result = await turso.execute({
     sql: `SELECT p.* FROM projects p 
           INNER JOIN project_assignments pa ON p.id = pa.project_id 
@@ -120,6 +126,7 @@ export async function getProjectsByUserId(userId: string): Promise<Project[]> {
 }
 
 export async function getProjectById(id: string): Promise<Project | null> {
+  await ensureProjectClientVisibilityColumns();
   const result = await turso.execute({
     sql: "SELECT * FROM projects WHERE id = ?",
     args: [id],
@@ -143,8 +150,50 @@ function mapRowToProjectSignature(row: Record<string, unknown>): ProjectSignatur
 }
 
 let projectSignaturesTableReady = false;
+let projectClientVisibilityColumnsReady = false;
+let projectClientVisibilityColumnsReadyPromise: Promise<void> | null = null;
 let estimateCustomEntriesTableReady = false;
 let estimateCustomEntriesTableReadyPromise: Promise<void> | null = null;
+
+async function ensureProjectClientVisibilityColumns(): Promise<void> {
+  if (projectClientVisibilityColumnsReady) return;
+  if (projectClientVisibilityColumnsReadyPromise) {
+    await projectClientVisibilityColumnsReadyPromise;
+    return;
+  }
+
+  projectClientVisibilityColumnsReadyPromise = (async () => {
+    try {
+      await turso.execute(
+        "ALTER TABLE projects ADD COLUMN hide_line_item_prices_for_client INTEGER NOT NULL DEFAULT 0"
+      );
+    } catch (error) {
+      const message = String(error).toLowerCase();
+      if (!message.includes("duplicate column name")) {
+        throw error;
+      }
+    }
+
+    try {
+      await turso.execute(
+        "ALTER TABLE projects ADD COLUMN hide_markup_for_client INTEGER NOT NULL DEFAULT 0"
+      );
+    } catch (error) {
+      const message = String(error).toLowerCase();
+      if (!message.includes("duplicate column name")) {
+        throw error;
+      }
+    }
+
+    projectClientVisibilityColumnsReady = true;
+  })();
+
+  try {
+    await projectClientVisibilityColumnsReadyPromise;
+  } finally {
+    projectClientVisibilityColumnsReadyPromise = null;
+  }
+}
 
 async function ensureProjectSignaturesTable(): Promise<void> {
   if (projectSignaturesTableReady) return;
@@ -227,10 +276,13 @@ export async function createProject(data: {
   end_date?: string;
   budget_amount?: number;
   is_funded?: boolean;
+  hide_line_item_prices_for_client?: boolean;
+  hide_markup_for_client?: boolean;
   funding_notes?: string;
   on_hold_reason?: string;
   expected_resume_date?: string;
 }): Promise<Project> {
+  await ensureProjectClientVisibilityColumns();
   const id = crypto.randomUUID().replace(/-/g, "");
   await turso.execute({
     sql: `INSERT INTO projects (id, name, description, status, address, start_date, end_date, budget_amount, is_funded, funding_notes, on_hold_reason, expected_resume_date)
@@ -257,6 +309,7 @@ export async function updateProject(
   id: string,
   data: Partial<Omit<Project, "id" | "created_at">>
 ): Promise<Project | null> {
+  await ensureProjectClientVisibilityColumns();
   const updates: string[] = [];
   const args: (string | number | null)[] = [];
 
@@ -287,6 +340,14 @@ export async function updateProject(
   if (data.budget_amount !== undefined) {
     updates.push("budget_amount = ?");
     args.push(data.budget_amount);
+  }
+  if (data.hide_line_item_prices_for_client !== undefined) {
+    updates.push("hide_line_item_prices_for_client = ?");
+    args.push(data.hide_line_item_prices_for_client ? 1 : 0);
+  }
+  if (data.hide_markup_for_client !== undefined) {
+    updates.push("hide_markup_for_client = ?");
+    args.push(data.hide_markup_for_client ? 1 : 0);
   }
   if (data.is_funded !== undefined) {
     updates.push("is_funded = ?");

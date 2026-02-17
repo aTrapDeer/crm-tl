@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS projects (
   start_date TEXT,
   end_date TEXT,
   budget_amount REAL,
+  hide_line_item_prices_for_client INTEGER NOT NULL DEFAULT 0,
+  hide_markup_for_client INTEGER NOT NULL DEFAULT 0,
   is_funded INTEGER NOT NULL DEFAULT 0,
   funding_notes TEXT,
   on_hold_reason TEXT,
