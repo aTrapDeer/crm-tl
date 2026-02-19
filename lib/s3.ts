@@ -1,31 +1,34 @@
-/**
- * AWS S3 Integration (Placeholder)
- * 
- * This file contains placeholder functions for S3 integration.
- * When ready to implement, you'll need to:
- * 1. Install AWS SDK: npm install @aws-sdk/client-s3 @aws-sdk/s3-request-presigner
- * 2. Set up environment variables:
- *    - AWS_ACCESS_KEY_ID
- *    - AWS_SECRET_ACCESS_KEY
- *    - AWS_REGION
- *    - S3_BUCKET_NAME (crm-tl)
- * 3. Uncomment and implement the actual S3 operations
- */
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-// import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
-// import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-
-const S3_BUCKET = process.env.S3_BUCKET_NAME || "crm-tl";
+const S3_BUCKET = process.env.S3_BUCKET_NAME || "crm-tlcorp";
 const AWS_REGION = process.env.AWS_REGION || "us-east-1";
+const S3_KEY_PREFIX = (process.env.S3_KEY_PREFIX || "projects/images").replace(
+  /^\/+|\/+$/g,
+  ""
+);
 
-// Placeholder S3 client - uncomment when ready
-// const s3Client = new S3Client({
-//   region: AWS_REGION,
-//   credentials: {
-//     accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-//     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-//   },
-// });
+let s3Client: S3Client | null = null;
+
+function getS3Client(): S3Client {
+  if (!s3Client) {
+    s3Client = new S3Client({ region: AWS_REGION });
+  }
+  return s3Client;
+}
+
+function encodeS3Key(key: string): string {
+  return key
+    .split("/")
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+}
 
 export interface UploadResult {
   success: boolean;
@@ -36,80 +39,101 @@ export interface UploadResult {
 
 /**
  * Generate the S3 key (path) for a project image
- * Format: projects/{projectId}/images/{filename}
+ * Format: projects/images/{projectId}/{filename}
  */
 export function generateS3Key(projectId: string, filename: string): string {
+  const sanitizedProjectId = projectId.replace(/[^a-zA-Z0-9_-]/g, "_");
   const timestamp = Date.now();
   const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, "_");
-  return `projects/${projectId}/images/${timestamp}-${sanitizedFilename}`;
+  return `${S3_KEY_PREFIX}/${sanitizedProjectId}/${timestamp}-${sanitizedFilename}`;
+}
+
+export function getPublicS3Url(key: string): string {
+  return `https://${S3_BUCKET}.s3.${AWS_REGION}.amazonaws.com/${encodeS3Key(key)}`;
 }
 
 /**
  * Upload a file to S3
- * Currently returns a placeholder - implement when S3 is configured
  */
 export async function uploadToS3(
   projectId: string,
   filename: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _fileBuffer: Buffer,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _contentType: string
+  fileBuffer: Buffer,
+  contentType: string
 ): Promise<UploadResult> {
+  if (!isS3Configured()) {
+    return {
+      success: false,
+      error:
+        "S3 is not configured. Set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, and S3_BUCKET_NAME.",
+    };
+  }
+
   const key = generateS3Key(projectId, filename);
-  
-  // TODO: Implement actual S3 upload
-  // const command = new PutObjectCommand({
-  //   Bucket: S3_BUCKET,
-  //   Key: key,
-  //   Body: fileBuffer,
-  //   ContentType: contentType,
-  // });
-  // await s3Client.send(command);
-  
-  // For now, return placeholder
-  console.log(`[S3 Placeholder] Would upload to: ${S3_BUCKET}/${key}`);
-  
-  return {
-    success: true,
-    key,
-    url: `https://${S3_BUCKET}.s3.${AWS_REGION}.amazonaws.com/${key}`,
-  };
+
+  try {
+    await getS3Client().send(
+      new PutObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: key,
+        Body: fileBuffer,
+        ContentType: contentType || "application/octet-stream",
+      })
+    );
+
+    return {
+      success: true,
+      key,
+      url: getPublicS3Url(key),
+    };
+  } catch (error) {
+    console.error("S3 upload failed:", error);
+    return {
+      success: false,
+      error: "Failed to upload file to S3.",
+    };
+  }
 }
 
 /**
  * Delete a file from S3
- * Currently a placeholder - implement when S3 is configured
  */
 export async function deleteFromS3(key: string): Promise<boolean> {
-  // TODO: Implement actual S3 delete
-  // const command = new DeleteObjectCommand({
-  //   Bucket: S3_BUCKET,
-  //   Key: key,
-  // });
-  // await s3Client.send(command);
-  
-  console.log(`[S3 Placeholder] Would delete: ${S3_BUCKET}/${key}`);
-  return true;
+  if (!isS3Configured()) {
+    console.warn("S3 is not configured. Skipping object delete:", key);
+    return false;
+  }
+
+  try {
+    await getS3Client().send(
+      new DeleteObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: key,
+      })
+    );
+    return true;
+  } catch (error) {
+    console.error("S3 delete failed:", error);
+    return false;
+  }
 }
 
 /**
  * Generate a presigned URL for temporary access to a private S3 object
- * Currently returns a placeholder URL
  */
 export async function getPresignedUrl(
   key: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _expiresIn: number = 3600
+  expiresIn = 3600
 ): Promise<string> {
-  // TODO: Implement actual presigned URL generation
-  // const command = new GetObjectCommand({
-  //   Bucket: S3_BUCKET,
-  //   Key: key,
-  // });
-  // return getSignedUrl(s3Client, command, { expiresIn });
-  
-  return `https://${S3_BUCKET}.s3.${AWS_REGION}.amazonaws.com/${key}`;
+  if (!isS3Configured()) {
+    return getPublicS3Url(key);
+  }
+
+  const command = new GetObjectCommand({
+    Bucket: S3_BUCKET,
+    Key: key,
+  });
+  return getSignedUrl(getS3Client(), command, { expiresIn });
 }
 
 /**
@@ -119,6 +143,7 @@ export function isS3Configured(): boolean {
   return Boolean(
     process.env.AWS_ACCESS_KEY_ID &&
     process.env.AWS_SECRET_ACCESS_KEY &&
+    process.env.AWS_REGION &&
     process.env.S3_BUCKET_NAME
   );
 }

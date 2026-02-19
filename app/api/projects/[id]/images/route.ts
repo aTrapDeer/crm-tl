@@ -7,7 +7,13 @@ import {
   getProjectsByUserId,
   clearProjectSignatures,
 } from "@/lib/projects";
-import { uploadToS3, deleteFromS3, generateS3Key, isS3Configured } from "@/lib/s3";
+import {
+  uploadToS3,
+  deleteFromS3,
+  generateS3Key,
+  getPublicS3Url,
+  isS3Configured,
+} from "@/lib/s3";
 import { cookies } from "next/headers";
 
 export async function GET(
@@ -105,6 +111,13 @@ export async function POST(
 
       // Try to upload to S3 (will use placeholder if not configured)
       const s3Result = await uploadToS3(projectId, filename, fileBuffer, fileType);
+      if (!s3Result.success || !s3Result.key || !s3Result.url) {
+        const status = isS3Configured() ? 500 : 503;
+        return Response.json(
+          { error: s3Result.error || "Failed to upload image to S3" },
+          { status }
+        );
+      }
 
       const image = await addProjectImage({
         project_id: projectId,
@@ -116,12 +129,10 @@ export async function POST(
       });
       await clearProjectSignatures(projectId);
 
-      return Response.json({ 
-        image, 
+      return Response.json({
+        image,
         s3Configured: isS3Configured(),
-        message: isS3Configured() 
-          ? "Image uploaded successfully" 
-          : "Image record created (S3 not configured - file not actually uploaded)"
+        message: "Image uploaded successfully",
       });
     }
     
@@ -135,7 +146,7 @@ export async function POST(
 
     // Generate placeholder S3 key/url if not provided
     const key = s3_key || generateS3Key(projectId, filename);
-    const url = s3_url || `https://crm-tl.s3.us-east-1.amazonaws.com/${key}`;
+    const url = s3_url || getPublicS3Url(key);
 
     const image = await addProjectImage({
       project_id: projectId,
@@ -147,10 +158,10 @@ export async function POST(
     });
     await clearProjectSignatures(projectId);
 
-    return Response.json({ 
-      image, 
+    return Response.json({
+      image,
       s3Configured: isS3Configured(),
-      message: "Image record created (placeholder - S3 not configured)"
+      message: "Image metadata created",
     });
   } catch (error) {
     console.error("Error uploading image:", error);
@@ -258,16 +269,17 @@ export async function DELETE(
     }
 
     // Try to delete from S3 if key exists
+    let deletedFromS3 = true;
     if (deletedImage.s3_key) {
-      await deleteFromS3(deletedImage.s3_key);
+      deletedFromS3 = await deleteFromS3(deletedImage.s3_key);
     }
     await clearProjectSignatures(deletedImage.project_id);
 
-    return Response.json({ 
-      success: true, 
-      message: isS3Configured() 
-        ? "Image deleted from S3" 
-        : "Image record deleted (S3 not configured)"
+    return Response.json({
+      success: true,
+      message: deletedFromS3
+        ? "Image deleted successfully"
+        : "Image record deleted, but failed to delete object from S3",
     });
   } catch (error) {
     console.error("Error deleting image:", error);

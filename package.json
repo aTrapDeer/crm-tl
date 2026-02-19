@@ -16,6 +16,8 @@
     "db:migrate-project-signatures": "tsx scripts/migrate-project-signatures.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.993.0",
+    "@aws-sdk/s3-request-presigner": "^3.993.0",
     "@libsql/client": "^0.15.12",
     "bcryptjs": "^2.4.3",
     "next": "16.1.3",
