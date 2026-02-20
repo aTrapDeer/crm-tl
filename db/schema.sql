@@ -208,6 +208,40 @@ CREATE INDEX IF NOT EXISTS idx_work_orders_assigned ON work_orders(assigned_to);
 CREATE INDEX IF NOT EXISTS idx_work_orders_project ON work_orders(project_id);
 CREATE INDEX IF NOT EXISTS idx_work_orders_date ON work_orders(date);
 
+-- ============ BONAN REPORTS ============
+
+CREATE TABLE IF NOT EXISTS bonan_reports (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  site TEXT NOT NULL DEFAULT 'bonan_towers' CHECK (site IN ('bonan_towers')),
+  report_type TEXT NOT NULL CHECK (report_type IN ('daily', 'weekly', 'monthly')),
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'submitted')),
+  report_date TEXT NOT NULL DEFAULT (date('now')),
+  work_order_id TEXT REFERENCES work_orders(id) ON DELETE SET NULL,
+  created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  payload_json TEXT NOT NULL DEFAULT '{}',
+  last_autosaved_at TEXT,
+  submitted_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_bonan_reports_type ON bonan_reports(report_type);
+CREATE INDEX IF NOT EXISTS idx_bonan_reports_status ON bonan_reports(status);
+CREATE INDEX IF NOT EXISTS idx_bonan_reports_date ON bonan_reports(report_date);
+CREATE INDEX IF NOT EXISTS idx_bonan_reports_work_order ON bonan_reports(work_order_id);
+
+CREATE TABLE IF NOT EXISTS bonan_report_work_orders (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  bonan_report_id TEXT NOT NULL REFERENCES bonan_reports(id) ON DELETE CASCADE,
+  work_order_id TEXT NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
+  created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(bonan_report_id, work_order_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bonan_report_work_orders_report ON bonan_report_work_orders(bonan_report_id);
+CREATE INDEX IF NOT EXISTS idx_bonan_report_work_orders_work_order ON bonan_report_work_orders(work_order_id);
+
 -- ============ WORK ORDER MATERIALS ============
 
 CREATE TABLE IF NOT EXISTS work_order_materials (

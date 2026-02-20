@@ -34,6 +34,19 @@ const adminNavItems = [
     ),
   },
   {
+    label: "Bonan Towers",
+    href: "/dashboard/bonan",
+    matchPrefix: "/dashboard/bonan",
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 21h18" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5 21V7a2 2 0 012-2h10a2 2 0 012 2v14" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 21v-4h6v4" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 10h2M14 10h2M8 14h2M14 14h2" />
+      </svg>
+    ),
+  },
+  {
     label: "Management",
     href: "/dashboard/management",
     matchPrefix: "/dashboard/management",
@@ -139,6 +152,9 @@ export default function DashboardLayout({
   if (!user) return null;
 
   const isAdmin = user.role === "admin";
+  const isBonanRoute =
+    pathname.startsWith("/dashboard/bonan") ||
+    pathname.startsWith("/dashboard/management/bonan");
 
   const roleLabel = {
     admin: "Administrator",
@@ -366,13 +382,21 @@ export default function DashboardLayout({
           )}
 
           {/* Main Content with sidebar offset */}
-          <main className="relative z-10 flex-1 min-w-0 px-4 md:px-6 lg:px-8 py-4 md:py-8 max-w-6xl mx-auto">
+          <main
+            className={`relative z-10 flex-1 min-w-0 py-4 md:py-8 ${
+              isBonanRoute ? "w-full px-2 md:px-3 lg:px-4 max-w-none" : "px-4 md:px-6 lg:px-8 max-w-6xl mx-auto"
+            }`}
+          >
             {children}
           </main>
         </div>
       ) : (
         /* Non-admin layout: no sidebar */
-        <main className="relative z-10 mx-auto max-w-6xl px-4 md:px-6 py-4 md:py-8">
+        <main
+          className={`relative z-10 py-4 md:py-8 ${
+            isBonanRoute ? "w-full px-2 md:px-3 lg:px-4 max-w-none" : "mx-auto max-w-6xl px-4 md:px-6"
+          }`}
+        >
           {children}
         </main>
       )}

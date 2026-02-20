@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import ServiceWorkerRegistration from "@/app/components/service-worker-registration";
 import "./globals.css";
 
 const inter = Inter({
@@ -24,7 +25,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} antialiased`}>{children}</body>
+      <body className={`${inter.variable} antialiased`}>
+        <ServiceWorkerRegistration />
+        {children}
+      </body>
     </html>
   );
 }

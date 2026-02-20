@@ -70,9 +70,18 @@ export async function POST(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admins can post updates. Employees can view updates only.
+    // Clients can view updates but cannot create them.
+    if (user.role === "client") {
+      return Response.json({ error: "Only admins and employees can add updates" }, { status: 403 });
+    }
+
+    // Employees can only add updates on assigned projects.
     if (user.role !== "admin") {
-      return Response.json({ error: "Only admins can add updates" }, { status: 403 });
+      const assignedProjects = await getProjectsByUserId(user.id);
+      const isAssigned = assignedProjects.some((p) => p.id === id);
+      if (!isAssigned) {
+        return Response.json({ error: "Access denied" }, { status: 403 });
+      }
     }
 
     const body = await request.json();

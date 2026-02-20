@@ -60,6 +60,10 @@ export default function ManagementPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedWorkOrder, setSelectedWorkOrder] = useState<WorkOrder | null>(null);
+  const [pendingDeleteWorkOrder, setPendingDeleteWorkOrder] = useState<WorkOrder | null>(null);
+  const [deleteWorkOrderConfirmInput, setDeleteWorkOrderConfirmInput] = useState("");
+  const [deleteWorkOrderError, setDeleteWorkOrderError] = useState("");
+  const [deletingWorkOrder, setDeletingWorkOrder] = useState(false);
 
   // Check auth
   useEffect(() => {
@@ -148,6 +152,41 @@ export default function ManagementPage() {
     fetchStats();
   }
 
+  function openDeleteWorkOrderWarning(workOrder: WorkOrder) {
+    setPendingDeleteWorkOrder(workOrder);
+    setDeleteWorkOrderConfirmInput("");
+    setDeleteWorkOrderError("");
+  }
+
+  async function handleConfirmDeleteWorkOrder() {
+    if (!pendingDeleteWorkOrder || deletingWorkOrder) return;
+
+    if (deleteWorkOrderConfirmInput.trim() !== pendingDeleteWorkOrder.work_order_number) {
+      setDeleteWorkOrderError(`Type ${pendingDeleteWorkOrder.work_order_number} to confirm deletion.`);
+      return;
+    }
+
+    setDeletingWorkOrder(true);
+    setDeleteWorkOrderError("");
+    try {
+      const res = await fetch(`/api/work-orders/${pendingDeleteWorkOrder.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setDeleteWorkOrderError(data.error || "Failed to delete work order.");
+        return;
+      }
+
+      handleWorkOrderDelete(pendingDeleteWorkOrder.id);
+      setPendingDeleteWorkOrder(null);
+      setDeleteWorkOrderConfirmInput("");
+    } catch (error) {
+      console.error("Failed to delete work order:", error);
+      setDeleteWorkOrderError("Failed to delete work order.");
+    } finally {
+      setDeletingWorkOrder(false);
+    }
+  }
+
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -172,12 +211,6 @@ export default function ManagementPage() {
                 className="tl-btn px-4 py-2.5 text-sm"
               >
                 + New Change Order
-              </Link>
-              <Link
-                href="/dashboard/management/work-orders/new?orderType=bonan"
-                className="rounded-full border border-(--border)/50 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
-              >
-                Bonan Order
               </Link>
             </div>
           )}
@@ -251,24 +284,62 @@ export default function ManagementPage() {
               const fullWO = workOrders.find((w) => w.id === wo.id);
               if (fullWO) setSelectedWorkOrder(fullWO);
             }}
-            onDeleteWorkOrder={async (wo) => {
-              if (confirm(`Are you sure you want to delete change order ${wo.work_order_number}?`)) {
-                try {
-                  const res = await fetch(`/api/work-orders/${wo.id}`, { method: "DELETE" });
-                  if (res.ok) {
-                    handleWorkOrderDelete(wo.id);
-                  }
-                } catch (error) {
-                  console.error("Failed to delete work order:", error);
-                }
-              }
-            }}
+            onDeleteWorkOrder={(wo) => openDeleteWorkOrderWarning(wo as WorkOrder)}
             loading={loading}
           />
         ) : (
           <DocumentManager userRole={user.role} />
         )}
       </div>
+
+      {pendingDeleteWorkOrder && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-10000 p-4">
+          <div className="tl-card p-6 w-full max-w-md space-y-4" onClick={(event) => event.stopPropagation()}>
+            <div>
+              <h3 className="text-lg font-semibold text-red-700">Delete Work Order Warning</h3>
+              <p className="text-sm text-(--text)/75 mt-2">
+                This will permanently delete work order <strong>{pendingDeleteWorkOrder.work_order_number}</strong>.
+              </p>
+              <p className="text-sm text-(--text)/75 mt-1">Type the work order number to confirm.</p>
+            </div>
+            <input
+              type="text"
+              value={deleteWorkOrderConfirmInput}
+              onChange={(event) => {
+                setDeleteWorkOrderConfirmInput(event.target.value);
+                if (deleteWorkOrderError) setDeleteWorkOrderError("");
+              }}
+              placeholder={`Type ${pendingDeleteWorkOrder.work_order_number}`}
+              className="w-full px-4 py-2.5 rounded-xl border border-red-200 bg-red-50/40 text-(--text) focus:outline-none focus:ring-2 focus:ring-red-200"
+            />
+            {deleteWorkOrderError && (
+              <p className="text-sm text-red-700">{deleteWorkOrderError}</p>
+            )}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (deletingWorkOrder) return;
+                  setPendingDeleteWorkOrder(null);
+                  setDeleteWorkOrderConfirmInput("");
+                  setDeleteWorkOrderError("");
+                }}
+                className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmDeleteWorkOrder()}
+                disabled={deletingWorkOrder}
+                className="flex-1 rounded-full bg-red-600 text-white px-4 py-2.5 text-sm font-medium hover:bg-red-700 transition disabled:opacity-60"
+              >
+                {deletingWorkOrder ? "Deleting..." : "Delete Now"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Work Order Details Modal */}
       {selectedWorkOrder && (

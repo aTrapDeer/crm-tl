@@ -194,7 +194,7 @@ export default function ProjectPage() {
   const canCreateTasks = userRole === "admin";
   const canManageImages = userRole === "admin" || userRole === "employee";
   const canEdit = userRole === "admin";
-  const canAddUpdates = userRole === "admin";
+  const canAddUpdates = userRole === "admin" || userRole === "employee";
   const canViewEstimate = userRole !== "employee";
   const canSignProject = userRole === "admin" || userRole === "client";
 
@@ -1668,7 +1668,7 @@ export default function ProjectPage() {
                     )}
                     {update.user_name && (
                       <p className="text-xs text-(--text) mt-2">
-                        - {update.user_name}
+                        Posted by {update.user_name}
                       </p>
                     )}
                   </div>

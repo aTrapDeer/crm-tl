@@ -430,13 +430,24 @@ export async function addProjectUpdate(
     sql: `INSERT INTO project_updates (id, project_id, user_id, title, content) VALUES (?, ?, ?, ?, ?)`,
     args: [id, projectId, userId, title, content || null],
   });
+
+  const result = await turso.execute({
+    sql: `SELECT pu.*, u.first_name || ' ' || u.last_name as user_name
+          FROM project_updates pu
+          LEFT JOIN users u ON pu.user_id = u.id
+          WHERE pu.id = ?`,
+    args: [id],
+  });
+
+  const row = result.rows[0];
   return {
-    id,
-    project_id: projectId,
-    user_id: userId,
-    title,
-    content: content || null,
-    created_at: new Date().toISOString(),
+    id: row.id as string,
+    project_id: row.project_id as string,
+    user_id: row.user_id as string | null,
+    title: row.title as string,
+    content: row.content as string | null,
+    created_at: row.created_at as string,
+    user_name: row.user_name as string | undefined,
   };
 }
 

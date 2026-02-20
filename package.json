@@ -13,7 +13,8 @@
     "db:migrate-estimate": "tsx scripts/migrate-estimate-builder.ts",
     "db:migrate-employee": "tsx scripts/migrate-employee-invites-and-estimate-custom-entries.ts",
     "db:migrate-user-roles": "tsx scripts/migrate-user-role-worker-to-employee.ts",
-    "db:migrate-project-signatures": "tsx scripts/migrate-project-signatures.ts"
+    "db:migrate-project-signatures": "tsx scripts/migrate-project-signatures.ts",
+    "db:migrate-bonan": "tsx scripts/migrate-bonan-reports.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.993.0",
