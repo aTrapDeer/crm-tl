@@ -202,7 +202,7 @@ export default function ManagementPage() {
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-2xl font-bold text-(--text)">Management Portal</h1>
-            <p className="text-sm text-(--text)/60">Manage change orders and documents</p>
+            <p className="text-sm text-(--text)/60">Manage work orders and documents</p>
           </div>
           {activeTab === "work-orders" && (
             <div className="flex items-center gap-2">
@@ -210,7 +210,7 @@ export default function ManagementPage() {
                 href="/dashboard/management/work-orders/new"
                 className="tl-btn px-4 py-2.5 text-sm"
               >
-                + New Change Order
+                + New Work Order
               </Link>
             </div>
           )}
@@ -256,7 +256,7 @@ export default function ManagementPage() {
                 : "border-transparent text-(--text)/60 hover:text-(--text)"
             }`}
           >
-            Change Orders
+            Work Orders
           </button>
           <button
             onClick={() => setActiveTab("documents")}
@@ -280,9 +280,7 @@ export default function ManagementPage() {
               if (fullWO) setSelectedWorkOrder(fullWO);
             }}
             onEditWorkOrder={(wo) => {
-              // Find the full work order and open the modal (edit mode would be handled in modal)
-              const fullWO = workOrders.find((w) => w.id === wo.id);
-              if (fullWO) setSelectedWorkOrder(fullWO);
+              router.push(`/dashboard/management/work-orders/${wo.id}/edit`);
             }}
             onDeleteWorkOrder={(wo) => openDeleteWorkOrderWarning(wo as WorkOrder)}
             loading={loading}
@@ -354,3 +352,4 @@ export default function ManagementPage() {
     </div>
   );
 }
+

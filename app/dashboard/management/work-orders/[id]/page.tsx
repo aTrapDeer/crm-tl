@@ -248,7 +248,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
       const data = await res.json();
       setWorkOrder(data.workOrder);
     } catch (error) {
-      console.error("Failed to fetch change order:", error);
+      console.error("Failed to fetch work order:", error);
       router.push("/dashboard/management");
     }
   }, [id, router]);
@@ -411,15 +411,15 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
 
       const data = await res.json();
       if (!res.ok) {
-        setEditError(data.error || "Failed to update change order.");
+        setEditError(data.error || "Failed to update work order.");
         return;
       }
 
       setWorkOrder(data.workOrder);
       setShowEditWorkOrder(false);
     } catch (error) {
-      console.error("Failed to update change order:", error);
-      setEditError("Failed to update change order.");
+      console.error("Failed to update work order:", error);
+      setEditError("Failed to update work order.");
     } finally {
       setSavingEdits(false);
     }
@@ -520,10 +520,10 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
           <div className="flex flex-wrap items-center gap-2">
             {userRole === "admin" && (
               <button
-                onClick={() => setShowEditWorkOrder(true)}
+                onClick={() => router.push(`/dashboard/management/work-orders/${id}/edit`)}
                 className="tl-btn px-4 py-2 text-sm"
               >
-                Edit Change Order
+                Edit Work Order
               </button>
             )}
             {userRole === "admin" && (
@@ -554,9 +554,9 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <div>
-              <p className="font-medium text-green-800">Change Order Created Successfully</p>
+              <p className="font-medium text-green-800">Work Order Created Successfully</p>
               <p className="text-sm text-green-600">
-                Change Order #{workOrder.work_order_number} has been created and is ready for processing.
+                Work Order #{workOrder.work_order_number} has been created and is ready for processing.
               </p>
             </div>
           </div>
@@ -806,12 +806,12 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
         </div>
       )}
 
-      {/* Edit Change Order Modal */}
+      {/* Edit Work Order Modal */}
       {showEditWorkOrder && userRole === "admin" && (
         <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-10000 p-0 md:p-4" onClick={() => setShowEditWorkOrder(false)}>
           <div className="tl-card p-4 md:p-6 w-full max-w-3xl rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-(--text)">Edit Change Order</h3>
+              <h3 className="text-lg font-semibold text-(--text)">Edit Work Order</h3>
               <button
                 onClick={() => setShowEditWorkOrder(false)}
                 className="p-1 rounded-lg hover:bg-(--bg)"
@@ -1328,3 +1328,4 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
     </div>
   );
 }
+

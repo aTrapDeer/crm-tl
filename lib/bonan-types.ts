@@ -22,7 +22,8 @@ export interface DailyReportMetadata {
 
 export interface CoverageMatrixRow {
   area: string;
-  restrooms: AreaStatus;
+  restroomsMale: AreaStatus;
+  restroomsFemale: AreaStatus;
   fountain: AreaStatus;
   elecCloset: AreaStatus;
   notes: string;
@@ -134,7 +135,8 @@ function getCurrentTime(now = new Date()): string {
 function createCoverageRow(area: string): CoverageMatrixRow {
   return {
     area,
-    restrooms: "NA",
+    restroomsMale: "NA",
+    restroomsFemale: "NA",
     fountain: "NA",
     elecCloset: "NA",
     notes: "",
@@ -254,9 +256,11 @@ function normalizeCoverageRows(input: unknown): CoverageMatrixRow[] {
       return defaultRow;
     }
     const row = candidate as Record<string, unknown>;
+    const legacyRestrooms = asAreaStatus(row.restrooms);
     return {
       area: asString(row.area) || defaultRow.area,
-      restrooms: asAreaStatus(row.restrooms),
+      restroomsMale: asAreaStatus(row.restroomsMale ?? legacyRestrooms),
+      restroomsFemale: asAreaStatus(row.restroomsFemale ?? legacyRestrooms),
       fountain: asAreaStatus(row.fountain),
       elecCloset: asAreaStatus(row.elecCloset),
       notes: asString(row.notes),

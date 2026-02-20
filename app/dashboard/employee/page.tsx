@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import ProjectDetailsModal from "@/app/components/ProjectDetailsModal";
 
 interface Project {
@@ -31,6 +32,8 @@ interface ProjectUpdate {
 export default function EmployeeDashboard() {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [workOrderCount, setWorkOrderCount] = useState(0);
+  const [dailyReportCount, setDailyReportCount] = useState(0);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [updates, setUpdates] = useState<ProjectUpdate[]>([]);
@@ -49,6 +52,7 @@ export default function EmployeeDashboard() {
   useEffect(() => {
     fetchProjects();
     fetchOnboardingStatus();
+    fetchOperationsSummary();
   }, []);
 
   async function fetchProjects() {
@@ -74,6 +78,27 @@ export default function EmployeeDashboard() {
       console.error("Failed to fetch onboarding status:", error);
     } finally {
       setOnboardingLoading(false);
+    }
+  }
+
+  async function fetchOperationsSummary() {
+    try {
+      const [workOrdersRes, dailyReportsRes] = await Promise.all([
+        fetch("/api/work-orders"),
+        fetch("/api/bonan/reports?report_type=daily"),
+      ]);
+
+      const workOrdersData = await workOrdersRes.json().catch(() => ({ workOrders: [] }));
+      const dailyReportsData = await dailyReportsRes.json().catch(() => ({ reports: [] }));
+
+      if (workOrdersRes.ok) {
+        setWorkOrderCount((workOrdersData.workOrders || []).length);
+      }
+      if (dailyReportsRes.ok) {
+        setDailyReportCount((dailyReportsData.reports || []).length);
+      }
+    } catch (error) {
+      console.error("Failed to fetch employee operations summary:", error);
     }
   }
 
@@ -169,9 +194,39 @@ export default function EmployeeDashboard() {
           Employee Dashboard
         </h2>
         <p className="text-xs md:text-sm text-(--text) mt-1">
-          View your assigned projects, scope, tasks, and updates
+          View projects, daily walkthroughs, and assigned work orders
         </p>
       </div>
+
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Link
+          href="/dashboard/work-orders"
+          className="tl-card p-5 border border-blue-200 bg-blue-50/70 hover:shadow-lg transition"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Operations</p>
+          <h3 className="text-lg font-semibold text-blue-950 mt-2">Work Orders</h3>
+          <p className="text-sm text-blue-900/80 mt-2">
+            Open and update your assigned work orders.
+          </p>
+          <p className="mt-3 inline-flex rounded-full bg-white/70 px-2.5 py-1 text-xs font-semibold text-blue-800">
+            {workOrderCount} assigned
+          </p>
+        </Link>
+
+        <Link
+          href="/dashboard/bonan/daily"
+          className="tl-card p-5 border border-emerald-200 bg-emerald-50/70 hover:shadow-lg transition"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Operations</p>
+          <h3 className="text-lg font-semibold text-emerald-950 mt-2">Daily Walk-Throughs</h3>
+          <p className="text-sm text-emerald-900/80 mt-2">
+            Complete Bonan daily walkthrough reports and section follow-ups.
+          </p>
+          <p className="mt-3 inline-flex rounded-full bg-white/70 px-2.5 py-1 text-xs font-semibold text-emerald-800">
+            {dailyReportCount} reports
+          </p>
+        </Link>
+      </section>
 
       {projects.length === 0 ? (
         <div className="tl-card p-12 text-center">

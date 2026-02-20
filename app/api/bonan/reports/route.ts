@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { getSession, getUserById } from "@/lib/auth";
-import { createBonanReport, getBonanReports } from "@/lib/bonan-reports";
+import { createBonanReport, getBonanReportByDate, getBonanReports } from "@/lib/bonan-reports";
 import type { BonanReportStatus, BonanReportType } from "@/lib/bonan-types";
 
 function isValidReportType(value: string): value is BonanReportType {
@@ -9,6 +9,13 @@ function isValidReportType(value: string): value is BonanReportType {
 
 function isValidReportStatus(value: string): value is BonanReportStatus {
   return value === "draft" || value === "submitted";
+}
+
+function isValidIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  if (!Number.isFinite(date.getTime())) return false;
+  return date.toISOString().slice(0, 10) === value;
 }
 
 async function getAuthenticatedUser() {
@@ -89,10 +96,40 @@ export async function POST(request: Request) {
       );
     }
 
+    let reportDate: string | undefined;
+    if (body.report_date !== undefined) {
+      if (typeof body.report_date !== "string" || !isValidIsoDate(body.report_date)) {
+        return Response.json({ error: "Invalid report_date. Use YYYY-MM-DD." }, { status: 400 });
+      }
+      reportDate = body.report_date;
+    }
+
+    if (reportDate) {
+      const existingReport = await getBonanReportByDate({
+        report_type: reportTypeRaw,
+        report_date: reportDate,
+        site: "bonan_towers",
+      });
+      if (existingReport) {
+        return Response.json(
+          {
+            error: "A daily report already exists for that date.",
+            existingReport: {
+              id: existingReport.id,
+              report_date: existingReport.report_date,
+              status: existingReport.status,
+            },
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     const report = await createBonanReport({
       report_type: reportTypeRaw,
       created_by: user.id,
       site: "bonan_towers",
+      report_date: reportDate,
     });
 
     return Response.json({ report }, { status: 201 });

@@ -38,6 +38,7 @@ export interface BonanAssociatedWorkOrder {
   work_order_id: string;
   work_order_number: string;
   date: string;
+  area: string | null;
   priority: "emergency" | "high" | "normal" | "low";
   service_type: "maintenance" | "repair" | "replace" | "inspection" | "preventive" | "cleaning" | "other";
   work_completed: "pending" | "in_progress" | "completed" | "cancelled";
@@ -100,6 +101,7 @@ function mapRowToAssociatedWorkOrder(row: Record<string, unknown>): BonanAssocia
     work_order_id: row.work_order_id as string,
     work_order_number: row.work_order_number as string,
     date: row.date as string,
+    area: row.area as string | null,
     priority: row.priority as BonanAssociatedWorkOrder["priority"],
     service_type: row.service_type as BonanAssociatedWorkOrder["service_type"],
     work_completed: row.work_completed as BonanAssociatedWorkOrder["work_completed"],
@@ -108,7 +110,11 @@ function mapRowToAssociatedWorkOrder(row: Record<string, unknown>): BonanAssocia
   };
 }
 
-async function createLinkedWorkOrder(reportType: BonanReportType, createdBy: string): Promise<string> {
+async function createLinkedWorkOrder(
+  reportType: BonanReportType,
+  createdBy: string,
+  reportDate?: string
+): Promise<string> {
   const workOrderNumber = await generateWorkOrderNumber();
 
   const descriptionByType: Record<BonanReportType, string> = {
@@ -119,7 +125,7 @@ async function createLinkedWorkOrder(reportType: BonanReportType, createdBy: str
 
   const workOrder = await createWorkOrder({
     work_order_number: workOrderNumber,
-    date: getTodayDate(),
+    date: reportDate || getTodayDate(),
     time_received: getCurrentTime(),
     company: "Bonan Towers",
     department: "Facilities",
@@ -131,6 +137,30 @@ async function createLinkedWorkOrder(reportType: BonanReportType, createdBy: str
   });
 
   return workOrder.id;
+}
+
+export async function getBonanReportByDate(data: {
+  report_type: BonanReportType;
+  report_date: string;
+  site?: BonanSite;
+}): Promise<BonanReport | null> {
+  const result = await turso.execute({
+    sql: `SELECT br.*,
+                 wo.work_order_number,
+                 u.first_name || ' ' || u.last_name as creator_name
+          FROM bonan_reports br
+          LEFT JOIN work_orders wo ON br.work_order_id = wo.id
+          LEFT JOIN users u ON br.created_by = u.id
+          WHERE br.site = ?
+            AND br.report_type = ?
+            AND br.report_date = ?
+          ORDER BY br.created_at DESC
+          LIMIT 1`,
+    args: [data.site || "bonan_towers", data.report_type, data.report_date],
+  });
+
+  if (result.rows.length === 0) return null;
+  return mapRowToBonanReport(result.rows[0]);
 }
 
 export async function getBonanReports(filters: BonanReportFilters = {}): Promise<BonanReport[]> {
@@ -183,17 +213,33 @@ export async function createBonanReport(data: {
   report_type: BonanReportType;
   created_by: string;
   site?: BonanSite;
+  report_date?: string;
 }): Promise<BonanReport> {
   const id = crypto.randomUUID().replace(/-/g, "");
   const site = data.site || "bonan_towers";
 
-  const payload = data.report_type === "daily" ? createDefaultDailyReportPayload() : {};
-  const normalizedDailyPayload =
-    data.report_type === "daily"
-      ? normalizeDailyReportPayload(payload)
-      : null;
-  const reportDate = normalizedDailyPayload ? normalizedDailyPayload.metadata.date : getTodayDate();
-  const workOrderId = await createLinkedWorkOrder(data.report_type, data.created_by);
+  let payload: DailyReportPayload | Record<string, unknown>;
+  let normalizedDailyPayload: DailyReportPayload | null = null;
+  let reportDate = getTodayDate();
+
+  if (data.report_type === "daily") {
+    const dailyPayload = createDefaultDailyReportPayload();
+    if (data.report_date) {
+      dailyPayload.metadata.date = data.report_date;
+      dailyPayload.fridgeLogs = dailyPayload.fridgeLogs.map((row) => ({
+        ...row,
+        date: data.report_date as string,
+      }));
+    }
+
+    normalizedDailyPayload = normalizeDailyReportPayload(dailyPayload);
+    payload = normalizedDailyPayload;
+    reportDate = data.report_date || normalizedDailyPayload.metadata.date || getTodayDate();
+  } else {
+    payload = {};
+  }
+
+  const workOrderId = await createLinkedWorkOrder(data.report_type, data.created_by, reportDate);
 
   await turso.execute({
     sql: `INSERT INTO bonan_reports (
@@ -206,7 +252,7 @@ export async function createBonanReport(data: {
       reportDate,
       workOrderId,
       data.created_by,
-      JSON.stringify(normalizedDailyPayload || payload),
+      JSON.stringify(payload),
     ],
   });
 
@@ -293,6 +339,7 @@ export async function getBonanAssociatedWorkOrders(reportId: string): Promise<Bo
     sql: `SELECT brwo.*,
                  wo.work_order_number,
                  wo.date,
+                 wo.area,
                  wo.priority,
                  wo.service_type,
                  wo.work_completed,
@@ -351,6 +398,7 @@ export async function createAssociatedWorkOrderForBonanReport(data: {
     sql: `SELECT brwo.*,
                  wo.work_order_number,
                  wo.date,
+                 wo.area,
                  wo.priority,
                  wo.service_type,
                  wo.work_completed,

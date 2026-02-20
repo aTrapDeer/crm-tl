@@ -439,15 +439,15 @@ export default function WorkOrderDetailsModal({
           </div>
           <div className="flex items-center gap-2 ml-4">
             {canEdit && (
-              <button
-                onClick={() => setShowEditModal(true)}
+              <Link
+                href={`/dashboard/management/work-orders/${workOrder.id}/edit`}
                 className="p-2 hover:bg-(--bg) rounded-full transition"
-                title="Edit change order"
+                title="Edit work order"
               >
                 <svg className="w-5 h-5 text-(--text)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
-              </button>
+              </Link>
             )}
             <Link
               href={`/dashboard/management/work-orders/${workOrder.id}`}
@@ -464,7 +464,7 @@ export default function WorkOrderDetailsModal({
               <button
                 onClick={() => setShowDeleteConfirm(true)}
                 className="p-2 hover:bg-red-50 rounded-full transition"
-                title="Delete change order"
+                title="Delete work order"
               >
                 <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -500,12 +500,12 @@ export default function WorkOrderDetailsModal({
                   >
                     Change Status
                   </button>
-                  <button
-                    onClick={() => setShowEditModal(true)}
+                  <Link
+                    href={`/dashboard/management/work-orders/${workOrder.id}/edit`}
                     className="tl-btn-outline px-4 py-2 text-sm"
                   >
-                    Edit Execution Details
-                  </button>
+                    Edit Work Order
+                  </Link>
                 </div>
               )}
 
@@ -1115,7 +1115,7 @@ export default function WorkOrderDetailsModal({
           <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-(--text) mb-4">Add Customer Contact</h3>
             <p className="text-sm text-(--text)/70 mb-4">
-              Add a customer contact to receive updates about this change order.
+              Add a customer contact to receive updates about this work order.
             </p>
             <form onSubmit={handleInviteCustomer} className="space-y-4">
               <div>
@@ -1168,9 +1168,9 @@ export default function WorkOrderDetailsModal({
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-10000 p-4" onClick={() => setShowDeleteConfirm(false)}>
           <div className="tl-card p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-(--text) mb-2">Delete Change Order</h3>
+            <h3 className="text-lg font-semibold text-(--text) mb-2">Delete Work Order</h3>
             <p className="text-sm text-(--text)/70 mb-4">
-              Are you sure you want to delete change order <strong>{workOrder.work_order_number}</strong>? This action cannot be undone.
+              Are you sure you want to delete work order <strong>{workOrder.work_order_number}</strong>? This action cannot be undone.
             </p>
             <div className="flex gap-3">
               <button
@@ -1196,3 +1196,4 @@ export default function WorkOrderDetailsModal({
 
   return createPortal(modalContent, document.body);
 }
+

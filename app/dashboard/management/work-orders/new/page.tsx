@@ -123,16 +123,16 @@ export default function NewWorkOrderPage() {
 
       if (!res.ok) {
         const data = await res.json();
-        setError(data.error || "Failed to create change order");
+        setError(data.error || "Failed to create work order");
         return;
       }
 
       const data = await res.json();
-      // Redirect to the new change order page
+      // Redirect to the new work order page
       router.push(`/dashboard/management/work-orders/${data.workOrder.id}`);
     } catch (err) {
-      console.error("Failed to create change order:", err);
-      setError("An error occurred while creating the change order");
+      console.error("Failed to create work order:", err);
+      setError("An error occurred while creating the work order");
     } finally {
       setCreating(false);
     }
@@ -161,10 +161,10 @@ export default function NewWorkOrderPage() {
           </Link>
           <div>
             <h1 className="text-2xl font-bold text-(--text)">
-              {isBonanOrder ? "New Bonan Order" : "New Change Order"}
+              {isBonanOrder ? "New Bonan Order" : "New Work Order"}
             </h1>
             <p className="text-sm text-(--text)/60">
-              Fill in the details below to create a {isBonanOrder ? "Bonan Order" : "change order"}
+              Fill in the details below to create a {isBonanOrder ? "Bonan Order" : "work order"}
             </p>
           </div>
         </div>
@@ -403,7 +403,7 @@ export default function NewWorkOrderPage() {
               disabled={creating}
               className="flex-1 tl-btn px-6 py-3 text-sm disabled:opacity-50"
             >
-              {creating ? "Creating..." : isBonanOrder ? "Create Bonan Order" : "Create Change Order"}
+              {creating ? "Creating..." : isBonanOrder ? "Create Bonan Order" : "Create Work Order"}
             </button>
           </div>
         </form>
@@ -411,3 +411,4 @@ export default function NewWorkOrderPage() {
     </div>
   );
 }
+

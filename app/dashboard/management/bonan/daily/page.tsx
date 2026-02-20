@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { BonanReportStatus } from "@/lib/bonan-types";
-import { formatUsCentralDateTime } from "@/lib/us-central-time";
+import { formatUsCentralDateTime, getUsCentralDate } from "@/lib/us-central-time";
 
 interface BonanReportSummary {
   id: string;
@@ -32,6 +32,10 @@ export default function BonanDailyReportsPage() {
   const [reports, setReports] = useState<BonanReportSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [showCreatePrompt, setShowCreatePrompt] = useState(false);
+  const [existingTodayReport, setExistingTodayReport] = useState<BonanReportSummary | null>(null);
+  const [newReportDate, setNewReportDate] = useState("");
+  const [createPromptError, setCreatePromptError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingDeleteReport, setPendingDeleteReport] = useState<BonanReportSummary | null>(null);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
@@ -73,29 +77,85 @@ export default function BonanDailyReportsPage() {
     init();
   }, [router]);
 
-  async function handleCreateDailyReport() {
+  async function createDailyReport(reportDate?: string) {
     setCreating(true);
     setError("");
+    setCreatePromptError("");
 
     try {
       const res = await fetch("/api/bonan/reports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ report_type: "daily" }),
+        body: JSON.stringify({
+          report_type: "daily",
+          ...(reportDate ? { report_date: reportDate } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Failed to create daily report.");
+        if (res.status === 409 && data.existingReport?.id) {
+          router.push(`/dashboard/bonan/daily/${data.existingReport.id}`);
+          return;
+        }
+        const message = data.error || "Failed to create daily report.";
+        if (showCreatePrompt) {
+          setCreatePromptError(message);
+        } else {
+          setError(message);
+        }
         return;
       }
 
+      setShowCreatePrompt(false);
       router.push(`/dashboard/bonan/daily/${data.report.id}`);
     } catch (createError) {
       console.error("Failed to create Bonan daily report:", createError);
-      setError("Failed to create daily report.");
+      if (showCreatePrompt) {
+        setCreatePromptError("Failed to create daily report.");
+      } else {
+        setError("Failed to create daily report.");
+      }
     } finally {
       setCreating(false);
     }
+  }
+
+  function handleCreateDailyReportClick() {
+    if (creating) return;
+
+    const todayDate = getUsCentralDate(new Date());
+    const todayReport = reports.find((report) => report.report_date === todayDate);
+    if (!todayReport) {
+      void createDailyReport(todayDate);
+      return;
+    }
+
+    setExistingTodayReport(todayReport);
+    setNewReportDate(todayDate);
+    setCreatePromptError("");
+    setShowCreatePrompt(true);
+  }
+
+  function handleResumeTodayReport() {
+    if (!existingTodayReport) return;
+    setShowCreatePrompt(false);
+    router.push(`/dashboard/bonan/daily/${existingTodayReport.id}`);
+  }
+
+  function handleCreateOrOpenSelectedDate() {
+    if (!newReportDate) {
+      setCreatePromptError("Select a date to continue.");
+      return;
+    }
+
+    const selectedExisting = reports.find((report) => report.report_date === newReportDate);
+    if (selectedExisting) {
+      setShowCreatePrompt(false);
+      router.push(`/dashboard/bonan/daily/${selectedExisting.id}`);
+      return;
+    }
+
+    void createDailyReport(newReportDate);
   }
 
   function openDeleteReportWarning(report: BonanReportSummary) {
@@ -144,7 +204,7 @@ export default function BonanDailyReportsPage() {
             </p>
             <h1 className="text-2xl font-bold text-(--text)">Daily Walk-Through Reports</h1>
             <p className="text-sm text-(--text)/60">
-              Drafts autosave every 30 seconds. Weekly and monthly modules are staged next.
+              Drafts autosave every 3 seconds after changes. Weekly and monthly modules are staged next.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -156,11 +216,11 @@ export default function BonanDailyReportsPage() {
             </Link>
             <button
               type="button"
-              onClick={handleCreateDailyReport}
-              disabled={creating}
+              onClick={handleCreateDailyReportClick}
+              disabled={creating || loading}
               className="tl-btn px-4 py-2.5 text-sm disabled:opacity-50"
             >
-              {creating ? "Creating..." : "New Daily Walk-Through"}
+              {creating ? "Creating..." : loading ? "Loading..." : "New Daily Walk-Through"}
             </button>
           </div>
         </div>
@@ -242,6 +302,84 @@ export default function BonanDailyReportsPage() {
           </div>
         )}
       </div>
+
+      {showCreatePrompt && existingTodayReport && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+          onClick={() => {
+            if (creating) return;
+            setShowCreatePrompt(false);
+            setCreatePromptError("");
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-slate-900">Daily Report Exists for Today</h3>
+            <p className="mt-2 text-sm text-slate-700">
+              Do you want to resume Daily Report for <strong>{existingTodayReport.id}</strong> or do one for new date?
+            </p>
+
+            <div className="mt-4 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Resume Today</p>
+              <p className="text-sm text-slate-700">
+                Daily Report <strong>{existingTodayReport.report_date}</strong> ({existingTodayReport.status})
+              </p>
+              <button
+                type="button"
+                onClick={handleResumeTodayReport}
+                className="mt-1 inline-flex rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100 transition"
+                disabled={creating}
+              >
+                Resume Daily Report
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Or New Date</p>
+              <input
+                type="date"
+                value={newReportDate}
+                onChange={(event) => {
+                  setNewReportDate(event.target.value);
+                  if (createPromptError) setCreatePromptError("");
+                }}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                disabled={creating}
+              />
+              <p className="text-xs text-slate-600">
+                If that date already has a daily report, you will resume it instead of creating a duplicate.
+              </p>
+            </div>
+
+            {createPromptError && <p className="mt-3 text-xs text-red-600">{createPromptError}</p>}
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (creating) return;
+                  setShowCreatePrompt(false);
+                  setCreatePromptError("");
+                }}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                disabled={creating}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateOrOpenSelectedDate}
+                className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                disabled={creating}
+              >
+                {creating ? "Working..." : "Open/Create Selected Date"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pendingDeleteReport && (
         <div

@@ -39,6 +39,7 @@ interface AssociatedWorkOrder {
   bonan_report_id: string;
   work_order_id: string;
   work_order_number: string;
+  area: string | null;
   work_completed: "pending" | "in_progress" | "completed" | "cancelled";
   priority: "emergency" | "high" | "normal" | "low";
   description: string;
@@ -127,6 +128,40 @@ function classNames(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
+function SectionWorkOrderIconButton({
+  onClick,
+  disabled,
+  title,
+  linked = false,
+}: {
+  onClick: () => void;
+  disabled: boolean;
+  title: string;
+  linked?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={classNames(
+        "inline-flex h-8 w-8 items-center justify-center rounded-lg transition disabled:cursor-not-allowed disabled:opacity-60",
+        linked
+          ? "border border-emerald-300 bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+          : "border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+      )}
+      aria-label={title}
+    >
+      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6M9 16h4" />
+      </svg>
+    </button>
+  );
+}
+
 export default function BonanDailyReportEditorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -146,6 +181,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
   const [showDeleteDailyWarning, setShowDeleteDailyWarning] = useState(false);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
   const [deleteReportError, setDeleteReportError] = useState("");
+  const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [syncState, setSyncState] = useState<DraftSyncState>("idle");
   const [lastCachedAt, setLastCachedAt] = useState("");
@@ -153,6 +189,24 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
   const isReadOnly = report?.status === "submitted";
   const draftCacheKey = useMemo(() => getDraftCacheKey(id), [id]);
   const draftQueueKey = useMemo(() => getDraftQueueKey(id), [id]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storedValue = window.localStorage.getItem("bonan-daily-header-collapsed");
+    if (storedValue !== null) {
+      setHeaderCollapsed(storedValue === "true");
+      return;
+    }
+
+    if (window.matchMedia("(max-width: 767px)").matches) {
+      setHeaderCollapsed(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("bonan-daily-header-collapsed", String(headerCollapsed));
+  }, [headerCollapsed]);
 
   const queueDraftForSync = useCallback(
     (draftPayload: DailyReportPayload) => {
@@ -383,7 +437,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
 
     const timer = setTimeout(() => {
       void saveDraft();
-    }, 30000);
+    }, 3000);
 
     return () => clearTimeout(timer);
   }, [dirty, payload, report, saveDraft]);
@@ -624,12 +678,45 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
     }
   }
 
-  async function handleCreateAssociatedWorkOrder() {
+  function shortSectionLabel(label: string): string {
+    const beforeColon = label.split(":")[0]?.trim();
+    return beforeColon && beforeColon.length > 0 ? beforeColon : label;
+  }
+
+  function getLinkedSectionWorkOrder(
+    sectionKey: string,
+    fallbackSectionName?: string
+  ): AssociatedWorkOrder | undefined {
+    return associatedWorkOrders.find((workOrder) => {
+      if (workOrder.area === sectionKey) return true;
+      if (fallbackSectionName && workOrder.area === fallbackSectionName) return true;
+      return false;
+    });
+  }
+
+  function isSectionLinked(sectionKey: string): boolean {
+    return Boolean(getLinkedSectionWorkOrder(sectionKey));
+  }
+
+  async function handleCreateAssociatedWorkOrder(options?: {
+    sectionKey?: string;
+    sectionName?: string;
+    details?: string;
+  }) {
     if (!report || creatingAssociatedWorkOrder) return;
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       setError("You are offline. Reconnect to create a linked work order.");
       return;
     }
+
+    const sectionKey = options?.sectionKey?.trim() || "";
+    const sectionName = options?.sectionName?.trim() || "General Daily Walk-Through";
+    const details = options?.details?.trim() || "";
+    const descriptionPrefix = `${sectionName} - Daily Walk-Through`;
+    const descriptionBody = details
+      ? `${descriptionPrefix}. ${details}`
+      : `${descriptionPrefix}. Deficiency follow-up recorded on ${report.report_date}.`;
+    const linkedArea = sectionKey || sectionName;
 
     setCreatingAssociatedWorkOrder(true);
     setError("");
@@ -638,8 +725,9 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          description: `Bonan Daily Walk-Through Deficiency Follow-up (${report.report_date})`,
+          description: descriptionBody,
           location: "Bonan Towers",
+          area: linkedArea,
         }),
       });
       const data = await res.json();
@@ -656,6 +744,24 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
     } finally {
       setCreatingAssociatedWorkOrder(false);
     }
+  }
+
+  function handleSectionWorkOrderAction(options: {
+    sectionKey: string;
+    sectionName: string;
+    details?: string;
+  }) {
+    const existing = getLinkedSectionWorkOrder(options.sectionKey, options.sectionName);
+    if (existing) {
+      router.push(`/dashboard/management/work-orders/${existing.work_order_id}`);
+      return;
+    }
+
+    void handleCreateAssociatedWorkOrder({
+      sectionKey: options.sectionKey,
+      sectionName: options.sectionName,
+      details: options.details,
+    });
   }
 
   function openDeleteDailyReportWarning() {
@@ -696,7 +802,11 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
   const completedCoverage = useMemo(() => {
     if (!payload) return 0;
     return payload.coverageMatrix.filter(
-      (row) => row.restrooms !== "NA" || row.fountain !== "NA" || row.elecCloset !== "NA"
+      (row) =>
+        row.restroomsMale !== "NA" ||
+        row.restroomsFemale !== "NA" ||
+        row.fountain !== "NA" ||
+        row.elecCloset !== "NA"
     ).length;
   }, [payload]);
 
@@ -844,7 +954,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
             <p className="text-xs text-(--text)/55">
               {isReadOnly
                 ? `Submitted ${report.submitted_at ? `${formatUsCentralDateTime(report.submitted_at)} CT` : ""}`
-                : `Autosave: every 30s after changes. ${saveMessage}`}
+                : `Autosave: every 3s after changes. ${saveMessage}`}
             </p>
           </div>
         </div>
@@ -915,8 +1025,34 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
         </section>
 
         <section className="tl-card p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-(--text)">Header</h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <h2 className="text-lg font-semibold text-(--text)">Header</h2>
+            <button
+              type="button"
+              onClick={() => setHeaderCollapsed((previous) => !previous)}
+              className="inline-flex items-center gap-2 rounded-full border border-(--border)/40 px-3 py-1.5 text-xs font-semibold text-(--text) hover:bg-(--bg) transition"
+              aria-expanded={!headerCollapsed}
+              aria-controls="daily-form-header-fields"
+            >
+              {headerCollapsed ? "Expand Header Fields" : "Collapse Header Fields"}
+              <svg
+                className={classNames("h-4 w-4 transition-transform", headerCollapsed ? "rotate-180" : "")}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          </div>
+          {headerCollapsed ? (
+            <div className="rounded-xl border border-(--border)/40 bg-(--bg) px-4 py-3 text-sm text-(--text)/75">
+              Header fields are collapsed. Date: {payload.metadata.date || "Not set"} | Inspector:{" "}
+              {payload.metadata.inspector || "Not set"} | Shift: {payload.metadata.shift || "Not set"}
+            </div>
+          ) : (
+            <div id="daily-form-header-fields" className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <label className="space-y-1 text-sm">
               <span className="text-(--text)/70">Date</span>
               <input
@@ -1001,29 +1137,31 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                 className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
               />
             </label>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <label className="space-y-1 text-sm">
-              <span className="text-(--text)/70">Work Orders Created (WO#)</span>
-              <input
-                type="text"
-                value={payload.metadata.workOrdersCreated}
-                onChange={(event) => updateMetadata("workOrdersCreated", event.target.value)}
-                disabled={isReadOnly}
-                className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-(--text)/70">Signature (typed)</span>
-              <input
-                type="text"
-                value={payload.metadata.signature}
-                onChange={(event) => updateMetadata("signature", event.target.value)}
-                disabled={isReadOnly}
-                className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
-              />
-            </label>
-          </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="space-y-1 text-sm">
+                  <span className="text-(--text)/70">Work Orders Created (WO#)</span>
+                  <input
+                    type="text"
+                    value={payload.metadata.workOrdersCreated}
+                    onChange={(event) => updateMetadata("workOrdersCreated", event.target.value)}
+                    disabled={isReadOnly}
+                    className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
+                  />
+                </label>
+                <label className="space-y-1 text-sm">
+                  <span className="text-(--text)/70">Signature (typed)</span>
+                  <input
+                    type="text"
+                    value={payload.metadata.signature}
+                    onChange={(event) => updateMetadata("signature", event.target.value)}
+                    disabled={isReadOnly}
+                    className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
+                  />
+                </label>
+              </div>
+            </div>
+          )}
         </section>
 
         {step === 0 && (
@@ -1039,14 +1177,47 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
               <div className="xl:hidden space-y-3">
                 {payload.coverageMatrix.map((row, index) => (
                   <div key={row.area} className="rounded-xl border border-(--border)/40 p-3 space-y-3">
-                    <p className="text-sm font-semibold text-(--text)">{row.area}</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-(--text)">{row.area}</p>
+                      <SectionWorkOrderIconButton
+                        onClick={() =>
+                          handleSectionWorkOrderAction({
+                            sectionKey: `coverage:${row.area}`,
+                            sectionName: row.area,
+                            details: row.notes || "Coverage matrix deficiency follow-up.",
+                          })
+                        }
+                        disabled={creatingAssociatedWorkOrder}
+                        linked={isSectionLinked(`coverage:${row.area}`)}
+                        title={
+                          isSectionLinked(`coverage:${row.area}`)
+                            ? `Open linked work order for ${row.area}`
+                            : `Create work order for ${row.area}`
+                        }
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                       <label className="space-y-1 text-xs">
-                        <span className="text-(--text)/65">Restrooms (M/W)</span>
+                        <span className="text-(--text)/65">Restroom - Male</span>
                         <select
-                          value={row.restrooms}
+                          value={row.restroomsMale}
                           onChange={(event) =>
-                            updateCoverageRow(index, "restrooms", event.target.value as CoverageMatrixRow["restrooms"])
+                            updateCoverageRow(index, "restroomsMale", event.target.value as CoverageMatrixRow["restroomsMale"])
+                          }
+                          disabled={isReadOnly}
+                          className="w-full rounded-md border border-(--border) px-2 py-1.5 text-(--text) bg-white disabled:opacity-70"
+                        >
+                          <option value="O">O</option>
+                          <option value="D">D</option>
+                          <option value="NA">NA</option>
+                        </select>
+                      </label>
+                      <label className="space-y-1 text-xs">
+                        <span className="text-(--text)/65">Restroom - Female</span>
+                        <select
+                          value={row.restroomsFemale}
+                          onChange={(event) =>
+                            updateCoverageRow(index, "restroomsFemale", event.target.value as CoverageMatrixRow["restroomsFemale"])
                           }
                           disabled={isReadOnly}
                           className="w-full rounded-md border border-(--border) px-2 py-1.5 text-(--text) bg-white disabled:opacity-70"
@@ -1115,11 +1286,13 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                   <thead className="bg-slate-100 text-(--text)">
                     <tr>
                       <th className="border border-(--border)/40 px-2 py-2 text-left">Area</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Restrooms (M/W)</th>
+                      <th className="border border-(--border)/40 px-2 py-2 text-left">Restroom - Male</th>
+                      <th className="border border-(--border)/40 px-2 py-2 text-left">Restroom - Female</th>
                       <th className="border border-(--border)/40 px-2 py-2 text-left">Fountain</th>
                       <th className="border border-(--border)/40 px-2 py-2 text-left">Elec Closet</th>
                       <th className="border border-(--border)/40 px-2 py-2 text-left">Notes / WO#</th>
                       <th className="border border-(--border)/40 px-2 py-2 text-left">Initials</th>
+                      <th className="border border-(--border)/40 px-2 py-2 text-left">WO</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1128,9 +1301,23 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                         <td className="border border-(--border)/40 px-2 py-2 font-medium text-(--text)">{row.area}</td>
                         <td className="border border-(--border)/40 px-2 py-2">
                           <select
-                            value={row.restrooms}
+                            value={row.restroomsMale}
                             onChange={(event) =>
-                              updateCoverageRow(index, "restrooms", event.target.value as CoverageMatrixRow["restrooms"])
+                              updateCoverageRow(index, "restroomsMale", event.target.value as CoverageMatrixRow["restroomsMale"])
+                            }
+                            disabled={isReadOnly}
+                            className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
+                          >
+                            <option value="O">O</option>
+                            <option value="D">D</option>
+                            <option value="NA">NA</option>
+                          </select>
+                        </td>
+                        <td className="border border-(--border)/40 px-2 py-2">
+                          <select
+                            value={row.restroomsFemale}
+                            onChange={(event) =>
+                              updateCoverageRow(index, "restroomsFemale", event.target.value as CoverageMatrixRow["restroomsFemale"])
                             }
                             disabled={isReadOnly}
                             className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
@@ -1186,6 +1373,24 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                             className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
                           />
                         </td>
+                        <td className="border border-(--border)/40 px-2 py-2 text-center">
+                          <SectionWorkOrderIconButton
+                            onClick={() =>
+                              handleSectionWorkOrderAction({
+                                sectionKey: `coverage:${row.area}`,
+                                sectionName: row.area,
+                                details: row.notes || "Coverage matrix deficiency follow-up.",
+                              })
+                            }
+                            disabled={creatingAssociatedWorkOrder}
+                            linked={isSectionLinked(`coverage:${row.area}`)}
+                            title={
+                              isSectionLinked(`coverage:${row.area}`)
+                                ? `Open linked work order for ${row.area}`
+                                : `Create work order for ${row.area}`
+                            }
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1198,16 +1403,34 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
               <div className="space-y-4">
                 {payload.commonAreas.map((item, index) => (
                   <div key={item.label} className="rounded-xl border border-(--border)/40 p-4 space-y-2">
-                    <label className="flex items-start gap-3">
-                      <input
-                        type="checkbox"
-                        checked={item.checked}
-                        onChange={(event) => updateChecklistRow("commonAreas", index, { checked: event.target.checked })}
-                        disabled={isReadOnly}
-                        className="mt-1 h-4 w-4 rounded border-(--border)"
+                    <div className="flex items-start justify-between gap-3">
+                      <label className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={item.checked}
+                          onChange={(event) => updateChecklistRow("commonAreas", index, { checked: event.target.checked })}
+                          disabled={isReadOnly}
+                          className="mt-1 h-4 w-4 rounded border-(--border)"
+                        />
+                        <span className="text-sm text-(--text)">{item.label}</span>
+                      </label>
+                      <SectionWorkOrderIconButton
+                        onClick={() =>
+                          handleSectionWorkOrderAction({
+                            sectionKey: `common:${index}`,
+                            sectionName: shortSectionLabel(item.label),
+                            details: item.notes || item.label,
+                          })
+                        }
+                        disabled={creatingAssociatedWorkOrder}
+                        linked={isSectionLinked(`common:${index}`)}
+                        title={
+                          isSectionLinked(`common:${index}`)
+                            ? `Open linked work order for ${shortSectionLabel(item.label)}`
+                            : `Create work order for ${shortSectionLabel(item.label)}`
+                        }
                       />
-                      <span className="text-sm text-(--text)">{item.label}</span>
-                    </label>
+                    </div>
                     <textarea
                       value={item.notes}
                       onChange={(event) => updateChecklistRow("commonAreas", index, { notes: event.target.value })}
@@ -1225,7 +1448,27 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
         {step === 1 && (
           <>
             <section className="tl-card p-6 space-y-4">
-              <h2 className="text-lg font-semibold text-(--text)">Daily Walk-Through - Critical Systems & Life Safety</h2>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <h2 className="text-lg font-semibold text-(--text)">Daily Walk-Through - Critical Systems & Life Safety</h2>
+                <SectionWorkOrderIconButton
+                  onClick={() =>
+                    handleSectionWorkOrderAction({
+                      sectionKey: "critical-systems",
+                      sectionName: "Critical Systems & Life Safety",
+                      details:
+                        `Pump Room: ${payload.temperatures.pumpRoom || "n/a"}, Boiler Room: ${payload.temperatures.boilerRoom || "n/a"}, ` +
+                        `Atrium: ${payload.temperatures.atrium || "n/a"}.`,
+                    })
+                  }
+                  disabled={creatingAssociatedWorkOrder}
+                  linked={isSectionLinked("critical-systems")}
+                  title={
+                    isSectionLinked("critical-systems")
+                      ? "Open linked work order for Critical Systems & Life Safety"
+                      : "Create work order for Critical Systems & Life Safety"
+                  }
+                />
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <label className="space-y-1 text-sm">
                   <span className="text-(--text)/70">Pump Room (F)</span>
@@ -1280,16 +1523,34 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
               <div className="space-y-4">
                 {payload.riskControls.map((item, index) => (
                   <div key={item.label} className="rounded-xl border border-(--border)/40 p-4 space-y-2">
-                    <label className="flex items-start gap-3">
-                      <input
-                        type="checkbox"
-                        checked={item.checked}
-                        onChange={(event) => updateChecklistRow("riskControls", index, { checked: event.target.checked })}
-                        disabled={isReadOnly}
-                        className="mt-1 h-4 w-4 rounded border-(--border)"
+                    <div className="flex items-start justify-between gap-3">
+                      <label className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={item.checked}
+                          onChange={(event) => updateChecklistRow("riskControls", index, { checked: event.target.checked })}
+                          disabled={isReadOnly}
+                          className="mt-1 h-4 w-4 rounded border-(--border)"
+                        />
+                        <span className="text-sm text-(--text)">{item.label}</span>
+                      </label>
+                      <SectionWorkOrderIconButton
+                        onClick={() =>
+                          handleSectionWorkOrderAction({
+                            sectionKey: `risk:${index}`,
+                            sectionName: shortSectionLabel(item.label),
+                            details: item.notes || item.label,
+                          })
+                        }
+                        disabled={creatingAssociatedWorkOrder}
+                        linked={isSectionLinked(`risk:${index}`)}
+                        title={
+                          isSectionLinked(`risk:${index}`)
+                            ? `Open linked work order for ${shortSectionLabel(item.label)}`
+                            : `Create work order for ${shortSectionLabel(item.label)}`
+                        }
                       />
-                      <span className="text-sm text-(--text)">{item.label}</span>
-                    </label>
+                    </div>
                     <textarea
                       value={item.notes}
                       onChange={(event) => updateChecklistRow("riskControls", index, { notes: event.target.value })}
@@ -1326,6 +1587,25 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
               <div className="xl:hidden space-y-3">
                 {payload.incidents.map((row, index) => (
                   <div key={`${index}-${row.time}-${row.systemArea}`} className="rounded-xl border border-(--border)/40 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold text-(--text)/75">Incident Row {index + 1}</p>
+                      <SectionWorkOrderIconButton
+                        onClick={() =>
+                          handleSectionWorkOrderAction({
+                            sectionKey: `incident:${index}`,
+                            sectionName: row.systemArea || `Incident Row ${index + 1}`,
+                            details: row.description || row.actionsTaken || "Incident follow-up required.",
+                          })
+                        }
+                        disabled={creatingAssociatedWorkOrder}
+                        linked={isSectionLinked(`incident:${index}`)}
+                        title={
+                          isSectionLinked(`incident:${index}`)
+                            ? `Open linked work order for incident row ${index + 1}`
+                            : `Create work order for incident row ${index + 1}`
+                        }
+                      />
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <label className="space-y-1 text-xs">
                         <span className="text-(--text)/65">Time</span>
@@ -1399,6 +1679,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                       <th className="border border-(--border)/40 px-2 py-2 text-left">Description</th>
                       <th className="border border-(--border)/40 px-2 py-2 text-left">Actions Taken</th>
                       <th className="border border-(--border)/40 px-2 py-2 text-left">WO# / Vendor</th>
+                      <th className="border border-(--border)/40 px-2 py-2 text-left">WO</th>
                       {!isReadOnly && <th className="border border-(--border)/40 px-2 py-2 text-left">Remove</th>}
                     </tr>
                   </thead>
@@ -1448,6 +1729,24 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                             onChange={(event) => updateIncidentRow(index, "workOrderOrVendor", event.target.value)}
                             disabled={isReadOnly}
                             className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
+                          />
+                        </td>
+                        <td className="border border-(--border)/40 px-2 py-2 text-center">
+                          <SectionWorkOrderIconButton
+                            onClick={() =>
+                              handleSectionWorkOrderAction({
+                                sectionKey: `incident:${index}`,
+                                sectionName: row.systemArea || `Incident Row ${index + 1}`,
+                                details: row.description || row.actionsTaken || "Incident follow-up required.",
+                              })
+                            }
+                            disabled={creatingAssociatedWorkOrder}
+                            linked={isSectionLinked(`incident:${index}`)}
+                            title={
+                              isSectionLinked(`incident:${index}`)
+                                ? `Open linked work order for incident row ${index + 1}`
+                                : `Create work order for incident row ${index + 1}`
+                            }
                           />
                         </td>
                         {!isReadOnly && (
@@ -1502,6 +1801,27 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
               <div className="xl:hidden space-y-3">
                 {payload.fridgeLogs.map((row, index) => (
                   <div key={`${index}-${row.date}-${row.time}`} className="rounded-xl border border-(--border)/40 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold text-(--text)/75">Fridge Entry {index + 1}</p>
+                      <SectionWorkOrderIconButton
+                        onClick={() =>
+                          handleSectionWorkOrderAction({
+                            sectionKey: `fridge:${index}`,
+                            sectionName: "Retail Fridge",
+                            details:
+                              `Entry ${index + 1}: Temp ${row.tempF || "n/a"}F at ${row.time || "n/a"}, within target ${row.withinTarget}. ` +
+                              `${row.correctiveAction || "Follow-up required."}`,
+                          })
+                        }
+                        disabled={creatingAssociatedWorkOrder}
+                        linked={isSectionLinked(`fridge:${index}`)}
+                        title={
+                          isSectionLinked(`fridge:${index}`)
+                            ? `Open linked work order for fridge entry ${index + 1}`
+                            : `Create work order for fridge entry ${index + 1}`
+                        }
+                      />
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <label className="space-y-1 text-xs">
                         <span className="text-(--text)/65">Date</span>
@@ -1592,6 +1912,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                       <th className="border border-(--border)/40 px-2 py-2 text-left">Within Target?</th>
                       <th className="border border-(--border)/40 px-2 py-2 text-left">Corrective Action / Notes</th>
                       <th className="border border-(--border)/40 px-2 py-2 text-left">Initials</th>
+                      <th className="border border-(--border)/40 px-2 py-2 text-left">WO</th>
                       {!isReadOnly && <th className="border border-(--border)/40 px-2 py-2 text-left">Remove</th>}
                     </tr>
                   </thead>
@@ -1654,6 +1975,26 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                             onChange={(event) => updateFridgeRow(index, "initials", event.target.value)}
                             disabled={isReadOnly}
                             className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
+                          />
+                        </td>
+                        <td className="border border-(--border)/40 px-2 py-2 text-center">
+                          <SectionWorkOrderIconButton
+                            onClick={() =>
+                              handleSectionWorkOrderAction({
+                                sectionKey: `fridge:${index}`,
+                                sectionName: "Retail Fridge",
+                                details:
+                                  `Entry ${index + 1}: Temp ${row.tempF || "n/a"}F at ${row.time || "n/a"}, within target ${row.withinTarget}. ` +
+                                  `${row.correctiveAction || "Follow-up required."}`,
+                              })
+                            }
+                            disabled={creatingAssociatedWorkOrder}
+                            linked={isSectionLinked(`fridge:${index}`)}
+                            title={
+                              isSectionLinked(`fridge:${index}`)
+                                ? `Open linked work order for fridge entry ${index + 1}`
+                                : `Create work order for fridge entry ${index + 1}`
+                            }
                           />
                         </td>
                         {!isReadOnly && (
@@ -1741,6 +2082,27 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
               <div className="xl:hidden space-y-3">
                 {payload.fireAlarmEntries.map((row, index) => (
                   <div key={`${index}-${row.date}-${row.time}`} className="rounded-xl border border-(--border)/40 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold text-(--text)/75">Fire Alarm Entry {index + 1}</p>
+                      <SectionWorkOrderIconButton
+                        onClick={() =>
+                          handleSectionWorkOrderAction({
+                            sectionKey: `fire-alarm:${index}`,
+                            sectionName: row.panel ? `Fire Alarm - ${row.panel}` : "Fire Alarm",
+                            details:
+                              `${row.type || "Event"} ${row.messageZone || ""} ${row.actionTaken || ""}`.trim() ||
+                              "Fire alarm event follow-up required.",
+                          })
+                        }
+                        disabled={creatingAssociatedWorkOrder}
+                        linked={isSectionLinked(`fire-alarm:${index}`)}
+                        title={
+                          isSectionLinked(`fire-alarm:${index}`)
+                            ? `Open linked work order for fire alarm entry ${index + 1}`
+                            : `Create work order for fire alarm entry ${index + 1}`
+                        }
+                      />
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <label className="space-y-1 text-xs">
                         <span className="text-(--text)/65">Date</span>
@@ -1851,6 +2213,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                       <th className="border border-(--border)/40 px-2 py-2 text-left">Action Taken</th>
                       <th className="border border-(--border)/40 px-2 py-2 text-left">Cleared</th>
                       <th className="border border-(--border)/40 px-2 py-2 text-left">WO#</th>
+                      <th className="border border-(--border)/40 px-2 py-2 text-left">WO</th>
                       {!isReadOnly && <th className="border border-(--border)/40 px-2 py-2 text-left">Remove</th>}
                     </tr>
                   </thead>
@@ -1927,6 +2290,26 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                             onChange={(event) => updateFireAlarmRow(index, "workOrderNumber", event.target.value)}
                             disabled={isReadOnly}
                             className="w-full rounded-md border border-(--border) px-2 py-1 bg-white text-(--text) disabled:opacity-70"
+                          />
+                        </td>
+                        <td className="border border-(--border)/40 px-2 py-2 text-center">
+                          <SectionWorkOrderIconButton
+                            onClick={() =>
+                              handleSectionWorkOrderAction({
+                                sectionKey: `fire-alarm:${index}`,
+                                sectionName: row.panel ? `Fire Alarm - ${row.panel}` : "Fire Alarm",
+                                details:
+                                  `${row.type || "Event"} ${row.messageZone || ""} ${row.actionTaken || ""}`.trim() ||
+                                  "Fire alarm event follow-up required.",
+                              })
+                            }
+                            disabled={creatingAssociatedWorkOrder}
+                            linked={isSectionLinked(`fire-alarm:${index}`)}
+                            title={
+                              isSectionLinked(`fire-alarm:${index}`)
+                                ? `Open linked work order for fire alarm entry ${index + 1}`
+                                : `Create work order for fire alarm entry ${index + 1}`
+                            }
                           />
                         </td>
                         {!isReadOnly && (
