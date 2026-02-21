@@ -173,8 +173,8 @@ export default function DashboardLayout({
 
   return (
     <div className="relative min-h-screen bg-(--bg)">
-      <div className="pointer-events-none absolute -top-32 right-[-140px] h-[380px] w-[380px] rounded-full bg-[radial-gradient(circle_at_30%_30%,rgba(1,183,231,0.15),rgba(1,183,231,0))] blur-3xl" />
-      <div className="pointer-events-none absolute left-[-120px] top-[280px] h-[320px] w-[320px] rounded-full bg-[radial-gradient(circle_at_30%_30%,rgba(123,168,179,0.18),rgba(123,168,179,0))] blur-3xl" />
+      <div className="pointer-events-none fixed -top-32 -right-20 h-[380px] w-[380px] rounded-full bg-[radial-gradient(circle_at_30%_30%,rgba(1,183,231,0.15),rgba(1,183,231,0))] blur-3xl" />
+      <div className="pointer-events-none fixed -left-20 top-[280px] h-[320px] w-[320px] rounded-full bg-[radial-gradient(circle_at_30%_30%,rgba(123,168,179,0.18),rgba(123,168,179,0))] blur-3xl" />
 
       <header className="sticky top-0 z-40 bg-[rgba(1,34,79,0.95)] backdrop-blur-xl border-b border-white/10 shadow-2xl">
         <div className={`mx-auto px-4 md:px-6 py-2 md:py-3 flex items-center justify-between ${isAdmin ? "" : "max-w-6xl"}`}>
@@ -383,7 +383,7 @@ export default function DashboardLayout({
 
           {/* Main Content with sidebar offset */}
           <main
-            className={`relative z-10 flex-1 min-w-0 py-4 md:py-8 ${
+            className={`relative z-10 flex-1 min-w-0 overflow-x-hidden py-4 md:py-8 ${
               isBonanRoute ? "w-full px-2 md:px-3 lg:px-4 max-w-none" : "px-4 md:px-6 lg:px-8 max-w-6xl mx-auto"
             }`}
           >
@@ -393,7 +393,7 @@ export default function DashboardLayout({
       ) : (
         /* Non-admin layout: no sidebar */
         <main
-          className={`relative z-10 py-4 md:py-8 ${
+          className={`relative z-10 overflow-x-hidden py-4 md:py-8 ${
             isBonanRoute ? "w-full px-2 md:px-3 lg:px-4 max-w-none" : "mx-auto max-w-6xl px-4 md:px-6"
           }`}
         >

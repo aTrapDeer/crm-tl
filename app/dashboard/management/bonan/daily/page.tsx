@@ -195,51 +195,34 @@ export default function BonanDailyReportsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-(--bg)">
-      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.15em] text-(--text)/55">
-              Bonan Towers
-            </p>
-            <h1 className="text-2xl font-bold text-(--text)">Daily Walk-Through Reports</h1>
-            <p className="text-sm text-(--text)/60">
-              Drafts autosave every 3 seconds after changes. Weekly and monthly modules are staged next.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link
-              href="/dashboard/bonan"
-              className="rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
-            >
-              Back to Bonan
-            </Link>
-            <button
-              type="button"
-              onClick={handleCreateDailyReportClick}
-              disabled={creating || loading}
-              className="tl-btn px-4 py-2.5 text-sm disabled:opacity-50"
-            >
-              {creating ? "Creating..." : loading ? "Loading..." : "New Daily Walk-Through"}
-            </button>
-          </div>
-        </div>
+    <div className="min-h-screen bg-(--bg) overflow-x-hidden">
+      <div className="max-w-5xl mx-auto px-3 md:px-4 lg:px-6 py-4 space-y-4">
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="tl-card p-4 border border-emerald-200 bg-emerald-50/70">
-            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Active Module</p>
-            <p className="text-base font-semibold text-emerald-900 mt-1">Daily Walk-Through</p>
-            <p className="text-sm text-emerald-800/80 mt-1">Coverage matrix, life safety, incidents, fridge, fire alarm logs.</p>
+        {/* ── Header ── */}
+        <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard/bonan"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-(--border)/30 text-(--text)/70 hover:bg-(--bg) transition"
+            aria-label="Back to Bonan"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+          </Link>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg font-bold text-(--text)">Daily Walk-Through</h1>
+            <p className="text-xs text-(--text)/50 mt-0.5">Bonan Towers</p>
           </div>
-          <div className="tl-card p-4 border border-slate-200 bg-slate-50/70">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Planned Next</p>
-            <p className="text-base font-semibold text-slate-900 mt-1">Weekly + Monthly Aggregation</p>
-            <p className="text-sm text-slate-700/80 mt-1">Foundation is in place for linked rollups and closeout summaries.</p>
-          </div>
+          <button
+            type="button"
+            onClick={handleCreateDailyReportClick}
+            disabled={creating || loading}
+            className="shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition disabled:opacity-50"
+          >
+            {creating ? "Creating..." : loading ? "Loading..." : "+ New Report"}
+          </button>
         </div>
 
         {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-xs font-medium text-red-700">
             {error}
           </div>
         )}
@@ -249,54 +232,56 @@ export default function BonanDailyReportsPage() {
             <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-(--text)"></div>
           </div>
         ) : reports.length === 0 ? (
-          <div className="tl-card p-8 text-center">
-            <p className="text-(--text)/70">No Bonan daily reports yet.</p>
-            <p className="mt-2 text-sm text-(--text)/50">Create your first daily walk-through to start the log trail.</p>
+          <div className="rounded-2xl border border-(--border)/20 bg-white/80 p-8 text-center">
+            <p className="text-sm text-(--text)/60">No daily reports yet.</p>
+            <p className="mt-1 text-xs text-(--text)/40">Create your first daily walk-through to get started.</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="rounded-2xl border border-(--border)/20 bg-white/80 backdrop-blur-sm overflow-hidden divide-y divide-(--border)/10">
             {reports.map((report) => {
-              const inspector = report.payload?.metadata?.inspector || "Unassigned inspector";
-              const shift = report.payload?.metadata?.shift || "No shift set";
+              const inspector = report.payload?.metadata?.inspector || "Unassigned";
+              const shift = report.payload?.metadata?.shift || "";
               return (
-                <div
+                <Link
                   key={report.id}
-                  className="tl-card p-4"
+                  href={`/dashboard/bonan/daily/${report.id}`}
+                  className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-(--bg)/50 transition"
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-1">
-                      <Link href={`/dashboard/bonan/daily/${report.id}`} className="group">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-semibold text-(--text) group-hover:underline">Daily Report {report.report_date}</span>
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[report.status]}`}>
-                            {report.status === "submitted" ? "Submitted" : "Draft"}
-                          </span>
-                          {report.work_order_number && (
-                            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                              WO #{report.work_order_number}
-                            </span>
-                          )}
-                        </div>
-                      </Link>
-                      <p className="text-sm text-(--text)/70">Inspector: {inspector}</p>
-                      <p className="text-xs text-(--text)/55">Shift: {shift}</p>
-                    </div>
-                    <div className="text-right text-xs text-(--text)/50 space-y-2">
-                      <p>Updated</p>
-                      <p className="mt-1">{formatUsCentralDateTime(report.updated_at)} CT</p>
-                      {userRole === "admin" && (
-                        <button
-                          type="button"
-                          onClick={() => openDeleteReportWarning(report)}
-                          disabled={deletingId === report.id}
-                          className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 transition disabled:opacity-60"
-                        >
-                          {deletingId === report.id ? "Deleting..." : "Delete"}
-                        </button>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold text-(--text)">{report.report_date}</span>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_STYLES[report.status]}`}>
+                        {report.status === "submitted" ? "Submitted" : "Draft"}
+                      </span>
+                      {report.work_order_number && (
+                        <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-600">
+                          WO #{report.work_order_number}
+                        </span>
                       )}
                     </div>
+                    <p className="text-xs text-(--text)/50 mt-0.5 truncate">
+                      {inspector}{shift ? ` · ${shift}` : ""}
+                    </p>
                   </div>
-                </div>
+                  <div className="shrink-0 flex items-center gap-2">
+                    <span className="hidden sm:block text-[10px] text-(--text)/40">{formatUsCentralDateTime(report.updated_at)}</span>
+                    {userRole === "admin" && (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          openDeleteReportWarning(report);
+                        }}
+                        disabled={deletingId === report.id}
+                        className="rounded-lg border border-red-200 px-2 py-1 text-[10px] font-semibold text-red-600 hover:bg-red-50 transition disabled:opacity-60"
+                      >
+                        {deletingId === report.id ? "..." : "Delete"}
+                      </button>
+                    )}
+                    <svg className="h-3.5 w-3.5 text-(--text)/30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                  </div>
+                </Link>
               );
             })}
           </div>
@@ -305,7 +290,7 @@ export default function BonanDailyReportsPage() {
 
       {showCreatePrompt && existingTodayReport && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
           onClick={() => {
             if (creating) return;
             setShowCreatePrompt(false);
@@ -313,31 +298,28 @@ export default function BonanDailyReportsPage() {
           }}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"
+            className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-white p-5 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold text-slate-900">Daily Report Exists for Today</h3>
-            <p className="mt-2 text-sm text-slate-700">
-              Do you want to resume Daily Report for <strong>{existingTodayReport.id}</strong> or do one for new date?
-            </p>
+            <h3 className="text-base font-semibold text-slate-900">Report Exists for Today</h3>
 
-            <div className="mt-4 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Resume Today</p>
-              <p className="text-sm text-slate-700">
-                Daily Report <strong>{existingTodayReport.report_date}</strong> ({existingTodayReport.status})
+            <div className="mt-3 rounded-xl bg-slate-50 p-3">
+              <p className="text-xs text-slate-500">Existing report</p>
+              <p className="text-sm font-semibold text-slate-800 mt-0.5">
+                {existingTodayReport.report_date} ({existingTodayReport.status})
               </p>
               <button
                 type="button"
                 onClick={handleResumeTodayReport}
-                className="mt-1 inline-flex rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100 transition"
+                className="mt-2 w-full rounded-xl bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition"
                 disabled={creating}
               >
-                Resume Daily Report
+                Resume This Report
               </button>
             </div>
 
             <div className="mt-4 space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Or New Date</p>
+              <p className="text-xs font-medium text-slate-500">Or pick a different date</p>
               <input
                 type="date"
                 value={newReportDate}
@@ -345,17 +327,14 @@ export default function BonanDailyReportsPage() {
                   setNewReportDate(event.target.value);
                   if (createPromptError) setCreatePromptError("");
                 }}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                 disabled={creating}
               />
-              <p className="text-xs text-slate-600">
-                If that date already has a daily report, you will resume it instead of creating a duplicate.
-              </p>
             </div>
 
-            {createPromptError && <p className="mt-3 text-xs text-red-600">{createPromptError}</p>}
+            {createPromptError && <p className="mt-2 text-xs text-red-600">{createPromptError}</p>}
 
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="mt-4 grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -363,7 +342,7 @@ export default function BonanDailyReportsPage() {
                   setShowCreatePrompt(false);
                   setCreatePromptError("");
                 }}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
                 disabled={creating}
               >
                 Cancel
@@ -371,10 +350,10 @@ export default function BonanDailyReportsPage() {
               <button
                 type="button"
                 onClick={handleCreateOrOpenSelectedDate}
-                className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                className="rounded-xl bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
                 disabled={creating}
               >
-                {creating ? "Working..." : "Open/Create Selected Date"}
+                {creating ? "Working..." : "Open Date"}
               </button>
             </div>
           </div>
@@ -383,7 +362,7 @@ export default function BonanDailyReportsPage() {
 
       {pendingDeleteReport && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
           onClick={() => {
             if (deletingId) return;
             setPendingDeleteReport(null);
@@ -392,15 +371,14 @@ export default function BonanDailyReportsPage() {
           }}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-red-200 bg-white p-5 shadow-2xl"
+            className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-white p-5 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold text-red-700">Delete Daily Report Warning</h3>
-            <p className="mt-2 text-sm text-slate-700">
-              This will permanently delete daily report <strong>{pendingDeleteReport.report_date}</strong> and its
-              primary linked work order.
+            <h3 className="text-base font-semibold text-red-600">Delete Report</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Permanently delete <strong>{pendingDeleteReport.report_date}</strong> and its linked work order.
             </p>
-            <p className="mt-2 text-xs text-slate-600">
+            <p className="mt-2 text-xs text-slate-500">
               Type <strong>{pendingDeleteReport.report_date}</strong> to confirm.
             </p>
             <input
@@ -410,12 +388,12 @@ export default function BonanDailyReportsPage() {
                 setDeleteConfirmInput(event.target.value);
                 if (deleteConfirmError) setDeleteConfirmError("");
               }}
-              placeholder={`Type ${pendingDeleteReport.report_date}`}
-              className="mt-3 w-full rounded-lg border border-red-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-200"
+              placeholder={pendingDeleteReport.report_date}
+              className="mt-3 w-full rounded-xl border border-red-200 px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-300"
               disabled={Boolean(deletingId)}
             />
             {deleteConfirmError && <p className="mt-2 text-xs text-red-600">{deleteConfirmError}</p>}
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="mt-4 grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -424,7 +402,7 @@ export default function BonanDailyReportsPage() {
                   setDeleteConfirmInput("");
                   setDeleteConfirmError("");
                 }}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
                 disabled={Boolean(deletingId)}
               >
                 Cancel
@@ -432,10 +410,10 @@ export default function BonanDailyReportsPage() {
               <button
                 type="button"
                 onClick={() => void handleDeleteReport()}
-                className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                className="rounded-xl bg-red-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
                 disabled={Boolean(deletingId)}
               >
-                {deletingId ? "Deleting..." : "Delete Now"}
+                {deletingId ? "Deleting..." : "Delete"}
               </button>
             </div>
           </div>

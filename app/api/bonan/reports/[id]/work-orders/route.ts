@@ -65,6 +65,32 @@ export async function POST(
     }
 
     const body = await request.json().catch(() => ({}));
+    const requestedArea = typeof body.area === "string" ? body.area.trim() : "";
+    const normalizedRequestedArea = requestedArea.toLowerCase();
+    const associatedWorkOrders = await getBonanAssociatedWorkOrders(id);
+
+    const existingAssociatedWorkOrder = associatedWorkOrders.find((workOrder) => {
+      const normalizedExistingArea = (workOrder.area || "").trim().toLowerCase();
+      if (normalizedRequestedArea) {
+        return normalizedExistingArea === normalizedRequestedArea;
+      }
+
+      return workOrder.date === report.report_date;
+    });
+
+    if (existingAssociatedWorkOrder) {
+      const duplicateMessage = normalizedRequestedArea
+        ? `A work order for ${requestedArea} already exists for ${report.report_date}.`
+        : `A work order already exists for ${report.report_date}.`;
+      return Response.json(
+        {
+          error: duplicateMessage,
+          existingAssociatedWorkOrder,
+        },
+        { status: 409 }
+      );
+    }
+
     const assignedTo =
       user.role === "employee"
         ? user.id

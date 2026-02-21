@@ -71,6 +71,12 @@ interface LocalDraftRecord {
   serverUpdatedAt: string | null;
 }
 
+interface PendingWorkOrderCreation {
+  sectionKey: string;
+  sectionName: string;
+  details?: string;
+}
+
 const DRAFT_CACHE_PREFIX = "bonan-daily-draft-v1";
 const DRAFT_QUEUE_PREFIX = "bonan-daily-queue-v1";
 
@@ -162,6 +168,16 @@ function SectionWorkOrderIconButton({
   );
 }
 
+function AreaStatusOptions() {
+  return (
+    <>
+      <option value="O">✅</option>
+      <option value="D">❌</option>
+      <option value="NA">NA</option>
+    </>
+  );
+}
+
 export default function BonanDailyReportEditorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -185,6 +201,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
   const [isOnline, setIsOnline] = useState(true);
   const [syncState, setSyncState] = useState<DraftSyncState>("idle");
   const [lastCachedAt, setLastCachedAt] = useState("");
+  const [pendingWorkOrderCreation, setPendingWorkOrderCreation] = useState<PendingWorkOrderCreation | null>(null);
 
   const isReadOnly = report?.status === "submitted";
   const draftCacheKey = useMemo(() => getDraftCacheKey(id), [id]);
@@ -732,6 +749,11 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
       });
       const data = await res.json();
       if (!res.ok) {
+        if (res.status === 409 && data?.existingAssociatedWorkOrder?.work_order_id) {
+          setError(data.error || "A work order already exists for this section.");
+          router.push(`/dashboard/management/work-orders/${data.existingAssociatedWorkOrder.work_order_id}`);
+          return;
+        }
         setError(data.error || "Failed to create associated work order.");
         return;
       }
@@ -757,11 +779,27 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
       return;
     }
 
-    void handleCreateAssociatedWorkOrder({
+    setPendingWorkOrderCreation({
       sectionKey: options.sectionKey,
       sectionName: options.sectionName,
       details: options.details,
     });
+  }
+
+  function confirmPendingWorkOrderCreation() {
+    if (!pendingWorkOrderCreation) return;
+    const request = pendingWorkOrderCreation;
+    setPendingWorkOrderCreation(null);
+    void handleCreateAssociatedWorkOrder({
+      sectionKey: request.sectionKey,
+      sectionName: request.sectionName,
+      details: request.details,
+    });
+  }
+
+  function closePendingWorkOrderCreationPrompt() {
+    if (creatingAssociatedWorkOrder) return;
+    setPendingWorkOrderCreation(null);
   }
 
   function openDeleteDailyReportWarning() {
@@ -853,50 +891,46 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
   }
 
   return (
-    <div className="min-h-screen bg-(--bg)">
-      <div className="w-full px-2 md:px-3 lg:px-4 py-6 pb-28 md:pb-6 space-y-6">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="space-y-1">
+    <div className="min-h-screen bg-(--bg) overflow-x-hidden">
+      <div className="w-full max-w-5xl mx-auto px-3 md:px-4 lg:px-6 py-4 pb-36 md:pb-6 space-y-4">
+
+        {/* ── Top Bar ── */}
+        <div className="flex items-center gap-2">
+          <Link
+            href="/dashboard/bonan/daily"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-(--border)/30 text-(--text)/70 hover:bg-(--bg) transition"
+            aria-label="Back to Daily Reports"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+          </Link>
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-(--text)/55">
-                Bonan Towers Daily Walk-Through
-              </p>
-              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[report.status]}`}>
+              <h1 className="text-lg font-bold text-(--text) truncate">
+                {report.report_date}
+              </h1>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_STYLES[report.status]}`}>
                 {STATUS_LABELS[report.status]}
               </span>
               {report.work_order_number && (
-                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-600">
                   WO #{report.work_order_number}
                 </span>
               )}
             </div>
-            <h1 className="text-2xl font-bold text-(--text)">Daily Report - {report.report_date}</h1>
-            <p className="text-sm text-(--text)/60">
-              Step {step + 1} of {STEP_TITLES.length}: {STEP_TITLES[step]}
+            <p className="text-xs text-(--text)/50 mt-0.5">
+              {isReadOnly
+                ? `Submitted ${report.submitted_at ? formatUsCentralDateTime(report.submitted_at) + " CT" : ""}`
+                : saveMessage || "Autosave active"}
             </p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap md:justify-end">
-            <Link
-              href="/dashboard/bonan/daily"
-              className="rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
-            >
-              Back to List
-            </Link>
-            <button
-              type="button"
-              onClick={() => void handleCreateAssociatedWorkOrder()}
-              disabled={creatingAssociatedWorkOrder}
-              className="rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100 transition disabled:opacity-60"
-            >
-              {creatingAssociatedWorkOrder ? "Creating WO..." : "Create Work Order"}
-            </button>
+          <div className="hidden md:flex items-center gap-1.5 shrink-0">
             {report.work_order_id && (
               <Link
                 href={`/dashboard/management/work-orders/${report.work_order_id}`}
                 target="_blank"
-                className="rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
+                className="rounded-lg border border-(--border)/30 px-3 py-1.5 text-xs font-medium text-(--text)/70 hover:bg-(--bg) transition"
               >
-                Open Linked WO
+                Linked WO
               </Link>
             )}
             {!isReadOnly && (
@@ -904,9 +938,9 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                 type="button"
                 onClick={() => void saveDraft()}
                 disabled={saving}
-                className="rounded-full border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 hover:bg-blue-100 transition disabled:opacity-60"
+                className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-100 transition disabled:opacity-60"
               >
-                {saving ? "Saving..." : "Save Draft"}
+                {saving ? "Saving..." : "Save"}
               </button>
             )}
             {userRole === "admin" && (
@@ -914,60 +948,46 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                 type="button"
                 onClick={() => openDeleteDailyReportWarning()}
                 disabled={deletingReport}
-                className="rounded-full border border-red-300 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-700 hover:bg-red-100 transition disabled:opacity-60"
+                className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition disabled:opacity-60"
               >
-                {deletingReport ? "Deleting..." : "Delete Daily Report"}
+                Delete
               </button>
             )}
-            {!isReadOnly && step === STEP_TITLES.length - 1 && (
+          </div>
+        </div>
+
+        {/* ── Step Progress ── */}
+        <nav className="rounded-2xl border border-(--border)/20 bg-white/80 backdrop-blur-sm p-2">
+          <div className="flex items-center gap-1">
+            {STEP_TITLES.map((title, index) => (
               <button
+                key={title}
                 type="button"
-                onClick={() => void handleSubmitReport()}
-                disabled={submitting}
-                className="tl-btn px-4 py-2.5 text-sm disabled:opacity-60"
+                onClick={() => setStep(index)}
+                className={classNames(
+                  "flex-1 relative rounded-xl px-2 py-2 text-center transition-all",
+                  step === index
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-(--text)/60 hover:bg-(--bg)"
+                )}
               >
-                {submitting ? "Submitting..." : "Submit Daily Report"}
+                <span className="block text-[11px] font-bold">{index + 1}</span>
+                <span className="hidden sm:block text-[10px] font-medium leading-tight mt-0.5">{title}</span>
               </button>
-            )}
+            ))}
           </div>
-        </div>
+        </nav>
 
-        <div className="tl-card p-4">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex flex-wrap gap-2">
-              {STEP_TITLES.map((title, index) => (
-                <button
-                  key={title}
-                  type="button"
-                  onClick={() => setStep(index)}
-                  className={classNames(
-                    "rounded-full px-3 py-1.5 text-xs font-semibold transition",
-                    step === index
-                      ? "bg-blue-600 text-white"
-                      : "bg-white border border-(--border)/40 text-(--text)/70 hover:bg-(--bg)"
-                  )}
-                >
-                  {index + 1}. {title}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-(--text)/55">
-              {isReadOnly
-                ? `Submitted ${report.submitted_at ? `${formatUsCentralDateTime(report.submitted_at)} CT` : ""}`
-                : `Autosave: every 3s after changes. ${saveMessage}`}
-            </p>
-          </div>
-        </div>
-
+        {/* ── Sync / Error Banners ── */}
         {syncStatusText && (
           <div
             className={classNames(
-              "rounded-xl border px-4 py-3 text-sm",
+              "rounded-xl px-3 py-2 text-xs font-medium",
               !isOnline
-                ? "border-amber-300 bg-amber-50 text-amber-900"
+                ? "bg-amber-50 text-amber-700 border border-amber-200"
                 : syncState === "syncing"
-                  ? "border-blue-200 bg-blue-50 text-blue-800"
-                  : "border-slate-200 bg-slate-50 text-slate-700"
+                  ? "bg-blue-50 text-blue-700 border border-blue-200"
+                  : "bg-slate-50 text-slate-600 border border-slate-200"
             )}
           >
             {syncStatusText}
@@ -975,48 +995,57 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
         )}
 
         {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-xs font-medium text-red-700">
             {error}
           </div>
         )}
 
-        <section className="tl-card p-6 space-y-4">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <h2 className="text-lg font-semibold text-(--text)">Associated Work Reports</h2>
+        {/* ── Associated Work Orders ── */}
+        <section className="rounded-2xl border border-(--border)/20 bg-white/80 backdrop-blur-sm overflow-hidden">
+          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-(--border)/10">
+            <h2 className="text-sm font-semibold text-(--text)">
+              Work Orders
+              {associatedWorkOrders.length > 0 && (
+                <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-100 px-1.5 text-[10px] font-bold text-blue-700">
+                  {associatedWorkOrders.length}
+                </span>
+              )}
+            </h2>
             <button
               type="button"
               onClick={() => void handleCreateAssociatedWorkOrder()}
               disabled={creatingAssociatedWorkOrder}
-              className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition disabled:opacity-60"
+              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-700 transition disabled:opacity-60"
             >
-              {creatingAssociatedWorkOrder ? "Creating..." : "+ Create Work Order"}
+              {creatingAssociatedWorkOrder ? "Creating..." : "+ New WO"}
             </button>
           </div>
           {associatedWorkOrders.length === 0 ? (
-            <p className="text-sm text-(--text)/60">
-              No additional work reports are linked yet.
+            <p className="px-4 py-3 text-xs text-(--text)/50">
+              No work orders linked yet. Create one from any section.
             </p>
           ) : (
-            <div className="space-y-2">
+            <div className="divide-y divide-(--border)/10">
               {associatedWorkOrders.map((associated) => (
                 <Link
                   key={associated.id}
                   href={`/dashboard/management/work-orders/${associated.work_order_id}`}
-                  className="block rounded-xl border border-(--border)/40 px-4 py-3 hover:bg-(--bg) transition"
+                  className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-(--bg) transition"
                 >
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div>
-                      <p className="text-sm font-semibold text-(--text)">
-                        WO #{associated.work_order_number}
-                      </p>
-                      <p className="text-xs text-(--text)/60 mt-1 line-clamp-1">
-                        {associated.description}
-                      </p>
-                    </div>
-                    <div className="text-right text-xs text-(--text)/55">
-                      <p className="capitalize">{associated.work_completed.replace("_", " ")}</p>
-                      <p className="mt-1 capitalize">{associated.priority} priority</p>
-                    </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-(--text)">WO #{associated.work_order_number}</p>
+                    <p className="text-[11px] text-(--text)/50 mt-0.5 truncate">{associated.description}</p>
+                  </div>
+                  <div className="shrink-0 flex items-center gap-2">
+                    <span className={classNames(
+                      "rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize",
+                      associated.work_completed === "completed" ? "bg-green-100 text-green-700"
+                        : associated.work_completed === "in_progress" ? "bg-blue-100 text-blue-700"
+                        : "bg-slate-100 text-slate-600"
+                    )}>
+                      {associated.work_completed.replace("_", " ")}
+                    </span>
+                    <svg className="h-3.5 w-3.5 text-(--text)/30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                   </div>
                 </Link>
               ))}
@@ -1024,139 +1053,139 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
           )}
         </section>
 
-        <section className="tl-card p-6 space-y-4">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h2 className="text-lg font-semibold text-(--text)">Header</h2>
-            <button
-              type="button"
-              onClick={() => setHeaderCollapsed((previous) => !previous)}
-              className="inline-flex items-center gap-2 rounded-full border border-(--border)/40 px-3 py-1.5 text-xs font-semibold text-(--text) hover:bg-(--bg) transition"
-              aria-expanded={!headerCollapsed}
-              aria-controls="daily-form-header-fields"
-            >
-              {headerCollapsed ? "Expand Header Fields" : "Collapse Header Fields"}
-              <svg
-                className={classNames("h-4 w-4 transition-transform", headerCollapsed ? "rotate-180" : "")}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-          </div>
-          {headerCollapsed ? (
-            <div className="rounded-xl border border-(--border)/40 bg-(--bg) px-4 py-3 text-sm text-(--text)/75">
-              Header fields are collapsed. Date: {payload.metadata.date || "Not set"} | Inspector:{" "}
-              {payload.metadata.inspector || "Not set"} | Shift: {payload.metadata.shift || "Not set"}
+        {/* ── Header Fields ── */}
+        <section className="rounded-2xl border border-(--border)/20 bg-white/80 backdrop-blur-sm overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setHeaderCollapsed((previous) => !previous)}
+            className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-(--bg)/50 transition"
+            aria-expanded={!headerCollapsed}
+            aria-controls="daily-form-header-fields"
+          >
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-(--text)">Report Details</h2>
+              {headerCollapsed && (
+                <p className="text-[11px] text-(--text)/50 mt-0.5 truncate">
+                  {payload.metadata.date || "No date"} &middot; {payload.metadata.inspector || "No inspector"} &middot; {payload.metadata.shift || "No shift"}
+                </p>
+              )}
             </div>
-          ) : (
-            <div id="daily-form-header-fields" className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <label className="space-y-1 text-sm">
-              <span className="text-(--text)/70">Date</span>
-              <input
-                type="date"
-                value={payload.metadata.date}
-                onChange={(event) => updateMetadata("date", event.target.value)}
-                disabled={isReadOnly}
-                className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-(--text)/70">Start</span>
-              <input
-                type="time"
-                value={payload.metadata.start}
-                onChange={(event) => updateMetadata("start", event.target.value)}
-                disabled={isReadOnly}
-                className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-(--text)/70">End</span>
-              <input
-                type="time"
-                value={payload.metadata.end}
-                onChange={(event) => updateMetadata("end", event.target.value)}
-                disabled={isReadOnly}
-                className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-(--text)/70">Inspector</span>
-              <input
-                type="text"
-                value={payload.metadata.inspector}
-                onChange={(event) => updateMetadata("inspector", event.target.value)}
-                disabled={isReadOnly}
-                placeholder="Inspector name"
-                className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-(--text)/70">Towers</span>
-              <select
-                value={payload.metadata.towers}
-                onChange={(event) => updateMetadata("towers", event.target.value as DailyReportPayload["metadata"]["towers"])}
-                disabled={isReadOnly}
-                className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
-              >
-                <option value="north">North</option>
-                <option value="south">South</option>
-                <option value="both">Both</option>
-              </select>
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-(--text)/70">Weather</span>
-              <input
-                type="text"
-                value={payload.metadata.weather}
-                onChange={(event) => updateMetadata("weather", event.target.value)}
-                disabled={isReadOnly}
-                className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-(--text)/70">Shift</span>
-              <input
-                type="text"
-                value={payload.metadata.shift}
-                onChange={(event) => updateMetadata("shift", event.target.value)}
-                disabled={isReadOnly}
-                className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-(--text)/70">Supervisor Review</span>
-              <input
-                type="text"
-                value={payload.metadata.supervisorReview}
-                onChange={(event) => updateMetadata("supervisorReview", event.target.value)}
-                disabled={isReadOnly}
-                className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
-              />
-            </label>
+            <svg
+              className={classNames("h-4 w-4 shrink-0 text-(--text)/40 transition-transform", headerCollapsed ? "" : "rotate-180")}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {!headerCollapsed && (
+            <div id="daily-form-header-fields" className="border-t border-(--border)/10 px-4 py-4 space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <label className="space-y-1 text-xs">
+                  <span className="font-medium text-(--text)/60">Date</span>
+                  <input
+                    type="date"
+                    value={payload.metadata.date}
+                    onChange={(event) => updateMetadata("date", event.target.value)}
+                    disabled={isReadOnly}
+                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
+                  />
+                </label>
+                <label className="space-y-1 text-xs">
+                  <span className="font-medium text-(--text)/60">Start</span>
+                  <input
+                    type="time"
+                    value={payload.metadata.start}
+                    onChange={(event) => updateMetadata("start", event.target.value)}
+                    disabled={isReadOnly}
+                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
+                  />
+                </label>
+                <label className="space-y-1 text-xs">
+                  <span className="font-medium text-(--text)/60">End</span>
+                  <input
+                    type="time"
+                    value={payload.metadata.end}
+                    onChange={(event) => updateMetadata("end", event.target.value)}
+                    disabled={isReadOnly}
+                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
+                  />
+                </label>
+                <label className="space-y-1 text-xs">
+                  <span className="font-medium text-(--text)/60">Inspector</span>
+                  <input
+                    type="text"
+                    value={payload.metadata.inspector}
+                    onChange={(event) => updateMetadata("inspector", event.target.value)}
+                    disabled={isReadOnly}
+                    placeholder="Name"
+                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
+                  />
+                </label>
+                <label className="space-y-1 text-xs">
+                  <span className="font-medium text-(--text)/60">Towers</span>
+                  <select
+                    value={payload.metadata.towers}
+                    onChange={(event) => updateMetadata("towers", event.target.value as DailyReportPayload["metadata"]["towers"])}
+                    disabled={isReadOnly}
+                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
+                  >
+                    <option value="north">North</option>
+                    <option value="south">South</option>
+                    <option value="both">Both</option>
+                  </select>
+                </label>
+                <label className="space-y-1 text-xs">
+                  <span className="font-medium text-(--text)/60">Weather</span>
+                  <input
+                    type="text"
+                    value={payload.metadata.weather}
+                    onChange={(event) => updateMetadata("weather", event.target.value)}
+                    disabled={isReadOnly}
+                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
+                  />
+                </label>
+                <label className="space-y-1 text-xs">
+                  <span className="font-medium text-(--text)/60">Shift</span>
+                  <input
+                    type="text"
+                    value={payload.metadata.shift}
+                    onChange={(event) => updateMetadata("shift", event.target.value)}
+                    disabled={isReadOnly}
+                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
+                  />
+                </label>
+                <label className="space-y-1 text-xs">
+                  <span className="font-medium text-(--text)/60">Supervisor</span>
+                  <input
+                    type="text"
+                    value={payload.metadata.supervisorReview}
+                    onChange={(event) => updateMetadata("supervisorReview", event.target.value)}
+                    disabled={isReadOnly}
+                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
+                  />
+                </label>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <label className="space-y-1 text-sm">
-                  <span className="text-(--text)/70">Work Orders Created (WO#)</span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className="space-y-1 text-xs">
+                  <span className="font-medium text-(--text)/60">Work Orders Created (WO#)</span>
                   <input
                     type="text"
                     value={payload.metadata.workOrdersCreated}
                     onChange={(event) => updateMetadata("workOrdersCreated", event.target.value)}
                     disabled={isReadOnly}
-                    className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
+                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
-                <label className="space-y-1 text-sm">
-                  <span className="text-(--text)/70">Signature (typed)</span>
+                <label className="space-y-1 text-xs">
+                  <span className="font-medium text-(--text)/60">Signature (typed)</span>
                   <input
                     type="text"
                     value={payload.metadata.signature}
                     onChange={(event) => updateMetadata("signature", event.target.value)}
                     disabled={isReadOnly}
-                    className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
+                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
               </div>
@@ -1166,19 +1195,21 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
 
         {step === 0 && (
           <>
-            <section className="tl-card p-6 space-y-4">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <h2 className="text-lg font-semibold text-(--text)">Daily Walk-Through - Coverage Matrix</h2>
-                <span className="text-xs text-(--text)/60">{completedCoverage} / {payload.coverageMatrix.length} rows reviewed</span>
+            <section className="rounded-2xl border border-(--border)/20 bg-white/80 backdrop-blur-sm overflow-hidden">
+              <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-(--border)/10">
+                <div>
+                  <h2 className="text-sm font-semibold text-(--text)">Coverage Matrix</h2>
+                  <p className="text-[11px] text-(--text)/50 mt-0.5">Mark each area: OK, Deficiency, or NA</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-(--text)/60">
+                  {completedCoverage}/{payload.coverageMatrix.length}
+                </span>
               </div>
-              <p className="text-sm text-(--text)/60">
-                Mark each area as O (OK), D (Deficiency), or NA.
-              </p>
-              <div className="xl:hidden space-y-3">
+              <div className="xl:hidden divide-y divide-(--border)/10">
                 {payload.coverageMatrix.map((row, index) => (
-                  <div key={row.area} className="rounded-xl border border-(--border)/40 p-3 space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-(--text)">{row.area}</p>
+                  <div key={row.area} className="px-3 py-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-bold text-(--text)">{row.area}</p>
                       <SectionWorkOrderIconButton
                         onClick={() =>
                           handleSectionWorkOrderAction({
@@ -1196,184 +1227,170 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                         }
                       />
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                      <label className="space-y-1 text-xs">
-                        <span className="text-(--text)/65">Restroom - Male</span>
+                    <div className="grid grid-cols-4 gap-2">
+                      <label className="space-y-0.5 text-[10px]">
+                        <span className="text-(--text)/50 font-medium">Male</span>
                         <select
                           value={row.restroomsMale}
                           onChange={(event) =>
                             updateCoverageRow(index, "restroomsMale", event.target.value as CoverageMatrixRow["restroomsMale"])
                           }
                           disabled={isReadOnly}
-                          className="w-full rounded-md border border-(--border) px-2 py-1.5 text-(--text) bg-white disabled:opacity-70"
+                          className="w-full rounded-lg border border-(--border)/30 px-1.5 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
                         >
-                          <option value="O">O</option>
-                          <option value="D">D</option>
-                          <option value="NA">NA</option>
+                          <AreaStatusOptions />
                         </select>
                       </label>
-                      <label className="space-y-1 text-xs">
-                        <span className="text-(--text)/65">Restroom - Female</span>
+                      <label className="space-y-0.5 text-[10px]">
+                        <span className="text-(--text)/50 font-medium">Female</span>
                         <select
                           value={row.restroomsFemale}
                           onChange={(event) =>
                             updateCoverageRow(index, "restroomsFemale", event.target.value as CoverageMatrixRow["restroomsFemale"])
                           }
                           disabled={isReadOnly}
-                          className="w-full rounded-md border border-(--border) px-2 py-1.5 text-(--text) bg-white disabled:opacity-70"
+                          className="w-full rounded-lg border border-(--border)/30 px-1.5 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
                         >
-                          <option value="O">O</option>
-                          <option value="D">D</option>
-                          <option value="NA">NA</option>
+                          <AreaStatusOptions />
                         </select>
                       </label>
-                      <label className="space-y-1 text-xs">
-                        <span className="text-(--text)/65">Fountain</span>
+                      <label className="space-y-0.5 text-[10px]">
+                        <span className="text-(--text)/50 font-medium">Fountain</span>
                         <select
                           value={row.fountain}
                           onChange={(event) =>
                             updateCoverageRow(index, "fountain", event.target.value as CoverageMatrixRow["fountain"])
                           }
                           disabled={isReadOnly}
-                          className="w-full rounded-md border border-(--border) px-2 py-1.5 text-(--text) bg-white disabled:opacity-70"
+                          className="w-full rounded-lg border border-(--border)/30 px-1.5 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
                         >
-                          <option value="O">O</option>
-                          <option value="D">D</option>
-                          <option value="NA">NA</option>
+                          <AreaStatusOptions />
                         </select>
                       </label>
-                      <label className="space-y-1 text-xs">
-                        <span className="text-(--text)/65">Elec Closet</span>
+                      <label className="space-y-0.5 text-[10px]">
+                        <span className="text-(--text)/50 font-medium">Elec</span>
                         <select
                           value={row.elecCloset}
                           onChange={(event) =>
                             updateCoverageRow(index, "elecCloset", event.target.value as CoverageMatrixRow["elecCloset"])
                           }
                           disabled={isReadOnly}
-                          className="w-full rounded-md border border-(--border) px-2 py-1.5 text-(--text) bg-white disabled:opacity-70"
+                          className="w-full rounded-lg border border-(--border)/30 px-1.5 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
                         >
-                          <option value="O">O</option>
-                          <option value="D">D</option>
-                          <option value="NA">NA</option>
+                          <AreaStatusOptions />
                         </select>
                       </label>
                     </div>
-                    <label className="space-y-1 text-xs block">
-                      <span className="text-(--text)/65">Notes / WO#</span>
-                      <input
-                        type="text"
-                        value={row.notes}
-                        onChange={(event) => updateCoverageRow(index, "notes", event.target.value)}
-                        disabled={isReadOnly}
-                        className="w-full rounded-md border border-(--border) px-2 py-1.5 text-(--text) bg-white disabled:opacity-70"
-                      />
-                    </label>
-                    <label className="space-y-1 text-xs block">
-                      <span className="text-(--text)/65">Initials</span>
-                      <input
-                        type="text"
-                        value={row.initials}
-                        onChange={(event) => updateCoverageRow(index, "initials", event.target.value)}
-                        disabled={isReadOnly}
-                        className="w-full rounded-md border border-(--border) px-2 py-1.5 text-(--text) bg-white disabled:opacity-70"
-                      />
-                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <label className="col-span-2 space-y-0.5 text-[10px]">
+                        <span className="text-(--text)/50 font-medium">Notes</span>
+                        <input
+                          type="text"
+                          value={row.notes}
+                          onChange={(event) => updateCoverageRow(index, "notes", event.target.value)}
+                          disabled={isReadOnly}
+                          className="w-full rounded-lg border border-(--border)/30 px-2 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
+                        />
+                      </label>
+                      <label className="space-y-0.5 text-[10px]">
+                        <span className="text-(--text)/50 font-medium">Initials</span>
+                        <input
+                          type="text"
+                          value={row.initials}
+                          onChange={(event) => updateCoverageRow(index, "initials", event.target.value)}
+                          disabled={isReadOnly}
+                          className="w-full rounded-lg border border-(--border)/30 px-2 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
+                        />
+                      </label>
+                    </div>
                   </div>
                 ))}
               </div>
-              <div className="hidden xl:block overflow-x-auto">
-                <table className="min-w-[980px] w-full border border-(--border)/40 text-sm">
-                  <thead className="bg-slate-100 text-(--text)">
+              <div className="hidden xl:block overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-(--text)/70 text-xs">
                     <tr>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Area</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Restroom - Male</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Restroom - Female</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Fountain</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Elec Closet</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Notes / WO#</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Initials</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">WO</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">Area</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">Male</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">Female</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">Fountain</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">Elec Closet</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">Notes / WO#</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">Initials</th>
+                      <th className="border-b border-(--border)/20 px-2 py-2.5 text-center font-semibold w-12">WO</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-(--border)/10">
                     {payload.coverageMatrix.map((row, index) => (
-                      <tr key={row.area}>
-                        <td className="border border-(--border)/40 px-2 py-2 font-medium text-(--text)">{row.area}</td>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                      <tr key={row.area} className="hover:bg-slate-50/50">
+                        <td className="px-3 py-2 font-medium text-sm text-(--text)">{row.area}</td>
+                        <td className="px-3 py-2">
                           <select
                             value={row.restroomsMale}
                             onChange={(event) =>
                               updateCoverageRow(index, "restroomsMale", event.target.value as CoverageMatrixRow["restroomsMale"])
                             }
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
                           >
-                            <option value="O">O</option>
-                            <option value="D">D</option>
-                            <option value="NA">NA</option>
+                            <AreaStatusOptions />
                           </select>
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                        <td className="px-3 py-2">
                           <select
                             value={row.restroomsFemale}
                             onChange={(event) =>
                               updateCoverageRow(index, "restroomsFemale", event.target.value as CoverageMatrixRow["restroomsFemale"])
                             }
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
                           >
-                            <option value="O">O</option>
-                            <option value="D">D</option>
-                            <option value="NA">NA</option>
+                            <AreaStatusOptions />
                           </select>
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                        <td className="px-3 py-2">
                           <select
                             value={row.fountain}
                             onChange={(event) =>
                               updateCoverageRow(index, "fountain", event.target.value as CoverageMatrixRow["fountain"])
                             }
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
                           >
-                            <option value="O">O</option>
-                            <option value="D">D</option>
-                            <option value="NA">NA</option>
+                            <AreaStatusOptions />
                           </select>
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                        <td className="px-3 py-2">
                           <select
                             value={row.elecCloset}
                             onChange={(event) =>
                               updateCoverageRow(index, "elecCloset", event.target.value as CoverageMatrixRow["elecCloset"])
                             }
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
                           >
-                            <option value="O">O</option>
-                            <option value="D">D</option>
-                            <option value="NA">NA</option>
+                            <AreaStatusOptions />
                           </select>
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                        <td className="px-3 py-2">
                           <input
                             type="text"
                             value={row.notes}
                             onChange={(event) => updateCoverageRow(index, "notes", event.target.value)}
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
                           />
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                        <td className="px-3 py-2">
                           <input
                             type="text"
                             value={row.initials}
                             onChange={(event) => updateCoverageRow(index, "initials", event.target.value)}
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
                           />
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2 text-center">
+                        <td className="px-2 py-2 text-center">
                           <SectionWorkOrderIconButton
                             onClick={() =>
                               handleSectionWorkOrderAction({
@@ -1398,21 +1415,23 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
               </div>
             </section>
 
-            <section className="tl-card p-6 space-y-4">
-              <h2 className="text-lg font-semibold text-(--text)">Daily - Atrium & Common Areas</h2>
-              <div className="space-y-4">
+            <section className="rounded-2xl border border-(--border)/20 bg-white/80 backdrop-blur-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-(--border)/10">
+                <h2 className="text-sm font-semibold text-(--text)">Atrium & Common Areas</h2>
+              </div>
+              <div className="divide-y divide-(--border)/10">
                 {payload.commonAreas.map((item, index) => (
-                  <div key={item.label} className="rounded-xl border border-(--border)/40 p-4 space-y-2">
-                    <div className="flex items-start justify-between gap-3">
-                      <label className="flex items-start gap-3">
+                  <div key={item.label} className="px-4 py-3 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <label className="flex items-start gap-2.5 min-w-0">
                         <input
                           type="checkbox"
                           checked={item.checked}
                           onChange={(event) => updateChecklistRow("commonAreas", index, { checked: event.target.checked })}
                           disabled={isReadOnly}
-                          className="mt-1 h-4 w-4 rounded border-(--border)"
+                          className="mt-0.5 h-5 w-5 shrink-0 rounded-md border-(--border)/40 accent-blue-600"
                         />
-                        <span className="text-sm text-(--text)">{item.label}</span>
+                        <span className="text-xs font-medium text-(--text) leading-relaxed">{item.label}</span>
                       </label>
                       <SectionWorkOrderIconButton
                         onClick={() =>
@@ -1435,9 +1454,9 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                       value={item.notes}
                       onChange={(event) => updateChecklistRow("commonAreas", index, { notes: event.target.value })}
                       disabled={isReadOnly}
-                      rows={2}
-                      placeholder="Notes / WO#"
-                      className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
+                      rows={1}
+                      placeholder="Notes"
+                      className="w-full rounded-lg border border-(--border)/30 bg-(--bg) px-3 py-2 text-xs text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                     />
                   </div>
                 ))}
@@ -1447,9 +1466,12 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
         )}
         {step === 1 && (
           <>
-            <section className="tl-card p-6 space-y-4">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <h2 className="text-lg font-semibold text-(--text)">Daily Walk-Through - Critical Systems & Life Safety</h2>
+            <section className="rounded-2xl border border-(--border)/20 bg-white/80 backdrop-blur-sm overflow-hidden">
+              <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-(--border)/10">
+                <div>
+                  <h2 className="text-sm font-semibold text-(--text)">Critical Systems & Life Safety</h2>
+                  <p className="text-[11px] text-(--text)/50 mt-0.5">Temperature readings</p>
+                </div>
                 <SectionWorkOrderIconButton
                   onClick={() =>
                     handleSectionWorkOrderAction({
@@ -1469,9 +1491,9 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                   }
                 />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <label className="space-y-1 text-sm">
-                  <span className="text-(--text)/70">Pump Room (F)</span>
+              <div className="px-4 py-4 grid grid-cols-3 gap-3">
+                <label className="space-y-1 text-xs">
+                  <span className="font-medium text-(--text)/60">Pump Room (F)</span>
                   <input
                     type="text"
                     value={payload.temperatures.pumpRoom}
@@ -1482,11 +1504,11 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                       }))
                     }
                     disabled={isReadOnly}
-                    className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
+                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) text-center font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
-                <label className="space-y-1 text-sm">
-                  <span className="text-(--text)/70">Boiler Room (F)</span>
+                <label className="space-y-1 text-xs">
+                  <span className="font-medium text-(--text)/60">Boiler Room (F)</span>
                   <input
                     type="text"
                     value={payload.temperatures.boilerRoom}
@@ -1497,11 +1519,11 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                       }))
                     }
                     disabled={isReadOnly}
-                    className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
+                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) text-center font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
-                <label className="space-y-1 text-sm">
-                  <span className="text-(--text)/70">Atrium (F)</span>
+                <label className="space-y-1 text-xs">
+                  <span className="font-medium text-(--text)/60">Atrium (F)</span>
                   <input
                     type="text"
                     value={payload.temperatures.atrium}
@@ -1512,27 +1534,30 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                       }))
                     }
                     disabled={isReadOnly}
-                    className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
+                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) text-center font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
               </div>
             </section>
 
-            <section className="tl-card p-6 space-y-4">
-              <h2 className="text-lg font-semibold text-(--text)">Daily - Risk Controls (Insurance Review)</h2>
-              <div className="space-y-4">
+            <section className="rounded-2xl border border-(--border)/20 bg-white/80 backdrop-blur-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-(--border)/10">
+                <h2 className="text-sm font-semibold text-(--text)">Risk Controls</h2>
+                <p className="text-[11px] text-(--text)/50 mt-0.5">Insurance review checklist</p>
+              </div>
+              <div className="divide-y divide-(--border)/10">
                 {payload.riskControls.map((item, index) => (
-                  <div key={item.label} className="rounded-xl border border-(--border)/40 p-4 space-y-2">
-                    <div className="flex items-start justify-between gap-3">
-                      <label className="flex items-start gap-3">
+                  <div key={item.label} className="px-4 py-3 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <label className="flex items-start gap-2.5 min-w-0">
                         <input
                           type="checkbox"
                           checked={item.checked}
                           onChange={(event) => updateChecklistRow("riskControls", index, { checked: event.target.checked })}
                           disabled={isReadOnly}
-                          className="mt-1 h-4 w-4 rounded border-(--border)"
+                          className="mt-0.5 h-5 w-5 shrink-0 rounded-md border-(--border)/40 accent-blue-600"
                         />
-                        <span className="text-sm text-(--text)">{item.label}</span>
+                        <span className="text-xs font-medium text-(--text) leading-relaxed">{item.label}</span>
                       </label>
                       <SectionWorkOrderIconButton
                         onClick={() =>
@@ -1555,9 +1580,9 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                       value={item.notes}
                       onChange={(event) => updateChecklistRow("riskControls", index, { notes: event.target.value })}
                       disabled={isReadOnly}
-                      rows={2}
-                      placeholder="Notes / WO#"
-                      className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
+                      rows={1}
+                      placeholder="Notes"
+                      className="w-full rounded-lg border border-(--border)/30 bg-(--bg) px-3 py-2 text-xs text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                     />
                   </div>
                 ))}
@@ -1568,170 +1593,173 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
 
         {step === 2 && (
           <>
-            <section className="tl-card p-6 space-y-4">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <h2 className="text-lg font-semibold text-(--text)">Incident / Alarm / Shutdown Record</h2>
+            <section className="rounded-2xl border border-(--border)/20 bg-white/80 backdrop-blur-sm overflow-hidden">
+              <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-(--border)/10">
+                <div>
+                  <h2 className="text-sm font-semibold text-(--text)">Incidents / Alarms / Shutdowns</h2>
+                  <p className="text-[11px] text-(--text)/50 mt-0.5">Include WO# or vendor ref where possible</p>
+                </div>
                 {!isReadOnly && (
                   <button
                     type="button"
                     onClick={addIncidentRow}
-                    className="rounded-full border border-(--border)/40 px-3 py-1.5 text-xs font-semibold text-(--text) hover:bg-(--bg) transition"
+                    className="rounded-lg bg-slate-100 px-3 py-1.5 text-[11px] font-semibold text-(--text)/70 hover:bg-slate-200 transition"
                   >
-                    + Add Row
+                    + Add
                   </button>
                 )}
               </div>
-              <p className="text-sm text-(--text)/60">
-                Use for alarms, leaks, shutdowns, and safety incidents. Include WO# or vendor reference where possible.
-              </p>
-              <div className="xl:hidden space-y-3">
+              <div className="xl:hidden divide-y divide-(--border)/10">
                 {payload.incidents.map((row, index) => (
-                  <div key={`${index}-${row.time}-${row.systemArea}`} className="rounded-xl border border-(--border)/40 p-3 space-y-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-semibold text-(--text)/75">Incident Row {index + 1}</p>
-                      <SectionWorkOrderIconButton
-                        onClick={() =>
-                          handleSectionWorkOrderAction({
-                            sectionKey: `incident:${index}`,
-                            sectionName: row.systemArea || `Incident Row ${index + 1}`,
-                            details: row.description || row.actionsTaken || "Incident follow-up required.",
-                          })
-                        }
-                        disabled={creatingAssociatedWorkOrder}
-                        linked={isSectionLinked(`incident:${index}`)}
-                        title={
-                          isSectionLinked(`incident:${index}`)
-                            ? `Open linked work order for incident row ${index + 1}`
-                            : `Create work order for incident row ${index + 1}`
-                        }
-                      />
+                  <div key={`${index}-${row.time}-${row.systemArea}`} className="px-3 py-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] font-bold text-(--text)/50 uppercase tracking-wider">Incident {index + 1}</p>
+                      <div className="flex items-center gap-1.5">
+                        <SectionWorkOrderIconButton
+                          onClick={() =>
+                            handleSectionWorkOrderAction({
+                              sectionKey: `incident:${index}`,
+                              sectionName: row.systemArea || `Incident Row ${index + 1}`,
+                              details: row.description || row.actionsTaken || "Incident follow-up required.",
+                            })
+                          }
+                          disabled={creatingAssociatedWorkOrder}
+                          linked={isSectionLinked(`incident:${index}`)}
+                          title={
+                            isSectionLinked(`incident:${index}`)
+                              ? `Open linked work order for incident row ${index + 1}`
+                              : `Create work order for incident row ${index + 1}`
+                          }
+                        />
+                        {!isReadOnly && (
+                          <button
+                            type="button"
+                            onClick={() => removeIncidentRow(index)}
+                            className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 transition"
+                            aria-label="Remove incident"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <label className="space-y-1 text-xs">
-                        <span className="text-(--text)/65">Time</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="space-y-0.5 text-[10px]">
+                        <span className="text-(--text)/50 font-medium">Time</span>
                         <input
                           type="text"
                           value={row.time}
                           onChange={(event) => updateIncidentRow(index, "time", event.target.value)}
                           disabled={isReadOnly}
-                          className="w-full rounded-md border border-(--border) px-2 py-1.5 text-(--text) bg-white disabled:opacity-70"
+                          className="w-full rounded-lg border border-(--border)/30 px-2 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
                         />
                       </label>
-                      <label className="space-y-1 text-xs">
-                        <span className="text-(--text)/65">System / Area</span>
+                      <label className="space-y-0.5 text-[10px]">
+                        <span className="text-(--text)/50 font-medium">System / Area</span>
                         <input
                           type="text"
                           value={row.systemArea}
                           onChange={(event) => updateIncidentRow(index, "systemArea", event.target.value)}
                           disabled={isReadOnly}
-                          className="w-full rounded-md border border-(--border) px-2 py-1.5 text-(--text) bg-white disabled:opacity-70"
+                          className="w-full rounded-lg border border-(--border)/30 px-2 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
                         />
                       </label>
                     </div>
-                    <label className="space-y-1 text-xs block">
-                      <span className="text-(--text)/65">Description</span>
+                    <label className="space-y-0.5 text-[10px] block">
+                      <span className="text-(--text)/50 font-medium">Description</span>
                       <textarea
                         value={row.description}
                         onChange={(event) => updateIncidentRow(index, "description", event.target.value)}
                         disabled={isReadOnly}
                         rows={2}
-                        className="w-full rounded-md border border-(--border) px-2 py-1.5 text-(--text) bg-white disabled:opacity-70"
+                        className="w-full rounded-lg border border-(--border)/30 px-2 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
                       />
                     </label>
-                    <label className="space-y-1 text-xs block">
-                      <span className="text-(--text)/65">Actions Taken</span>
+                    <label className="space-y-0.5 text-[10px] block">
+                      <span className="text-(--text)/50 font-medium">Actions Taken</span>
                       <textarea
                         value={row.actionsTaken}
                         onChange={(event) => updateIncidentRow(index, "actionsTaken", event.target.value)}
                         disabled={isReadOnly}
                         rows={2}
-                        className="w-full rounded-md border border-(--border) px-2 py-1.5 text-(--text) bg-white disabled:opacity-70"
+                        className="w-full rounded-lg border border-(--border)/30 px-2 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
                       />
                     </label>
-                    <label className="space-y-1 text-xs block">
-                      <span className="text-(--text)/65">WO# / Vendor</span>
+                    <label className="space-y-0.5 text-[10px] block">
+                      <span className="text-(--text)/50 font-medium">WO# / Vendor</span>
                       <input
                         type="text"
                         value={row.workOrderOrVendor}
                         onChange={(event) => updateIncidentRow(index, "workOrderOrVendor", event.target.value)}
                         disabled={isReadOnly}
-                        className="w-full rounded-md border border-(--border) px-2 py-1.5 text-(--text) bg-white disabled:opacity-70"
+                        className="w-full rounded-lg border border-(--border)/30 px-2 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
                       />
                     </label>
-                    {!isReadOnly && (
-                      <button
-                        type="button"
-                        onClick={() => removeIncidentRow(index)}
-                        className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 transition"
-                      >
-                        Remove Row
-                      </button>
-                    )}
                   </div>
                 ))}
               </div>
-              <div className="hidden xl:block overflow-x-auto">
-                <table className="min-w-[1080px] w-full border border-(--border)/40 text-sm">
-                  <thead className="bg-slate-100">
+              <div className="hidden xl:block overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-(--text)/70 text-xs">
                     <tr>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Time</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">System / Area</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Description</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Actions Taken</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">WO# / Vendor</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">WO</th>
-                      {!isReadOnly && <th className="border border-(--border)/40 px-2 py-2 text-left">Remove</th>}
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">Time</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">System / Area</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">Description</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">Actions Taken</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">WO# / Vendor</th>
+                      <th className="border-b border-(--border)/20 px-2 py-2.5 text-center font-semibold w-12">WO</th>
+                      {!isReadOnly && <th className="border-b border-(--border)/20 px-2 py-2.5 text-center font-semibold w-16">Remove</th>}
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-(--border)/10">
                     {payload.incidents.map((row, index) => (
-                      <tr key={`${index}-${row.time}-${row.systemArea}`}>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                      <tr key={`${index}-${row.time}-${row.systemArea}`} className="hover:bg-slate-50/50">
+                        <td className="px-3 py-2">
                           <input
                             type="text"
                             value={row.time}
                             onChange={(event) => updateIncidentRow(index, "time", event.target.value)}
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
                           />
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                        <td className="px-3 py-2">
                           <input
                             type="text"
                             value={row.systemArea}
                             onChange={(event) => updateIncidentRow(index, "systemArea", event.target.value)}
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
                           />
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                        <td className="px-3 py-2">
                           <textarea
                             value={row.description}
                             onChange={(event) => updateIncidentRow(index, "description", event.target.value)}
                             disabled={isReadOnly}
                             rows={2}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
                           />
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                        <td className="px-3 py-2">
                           <textarea
                             value={row.actionsTaken}
                             onChange={(event) => updateIncidentRow(index, "actionsTaken", event.target.value)}
                             disabled={isReadOnly}
                             rows={2}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
                           />
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                        <td className="px-3 py-2">
                           <input
                             type="text"
                             value={row.workOrderOrVendor}
                             onChange={(event) => updateIncidentRow(index, "workOrderOrVendor", event.target.value)}
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
                           />
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2 text-center">
+                        <td className="px-2 py-2 text-center">
                           <SectionWorkOrderIconButton
                             onClick={() =>
                               handleSectionWorkOrderAction({
@@ -1750,11 +1778,11 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                           />
                         </td>
                         {!isReadOnly && (
-                          <td className="border border-(--border)/40 px-2 py-2 text-center">
+                          <td className="px-2 py-2 text-center">
                             <button
                               type="button"
                               onClick={() => removeIncidentRow(index)}
-                              className="rounded-md px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 transition"
+                              className="rounded-lg px-2 py-1 text-xs font-semibold text-red-500 hover:bg-red-50 transition"
                             >
                               Remove
                             </button>
@@ -1765,219 +1793,224 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                   </tbody>
                 </table>
               </div>
-              <label className="space-y-1 text-sm block">
-                <span className="text-(--text)/70">Documentation Reference</span>
-                <textarea
-                  value={payload.incidentDocumentationReference}
-                  onChange={(event) =>
-                    updatePayload((current) => ({
-                      ...current,
-                      incidentDocumentationReference: event.target.value,
-                    }))
-                  }
-                  disabled={isReadOnly}
-                  rows={3}
-                  className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
-                />
-              </label>
+              <div className="border-t border-(--border)/10 px-4 py-3">
+                <label className="space-y-1 text-xs block">
+                  <span className="font-medium text-(--text)/60">Documentation Reference</span>
+                  <textarea
+                    value={payload.incidentDocumentationReference}
+                    onChange={(event) =>
+                      updatePayload((current) => ({
+                        ...current,
+                        incidentDocumentationReference: event.target.value,
+                      }))
+                    }
+                    disabled={isReadOnly}
+                    rows={2}
+                    className="w-full rounded-lg border border-(--border)/30 bg-(--bg) px-3 py-2 text-xs text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
+                  />
+                </label>
+              </div>
             </section>
 
-            <section className="tl-card p-6 space-y-4">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <h2 className="text-lg font-semibold text-(--text)">Daily - Retail Fridge Temperature Log</h2>
+            <section className="rounded-2xl border border-(--border)/20 bg-white/80 backdrop-blur-sm overflow-hidden">
+              <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-(--border)/10">
+                <div>
+                  <h2 className="text-sm font-semibold text-(--text)">Fridge Temperature Log</h2>
+                  <p className="text-[11px] text-(--text)/50 mt-0.5">Target: 34-41F</p>
+                </div>
                 {!isReadOnly && (
                   <button
                     type="button"
                     onClick={addFridgeRow}
-                    className="rounded-full border border-(--border)/40 px-3 py-1.5 text-xs font-semibold text-(--text) hover:bg-(--bg) transition"
+                    className="rounded-lg bg-slate-100 px-3 py-1.5 text-[11px] font-semibold text-(--text)/70 hover:bg-slate-200 transition"
                   >
-                    + Add Reading
+                    + Add
                   </button>
                 )}
               </div>
-              <p className="text-sm text-(--text)/60">
-                Target range: 34-41F. Record corrective action for out-of-range readings.
-              </p>
-              <div className="xl:hidden space-y-3">
+              <div className="xl:hidden divide-y divide-(--border)/10">
                 {payload.fridgeLogs.map((row, index) => (
-                  <div key={`${index}-${row.date}-${row.time}`} className="rounded-xl border border-(--border)/40 p-3 space-y-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-semibold text-(--text)/75">Fridge Entry {index + 1}</p>
-                      <SectionWorkOrderIconButton
-                        onClick={() =>
-                          handleSectionWorkOrderAction({
-                            sectionKey: `fridge:${index}`,
-                            sectionName: "Retail Fridge",
-                            details:
-                              `Entry ${index + 1}: Temp ${row.tempF || "n/a"}F at ${row.time || "n/a"}, within target ${row.withinTarget}. ` +
-                              `${row.correctiveAction || "Follow-up required."}`,
-                          })
-                        }
-                        disabled={creatingAssociatedWorkOrder}
-                        linked={isSectionLinked(`fridge:${index}`)}
-                        title={
-                          isSectionLinked(`fridge:${index}`)
-                            ? `Open linked work order for fridge entry ${index + 1}`
-                            : `Create work order for fridge entry ${index + 1}`
-                        }
-                      />
+                  <div key={`${index}-${row.date}-${row.time}`} className="px-3 py-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] font-bold text-(--text)/50 uppercase tracking-wider">Reading {index + 1}</p>
+                      <div className="flex items-center gap-1.5">
+                        <SectionWorkOrderIconButton
+                          onClick={() =>
+                            handleSectionWorkOrderAction({
+                              sectionKey: `fridge:${index}`,
+                              sectionName: "Retail Fridge",
+                              details:
+                                `Entry ${index + 1}: Temp ${row.tempF || "n/a"}F at ${row.time || "n/a"}, within target ${row.withinTarget}. ` +
+                                `${row.correctiveAction || "Follow-up required."}`,
+                            })
+                          }
+                          disabled={creatingAssociatedWorkOrder}
+                          linked={isSectionLinked(`fridge:${index}`)}
+                          title={
+                            isSectionLinked(`fridge:${index}`)
+                              ? `Open linked work order for fridge entry ${index + 1}`
+                              : `Create work order for fridge entry ${index + 1}`
+                          }
+                        />
+                        {!isReadOnly && (
+                          <button
+                            type="button"
+                            onClick={() => removeFridgeRow(index)}
+                            className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 transition"
+                            aria-label="Remove reading"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <label className="space-y-1 text-xs">
-                        <span className="text-(--text)/65">Date</span>
+                    <div className="grid grid-cols-4 gap-2">
+                      <label className="space-y-0.5 text-[10px]">
+                        <span className="text-(--text)/50 font-medium">Date</span>
                         <input
                           type="date"
                           value={row.date}
                           onChange={(event) => updateFridgeRow(index, "date", event.target.value)}
                           disabled={isReadOnly}
-                          className="w-full rounded-md border border-(--border) px-2 py-1.5 text-(--text) bg-white disabled:opacity-70"
+                          className="w-full rounded-lg border border-(--border)/30 px-1.5 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
                         />
                       </label>
-                      <label className="space-y-1 text-xs">
-                        <span className="text-(--text)/65">Time</span>
+                      <label className="space-y-0.5 text-[10px]">
+                        <span className="text-(--text)/50 font-medium">Time</span>
                         <input
                           type="time"
                           value={row.time}
                           onChange={(event) => updateFridgeRow(index, "time", event.target.value)}
                           disabled={isReadOnly}
-                          className="w-full rounded-md border border-(--border) px-2 py-1.5 text-(--text) bg-white disabled:opacity-70"
+                          className="w-full rounded-lg border border-(--border)/30 px-1.5 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
                         />
                       </label>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <label className="space-y-1 text-xs">
-                        <span className="text-(--text)/65">Temp (F)</span>
+                      <label className="space-y-0.5 text-[10px]">
+                        <span className="text-(--text)/50 font-medium">Temp (F)</span>
                         <input
                           type="text"
                           value={row.tempF}
                           onChange={(event) => updateFridgeRow(index, "tempF", event.target.value)}
                           disabled={isReadOnly}
-                          className="w-full rounded-md border border-(--border) px-2 py-1.5 text-(--text) bg-white disabled:opacity-70"
+                          className="w-full rounded-lg border border-(--border)/30 px-1.5 py-2 text-xs text-(--text) bg-white text-center font-semibold disabled:opacity-60"
                         />
                       </label>
-                      <label className="space-y-1 text-xs">
-                        <span className="text-(--text)/65">Within Target?</span>
+                      <label className="space-y-0.5 text-[10px]">
+                        <span className="text-(--text)/50 font-medium">In Range?</span>
                         <select
                           value={row.withinTarget}
                           onChange={(event) =>
                             updateFridgeRow(index, "withinTarget", event.target.value as FridgeTempEntry["withinTarget"])
                           }
                           disabled={isReadOnly}
-                          className="w-full rounded-md border border-(--border) px-2 py-1.5 text-(--text) bg-white disabled:opacity-70"
+                          className="w-full rounded-lg border border-(--border)/30 px-1.5 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
                         >
                           <option value="Y">Y</option>
                           <option value="N">N</option>
                         </select>
                       </label>
                     </div>
-                    <label className="space-y-1 text-xs block">
-                      <span className="text-(--text)/65">Corrective Action / Notes</span>
-                      <input
-                        type="text"
-                        value={row.correctiveAction}
-                        onChange={(event) => updateFridgeRow(index, "correctiveAction", event.target.value)}
-                        disabled={isReadOnly}
-                        className="w-full rounded-md border border-(--border) px-2 py-1.5 text-(--text) bg-white disabled:opacity-70"
-                      />
-                    </label>
-                    <label className="space-y-1 text-xs block">
-                      <span className="text-(--text)/65">Initials</span>
-                      <input
-                        type="text"
-                        value={row.initials}
-                        onChange={(event) => updateFridgeRow(index, "initials", event.target.value)}
-                        disabled={isReadOnly}
-                        className="w-full rounded-md border border-(--border) px-2 py-1.5 text-(--text) bg-white disabled:opacity-70"
-                      />
-                    </label>
-                    {!isReadOnly && (
-                      <button
-                        type="button"
-                        onClick={() => removeFridgeRow(index)}
-                        className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 transition"
-                      >
-                        Remove Reading
-                      </button>
-                    )}
+                    <div className="grid grid-cols-3 gap-2">
+                      <label className="col-span-2 space-y-0.5 text-[10px]">
+                        <span className="text-(--text)/50 font-medium">Corrective Action</span>
+                        <input
+                          type="text"
+                          value={row.correctiveAction}
+                          onChange={(event) => updateFridgeRow(index, "correctiveAction", event.target.value)}
+                          disabled={isReadOnly}
+                          className="w-full rounded-lg border border-(--border)/30 px-2 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
+                        />
+                      </label>
+                      <label className="space-y-0.5 text-[10px]">
+                        <span className="text-(--text)/50 font-medium">Initials</span>
+                        <input
+                          type="text"
+                          value={row.initials}
+                          onChange={(event) => updateFridgeRow(index, "initials", event.target.value)}
+                          disabled={isReadOnly}
+                          className="w-full rounded-lg border border-(--border)/30 px-2 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
+                        />
+                      </label>
+                    </div>
                   </div>
                 ))}
               </div>
-              <div className="hidden xl:block overflow-x-auto">
-                <table className="min-w-[980px] w-full border border-(--border)/40 text-sm">
-                  <thead className="bg-slate-100">
+              <div className="hidden xl:block overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-(--text)/70 text-xs">
                     <tr>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Date</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Time</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Temp (F)</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Within Target?</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Corrective Action / Notes</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Initials</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">WO</th>
-                      {!isReadOnly && <th className="border border-(--border)/40 px-2 py-2 text-left">Remove</th>}
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">Date</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">Time</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">Temp (F)</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">In Range?</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">Corrective Action</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">Initials</th>
+                      <th className="border-b border-(--border)/20 px-2 py-2.5 text-center font-semibold w-12">WO</th>
+                      {!isReadOnly && <th className="border-b border-(--border)/20 px-2 py-2.5 text-center font-semibold w-16">Remove</th>}
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-(--border)/10">
                     {payload.fridgeLogs.map((row, index) => (
-                      <tr key={`${index}-${row.date}-${row.time}`}>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                      <tr key={`${index}-${row.date}-${row.time}`} className="hover:bg-slate-50/50">
+                        <td className="px-3 py-2">
                           <input
                             type="date"
                             value={row.date}
                             onChange={(event) => updateFridgeRow(index, "date", event.target.value)}
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
                           />
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                        <td className="px-3 py-2">
                           <input
                             type="time"
                             value={row.time}
                             onChange={(event) => updateFridgeRow(index, "time", event.target.value)}
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
                           />
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                        <td className="px-3 py-2">
                           <input
                             type="text"
                             value={row.tempF}
                             onChange={(event) => updateFridgeRow(index, "tempF", event.target.value)}
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
                           />
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                        <td className="px-3 py-2">
                           <select
                             value={row.withinTarget}
                             onChange={(event) =>
                               updateFridgeRow(index, "withinTarget", event.target.value as FridgeTempEntry["withinTarget"])
                             }
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
                           >
                             <option value="Y">Y</option>
                             <option value="N">N</option>
                           </select>
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                        <td className="px-3 py-2">
                           <input
                             type="text"
                             value={row.correctiveAction}
                             onChange={(event) => updateFridgeRow(index, "correctiveAction", event.target.value)}
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
                           />
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                        <td className="px-3 py-2">
                           <input
                             type="text"
                             value={row.initials}
                             onChange={(event) => updateFridgeRow(index, "initials", event.target.value)}
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 text-(--text) bg-white disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
                           />
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2 text-center">
+                        <td className="px-2 py-2 text-center">
                           <SectionWorkOrderIconButton
                             onClick={() =>
                               handleSectionWorkOrderAction({
@@ -1998,11 +2031,11 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                           />
                         </td>
                         {!isReadOnly && (
-                          <td className="border border-(--border)/40 px-2 py-2 text-center">
+                          <td className="px-2 py-2 text-center">
                             <button
                               type="button"
                               onClick={() => removeFridgeRow(index)}
-                              className="rounded-md px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 transition"
+                              className="rounded-lg px-2 py-1 text-xs font-semibold text-red-500 hover:bg-red-50 transition"
                             >
                               Remove
                             </button>
@@ -2018,281 +2051,282 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
         )}
         {step === 3 && (
           <>
-            <section className="tl-card p-6 space-y-4">
-              <h2 className="text-lg font-semibold text-(--text)">Fire Alarm Panel Status & Trouble Log</h2>
-              <p className="text-sm text-(--text)/60">
-                Panels: Main (Sprinkler Pump Room) and Sub-Panel (outside Boiler Room). Escalation: active alarm/smoke/fire -&gt; call 911 and follow site procedure.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <label className="space-y-1 text-sm">
-                  <span className="text-(--text)/70">Date Range</span>
+            <section className="rounded-2xl border border-(--border)/20 bg-white/80 backdrop-blur-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-(--border)/10">
+                <h2 className="text-sm font-semibold text-(--text)">Fire Alarm Panel Status</h2>
+                <p className="text-[11px] text-(--text)/50 mt-0.5">Main (Sprinkler Pump Room) & Sub-Panel (Boiler Room)</p>
+              </div>
+              <div className="px-4 py-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                <label className="space-y-1 text-xs">
+                  <span className="font-medium text-(--text)/60">Date Range</span>
                   <input
                     type="text"
                     value={payload.fireAlarmMeta.dateRange}
                     onChange={(event) => updateFireAlarmMeta("dateRange", event.target.value)}
                     disabled={isReadOnly}
-                    className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
+                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
-                <label className="space-y-1 text-sm">
-                  <span className="text-(--text)/70">Prepared By</span>
+                <label className="space-y-1 text-xs">
+                  <span className="font-medium text-(--text)/60">Prepared By</span>
                   <input
                     type="text"
                     value={payload.fireAlarmMeta.preparedBy}
                     onChange={(event) => updateFireAlarmMeta("preparedBy", event.target.value)}
                     disabled={isReadOnly}
-                    className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
+                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
-                <label className="space-y-1 text-sm">
-                  <span className="text-(--text)/70">Supervisor Review</span>
+                <label className="space-y-1 text-xs">
+                  <span className="font-medium text-(--text)/60">Supervisor</span>
                   <input
                     type="text"
                     value={payload.fireAlarmMeta.supervisorReview}
                     onChange={(event) => updateFireAlarmMeta("supervisorReview", event.target.value)}
                     disabled={isReadOnly}
-                    className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
+                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
-                <label className="space-y-1 text-sm">
-                  <span className="text-(--text)/70">Signature</span>
+                <label className="space-y-1 text-xs">
+                  <span className="font-medium text-(--text)/60">Signature</span>
                   <input
                     type="text"
                     value={payload.fireAlarmMeta.signature}
                     onChange={(event) => updateFireAlarmMeta("signature", event.target.value)}
                     disabled={isReadOnly}
-                    className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring) disabled:opacity-70"
+                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
               </div>
 
-              <div className="flex items-center justify-between gap-2 flex-wrap pt-2">
-                <h3 className="text-sm font-semibold text-(--text)">Event Log</h3>
+              <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-(--border)/10 bg-slate-50/50">
+                <h3 className="text-xs font-semibold text-(--text)/70">Event Log</h3>
                 {!isReadOnly && (
                   <button
                     type="button"
                     onClick={addFireAlarmRow}
-                    className="rounded-full border border-(--border)/40 px-3 py-1.5 text-xs font-semibold text-(--text) hover:bg-(--bg) transition"
+                    className="rounded-lg bg-slate-100 px-3 py-1.5 text-[11px] font-semibold text-(--text)/70 hover:bg-slate-200 transition"
                   >
-                    + Add Fire Alarm Row
+                    + Add Entry
                   </button>
                 )}
               </div>
 
-              <div className="xl:hidden space-y-3">
+              <div className="xl:hidden divide-y divide-(--border)/10">
                 {payload.fireAlarmEntries.map((row, index) => (
-                  <div key={`${index}-${row.date}-${row.time}`} className="rounded-xl border border-(--border)/40 p-3 space-y-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-semibold text-(--text)/75">Fire Alarm Entry {index + 1}</p>
-                      <SectionWorkOrderIconButton
-                        onClick={() =>
-                          handleSectionWorkOrderAction({
-                            sectionKey: `fire-alarm:${index}`,
-                            sectionName: row.panel ? `Fire Alarm - ${row.panel}` : "Fire Alarm",
-                            details:
-                              `${row.type || "Event"} ${row.messageZone || ""} ${row.actionTaken || ""}`.trim() ||
-                              "Fire alarm event follow-up required.",
-                          })
-                        }
-                        disabled={creatingAssociatedWorkOrder}
-                        linked={isSectionLinked(`fire-alarm:${index}`)}
-                        title={
-                          isSectionLinked(`fire-alarm:${index}`)
-                            ? `Open linked work order for fire alarm entry ${index + 1}`
-                            : `Create work order for fire alarm entry ${index + 1}`
-                        }
-                      />
+                  <div key={`${index}-${row.date}-${row.time}`} className="px-3 py-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] font-bold text-(--text)/50 uppercase tracking-wider">Entry {index + 1}</p>
+                      <div className="flex items-center gap-1.5">
+                        <SectionWorkOrderIconButton
+                          onClick={() =>
+                            handleSectionWorkOrderAction({
+                              sectionKey: `fire-alarm:${index}`,
+                              sectionName: row.panel ? `Fire Alarm - ${row.panel}` : "Fire Alarm",
+                              details:
+                                `${row.type || "Event"} ${row.messageZone || ""} ${row.actionTaken || ""}`.trim() ||
+                                "Fire alarm event follow-up required.",
+                            })
+                          }
+                          disabled={creatingAssociatedWorkOrder}
+                          linked={isSectionLinked(`fire-alarm:${index}`)}
+                          title={
+                            isSectionLinked(`fire-alarm:${index}`)
+                              ? `Open linked work order for fire alarm entry ${index + 1}`
+                              : `Create work order for fire alarm entry ${index + 1}`
+                          }
+                        />
+                        {!isReadOnly && (
+                          <button
+                            type="button"
+                            onClick={() => removeFireAlarmRow(index)}
+                            className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 transition"
+                            aria-label="Remove entry"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <label className="space-y-1 text-xs">
-                        <span className="text-(--text)/65">Date</span>
+                    <div className="grid grid-cols-4 gap-2">
+                      <label className="space-y-0.5 text-[10px]">
+                        <span className="text-(--text)/50 font-medium">Date</span>
                         <input
                           type="date"
                           value={row.date}
                           onChange={(event) => updateFireAlarmRow(index, "date", event.target.value)}
                           disabled={isReadOnly}
-                          className="w-full rounded-md border border-(--border) px-2 py-1.5 bg-white text-(--text) disabled:opacity-70"
+                          className="w-full rounded-lg border border-(--border)/30 px-1.5 py-2 text-xs bg-white text-(--text) disabled:opacity-60"
                         />
                       </label>
-                      <label className="space-y-1 text-xs">
-                        <span className="text-(--text)/65">Time</span>
+                      <label className="space-y-0.5 text-[10px]">
+                        <span className="text-(--text)/50 font-medium">Time</span>
                         <input
                           type="time"
                           value={row.time}
                           onChange={(event) => updateFireAlarmRow(index, "time", event.target.value)}
                           disabled={isReadOnly}
-                          className="w-full rounded-md border border-(--border) px-2 py-1.5 bg-white text-(--text) disabled:opacity-70"
+                          className="w-full rounded-lg border border-(--border)/30 px-1.5 py-2 text-xs bg-white text-(--text) disabled:opacity-60"
                         />
                       </label>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <label className="space-y-1 text-xs">
-                        <span className="text-(--text)/65">Panel</span>
+                      <label className="space-y-0.5 text-[10px]">
+                        <span className="text-(--text)/50 font-medium">Panel</span>
                         <input
                           type="text"
                           value={row.panel}
                           onChange={(event) => updateFireAlarmRow(index, "panel", event.target.value)}
                           disabled={isReadOnly}
-                          className="w-full rounded-md border border-(--border) px-2 py-1.5 bg-white text-(--text) disabled:opacity-70"
+                          className="w-full rounded-lg border border-(--border)/30 px-1.5 py-2 text-xs bg-white text-(--text) disabled:opacity-60"
                         />
                       </label>
-                      <label className="space-y-1 text-xs">
-                        <span className="text-(--text)/65">Type</span>
+                      <label className="space-y-0.5 text-[10px]">
+                        <span className="text-(--text)/50 font-medium">Type</span>
                         <input
                           type="text"
                           value={row.type}
                           onChange={(event) => updateFireAlarmRow(index, "type", event.target.value)}
                           disabled={isReadOnly}
-                          className="w-full rounded-md border border-(--border) px-2 py-1.5 bg-white text-(--text) disabled:opacity-70"
+                          className="w-full rounded-lg border border-(--border)/30 px-1.5 py-2 text-xs bg-white text-(--text) disabled:opacity-60"
                         />
                       </label>
                     </div>
-                    <label className="space-y-1 text-xs block">
-                      <span className="text-(--text)/65">Message / Zone</span>
+                    <label className="space-y-0.5 text-[10px] block">
+                      <span className="text-(--text)/50 font-medium">Message / Zone</span>
                       <input
                         type="text"
                         value={row.messageZone}
                         onChange={(event) => updateFireAlarmRow(index, "messageZone", event.target.value)}
                         disabled={isReadOnly}
-                        className="w-full rounded-md border border-(--border) px-2 py-1.5 bg-white text-(--text) disabled:opacity-70"
+                        className="w-full rounded-lg border border-(--border)/30 px-2 py-2 text-xs bg-white text-(--text) disabled:opacity-60"
                       />
                     </label>
-                    <label className="space-y-1 text-xs block">
-                      <span className="text-(--text)/65">Action Taken</span>
+                    <label className="space-y-0.5 text-[10px] block">
+                      <span className="text-(--text)/50 font-medium">Action Taken</span>
                       <input
                         type="text"
                         value={row.actionTaken}
                         onChange={(event) => updateFireAlarmRow(index, "actionTaken", event.target.value)}
                         disabled={isReadOnly}
-                        className="w-full rounded-md border border-(--border) px-2 py-1.5 bg-white text-(--text) disabled:opacity-70"
+                        className="w-full rounded-lg border border-(--border)/30 px-2 py-2 text-xs bg-white text-(--text) disabled:opacity-60"
                       />
                     </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <label className="space-y-1 text-xs">
-                        <span className="text-(--text)/65">WO#</span>
+                    <div className="flex items-center gap-3">
+                      <label className="flex-1 space-y-0.5 text-[10px]">
+                        <span className="text-(--text)/50 font-medium">WO#</span>
                         <input
                           type="text"
                           value={row.workOrderNumber}
                           onChange={(event) => updateFireAlarmRow(index, "workOrderNumber", event.target.value)}
                           disabled={isReadOnly}
-                          className="w-full rounded-md border border-(--border) px-2 py-1.5 bg-white text-(--text) disabled:opacity-70"
+                          className="w-full rounded-lg border border-(--border)/30 px-2 py-2 text-xs bg-white text-(--text) disabled:opacity-60"
                         />
                       </label>
-                      <label className="flex items-center gap-2 text-xs text-(--text) mt-5 sm:mt-0">
+                      <label className="flex items-center gap-2 text-xs text-(--text) pt-3.5">
                         <input
                           type="checkbox"
                           checked={row.cleared}
                           onChange={(event) => updateFireAlarmRow(index, "cleared", event.target.checked)}
                           disabled={isReadOnly}
-                          className="h-4 w-4 rounded border-(--border)"
+                          className="h-5 w-5 rounded-md border-(--border)/40 accent-blue-600"
                         />
                         Cleared
                       </label>
                     </div>
-                    {!isReadOnly && (
-                      <button
-                        type="button"
-                        onClick={() => removeFireAlarmRow(index)}
-                        className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 transition"
-                      >
-                        Remove Entry
-                      </button>
-                    )}
                   </div>
                 ))}
               </div>
-              <div className="hidden xl:block overflow-x-auto">
-                <table className="min-w-[1150px] w-full border border-(--border)/40 text-sm">
-                  <thead className="bg-slate-100">
+              <div className="hidden xl:block overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-(--text)/70 text-xs">
                     <tr>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Date</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Time</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Panel</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Type</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Message / Zone</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Action Taken</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">Cleared</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">WO#</th>
-                      <th className="border border-(--border)/40 px-2 py-2 text-left">WO</th>
-                      {!isReadOnly && <th className="border border-(--border)/40 px-2 py-2 text-left">Remove</th>}
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">Date</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">Time</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">Panel</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">Type</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">Message / Zone</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">Action Taken</th>
+                      <th className="border-b border-(--border)/20 px-2 py-2.5 text-center font-semibold">Cleared</th>
+                      <th className="border-b border-(--border)/20 px-3 py-2.5 text-left font-semibold">WO#</th>
+                      <th className="border-b border-(--border)/20 px-2 py-2.5 text-center font-semibold w-12">WO</th>
+                      {!isReadOnly && <th className="border-b border-(--border)/20 px-2 py-2.5 text-center font-semibold w-16">Remove</th>}
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-(--border)/10">
                     {payload.fireAlarmEntries.map((row, index) => (
-                      <tr key={`${index}-${row.date}-${row.time}`}>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                      <tr key={`${index}-${row.date}-${row.time}`} className="hover:bg-slate-50/50">
+                        <td className="px-3 py-2">
                           <input
                             type="date"
                             value={row.date}
                             onChange={(event) => updateFireAlarmRow(index, "date", event.target.value)}
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 bg-white text-(--text) disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 bg-white text-sm text-(--text) disabled:opacity-60"
                           />
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                        <td className="px-3 py-2">
                           <input
                             type="time"
                             value={row.time}
                             onChange={(event) => updateFireAlarmRow(index, "time", event.target.value)}
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 bg-white text-(--text) disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 bg-white text-sm text-(--text) disabled:opacity-60"
                           />
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                        <td className="px-3 py-2">
                           <input
                             type="text"
                             value={row.panel}
                             onChange={(event) => updateFireAlarmRow(index, "panel", event.target.value)}
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 bg-white text-(--text) disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 bg-white text-sm text-(--text) disabled:opacity-60"
                           />
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                        <td className="px-3 py-2">
                           <input
                             type="text"
                             value={row.type}
                             onChange={(event) => updateFireAlarmRow(index, "type", event.target.value)}
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 bg-white text-(--text) disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 bg-white text-sm text-(--text) disabled:opacity-60"
                           />
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                        <td className="px-3 py-2">
                           <input
                             type="text"
                             value={row.messageZone}
                             onChange={(event) => updateFireAlarmRow(index, "messageZone", event.target.value)}
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 bg-white text-(--text) disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 bg-white text-sm text-(--text) disabled:opacity-60"
                           />
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                        <td className="px-3 py-2">
                           <input
                             type="text"
                             value={row.actionTaken}
                             onChange={(event) => updateFireAlarmRow(index, "actionTaken", event.target.value)}
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 bg-white text-(--text) disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 bg-white text-sm text-(--text) disabled:opacity-60"
                           />
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2 text-center">
+                        <td className="px-2 py-2 text-center">
                           <input
                             type="checkbox"
                             checked={row.cleared}
                             onChange={(event) => updateFireAlarmRow(index, "cleared", event.target.checked)}
                             disabled={isReadOnly}
-                            className="h-4 w-4 rounded border-(--border)"
+                            className="h-5 w-5 rounded-md border-(--border)/40 accent-blue-600"
                           />
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2">
+                        <td className="px-3 py-2">
                           <input
                             type="text"
                             value={row.workOrderNumber}
                             onChange={(event) => updateFireAlarmRow(index, "workOrderNumber", event.target.value)}
                             disabled={isReadOnly}
-                            className="w-full rounded-md border border-(--border) px-2 py-1 bg-white text-(--text) disabled:opacity-70"
+                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 bg-white text-sm text-(--text) disabled:opacity-60"
                           />
                         </td>
-                        <td className="border border-(--border)/40 px-2 py-2 text-center">
+                        <td className="px-2 py-2 text-center">
                           <SectionWorkOrderIconButton
                             onClick={() =>
                               handleSectionWorkOrderAction({
@@ -2313,11 +2347,11 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                           />
                         </td>
                         {!isReadOnly && (
-                          <td className="border border-(--border)/40 px-2 py-2 text-center">
+                          <td className="px-2 py-2 text-center">
                             <button
                               type="button"
                               onClick={() => removeFireAlarmRow(index)}
-                              className="rounded-md px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 transition"
+                              className="rounded-lg px-2 py-1 text-xs font-semibold text-red-500 hover:bg-red-50 transition"
                             >
                               Remove
                             </button>
@@ -2330,60 +2364,63 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
               </div>
             </section>
 
-            <section className="tl-card p-6 space-y-3">
-              <h2 className="text-lg font-semibold text-(--text)">Submission Review</h2>
-              <p className="text-sm text-(--text)/70">
-                Confirm all four sections are complete before submitting. Submission notifies admins and linked stakeholders.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                <div className="rounded-lg border border-(--border)/40 p-3">
-                  <p className="font-medium text-(--text)">Coverage rows logged</p>
-                  <p className="text-(--text)/70 mt-1">{completedCoverage} / {payload.coverageMatrix.length}</p>
+            <section className="rounded-2xl border border-(--border)/20 bg-white/80 backdrop-blur-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-(--border)/10">
+                <h2 className="text-sm font-semibold text-(--text)">Submission Review</h2>
+                <p className="text-[11px] text-(--text)/50 mt-0.5">Confirm all sections are complete before submitting</p>
+              </div>
+              <div className="px-4 py-3 grid grid-cols-2 md:grid-cols-4 gap-2">
+                <div className="rounded-xl bg-slate-50 p-3 text-center">
+                  <p className="text-xl font-bold text-(--text)">{completedCoverage}<span className="text-sm font-normal text-(--text)/40">/{payload.coverageMatrix.length}</span></p>
+                  <p className="text-[10px] text-(--text)/50 font-medium mt-0.5">Coverage</p>
                 </div>
-                <div className="rounded-lg border border-(--border)/40 p-3">
-                  <p className="font-medium text-(--text)">Incident entries</p>
-                  <p className="text-(--text)/70 mt-1">{payload.incidents.length}</p>
+                <div className="rounded-xl bg-slate-50 p-3 text-center">
+                  <p className="text-xl font-bold text-(--text)">{payload.incidents.length}</p>
+                  <p className="text-[10px] text-(--text)/50 font-medium mt-0.5">Incidents</p>
                 </div>
-                <div className="rounded-lg border border-(--border)/40 p-3">
-                  <p className="font-medium text-(--text)">Fridge readings</p>
-                  <p className="text-(--text)/70 mt-1">{payload.fridgeLogs.length}</p>
+                <div className="rounded-xl bg-slate-50 p-3 text-center">
+                  <p className="text-xl font-bold text-(--text)">{payload.fridgeLogs.length}</p>
+                  <p className="text-[10px] text-(--text)/50 font-medium mt-0.5">Fridge Readings</p>
                 </div>
-                <div className="rounded-lg border border-(--border)/40 p-3">
-                  <p className="font-medium text-(--text)">Fire alarm entries</p>
-                  <p className="text-(--text)/70 mt-1">{payload.fireAlarmEntries.length}</p>
+                <div className="rounded-xl bg-slate-50 p-3 text-center">
+                  <p className="text-xl font-bold text-(--text)">{payload.fireAlarmEntries.length}</p>
+                  <p className="text-[10px] text-(--text)/50 font-medium mt-0.5">Fire Alarm</p>
                 </div>
               </div>
+              {!isReadOnly && (
+                <div className="px-4 py-3 border-t border-(--border)/10">
+                  <button
+                    type="button"
+                    onClick={() => void handleSubmitReport()}
+                    disabled={submitting}
+                    className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 transition disabled:opacity-60"
+                  >
+                    {submitting ? "Submitting..." : "Submit Daily Report"}
+                  </button>
+                </div>
+              )}
             </section>
           </>
         )}
 
-        <div className="hidden md:flex items-center justify-between gap-3 flex-wrap">
+        {/* ── Desktop Navigation ── */}
+        <div className="hidden md:flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => setStep((previous) => Math.max(previous - 1, 0))}
             disabled={step === 0}
-            className="rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition disabled:opacity-50"
+            className="rounded-xl border border-(--border)/20 px-5 py-2.5 text-sm font-medium text-(--text)/70 hover:bg-(--bg) transition disabled:opacity-40"
           >
             Previous
           </button>
           <div className="flex items-center gap-2">
-            {!isReadOnly && (
-              <button
-                type="button"
-                onClick={() => void saveDraft()}
-                disabled={saving}
-                className="rounded-full border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 hover:bg-blue-100 transition disabled:opacity-60"
-              >
-                {saving ? "Saving..." : "Save Draft"}
-              </button>
-            )}
             {step < STEP_TITLES.length - 1 ? (
               <button
                 type="button"
                 onClick={() => setStep((previous) => Math.min(previous + 1, STEP_TITLES.length - 1))}
-                className="tl-btn px-4 py-2.5 text-sm"
+                className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition"
               >
-                Next Section
+                Next: {STEP_TITLES[step + 1]}
               </button>
             ) : (
               !isReadOnly && (
@@ -2391,7 +2428,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                   type="button"
                   onClick={() => void handleSubmitReport()}
                   disabled={submitting}
-                  className="tl-btn px-4 py-2.5 text-sm disabled:opacity-60"
+                  className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition disabled:opacity-60"
                 >
                   {submitting ? "Submitting..." : "Submit Daily Report"}
                 </button>
@@ -2400,21 +2437,22 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
           </div>
         </div>
 
-        <div className="md:hidden fixed inset-x-0 bottom-0 z-30 border-t border-(--border)/40 bg-white/95 backdrop-blur px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
+        {/* ── Mobile Bottom Bar ── */}
+        <div className="md:hidden fixed inset-x-0 bottom-0 z-30 bg-white/95 backdrop-blur-lg border-t border-(--border)/15 px-3 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setStep((previous) => Math.max(previous - 1, 0))}
               disabled={step === 0}
-              className="flex-1 rounded-full border border-(--border)/30 px-3 py-2 text-sm font-medium text-(--text) disabled:opacity-50"
+              className="flex-1 rounded-xl border border-(--border)/20 py-2.5 text-sm font-medium text-(--text)/70 disabled:opacity-40"
             >
-              Previous
+              Back
             </button>
             {step < STEP_TITLES.length - 1 ? (
               <button
                 type="button"
                 onClick={() => setStep((previous) => Math.min(previous + 1, STEP_TITLES.length - 1))}
-                className="tl-btn flex-1 px-3 py-2 text-sm"
+                className="flex-[2] rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white"
               >
                 Next
               </button>
@@ -2424,29 +2462,70 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                   type="button"
                   onClick={() => void handleSubmitReport()}
                   disabled={submitting}
-                  className="tl-btn flex-1 px-3 py-2 text-sm disabled:opacity-60"
+                  className="flex-[2] rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
                 >
                   {submitting ? "Submitting..." : "Submit"}
                 </button>
               )
             )}
           </div>
-          {!isReadOnly && (
-            <button
-              type="button"
-              onClick={() => void saveDraft()}
-              disabled={saving}
-              className="mt-2 w-full rounded-full border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 disabled:opacity-60"
-            >
-              {saving ? "Saving..." : "Save Draft"}
-            </button>
-          )}
+          <div className="flex items-center justify-between mt-1.5 px-1">
+            <p className="text-[10px] text-(--text)/40 font-medium">
+              Step {step + 1}/{STEP_TITLES.length}
+              {saving && " · Saving..."}
+              {!saving && dirty && !isReadOnly && " · Unsaved"}
+            </p>
+            {!isReadOnly && !saving && dirty && (
+              <button
+                type="button"
+                onClick={() => void saveDraft()}
+                className="text-[10px] font-semibold text-blue-600"
+              >
+                Save now
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
+      {pendingWorkOrderCreation && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
+          onClick={closePendingWorkOrderCreationPrompt}
+        >
+          <div
+            className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-white p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold text-slate-900">Create Work Order</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Create a work order for <strong>{pendingWorkOrderCreation.sectionName}</strong>?
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={closePendingWorkOrderCreationPrompt}
+                className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                disabled={creatingAssociatedWorkOrder}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmPendingWorkOrderCreation}
+                className="rounded-xl bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                disabled={creatingAssociatedWorkOrder}
+              >
+                {creatingAssociatedWorkOrder ? "Creating..." : "Create"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showDeleteDailyWarning && report && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
           onClick={() => {
             if (deletingReport) return;
             setShowDeleteDailyWarning(false);
@@ -2455,15 +2534,14 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
           }}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-red-200 bg-white p-5 shadow-2xl"
+            className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-white p-5 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold text-red-700">Delete Daily Report Warning</h3>
-            <p className="mt-2 text-sm text-slate-700">
-              This will permanently delete daily report <strong>{report.report_date}</strong> and its primary linked
-              work order.
+            <h3 className="text-base font-semibold text-red-600">Delete Report</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              This permanently deletes <strong>{report.report_date}</strong> and its linked work order.
             </p>
-            <p className="mt-2 text-xs text-slate-600">
+            <p className="mt-2 text-xs text-slate-500">
               Type <strong>{report.report_date}</strong> to confirm.
             </p>
             <input
@@ -2473,12 +2551,12 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                 setDeleteConfirmInput(event.target.value);
                 if (deleteReportError) setDeleteReportError("");
               }}
-              placeholder={`Type ${report.report_date}`}
-              className="mt-3 w-full rounded-lg border border-red-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-200"
+              placeholder={report.report_date}
+              className="mt-3 w-full rounded-xl border border-red-200 px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-300"
               disabled={deletingReport}
             />
             {deleteReportError && <p className="mt-2 text-xs text-red-600">{deleteReportError}</p>}
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="mt-4 grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -2487,7 +2565,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                   setDeleteConfirmInput("");
                   setDeleteReportError("");
                 }}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
                 disabled={deletingReport}
               >
                 Cancel
@@ -2495,10 +2573,10 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
               <button
                 type="button"
                 onClick={() => void handleDeleteDailyReport()}
-                className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                className="rounded-xl bg-red-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
                 disabled={deletingReport}
               >
-                {deletingReport ? "Deleting..." : "Delete Now"}
+                {deletingReport ? "Deleting..." : "Delete"}
               </button>
             </div>
           </div>
