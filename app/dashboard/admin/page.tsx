@@ -2,8 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import ProjectDetailsModal from "@/app/components/ProjectDetailsModal";
 import AddressAutocomplete from "@/app/components/AddressAutocomplete";
+import {
+  formatUsCentralDateTime,
+  getMonthKey,
+  getWeekEndSaturday,
+} from "@/lib/us-central-time";
 
 interface Project {
   id: string;
@@ -53,6 +59,47 @@ interface EstimateCustomEntry {
   default_quantity: number;
 }
 
+type BonanReportStatus = "draft" | "submitted";
+
+interface BonanHighlightReport {
+  id: string;
+  report_date: string;
+  status: BonanReportStatus;
+  updated_at: string;
+  payload?: {
+    metadata?: {
+      preparedBy?: string;
+    };
+    collectiveSummary?: {
+      dailyWalkthroughCompletion?: string;
+      criticalCheckupsCompletion?: string;
+      monthlyCheckupCompletion?: string;
+      incidentReportsFiled?: string;
+    };
+  };
+}
+
+interface BonanHighlightSummary {
+  period_start: string;
+  period_end: string;
+  daily_reports: {
+    due: number;
+    submitted: number;
+  };
+  incidents: {
+    total: number;
+    open: number;
+    in_progress: number;
+    closed: number;
+  };
+  work_orders: {
+    total: number;
+    pending: number;
+    in_progress: number;
+    completed: number;
+  };
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -65,6 +112,11 @@ export default function AdminDashboard() {
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
   const [customEntries, setCustomEntries] = useState<EstimateCustomEntry[]>([]);
   const [savingCustomEntryIndex, setSavingCustomEntryIndex] = useState<number | null>(null);
+  const [latestWeeklyReport, setLatestWeeklyReport] = useState<BonanHighlightReport | null>(null);
+  const [latestMonthlyReport, setLatestMonthlyReport] = useState<BonanHighlightReport | null>(null);
+  const [weeklySummary, setWeeklySummary] = useState<BonanHighlightSummary | null>(null);
+  const [monthlySummary, setMonthlySummary] = useState<BonanHighlightSummary | null>(null);
+  const [bonanHighlightsError, setBonanHighlightsError] = useState("");
 
   const PREDEFINED_CATEGORIES = [
     "Demo",
@@ -94,20 +146,64 @@ export default function AdminDashboard() {
 
   async function fetchData() {
     try {
-      const [projectsRes, usersRes, customEntriesRes] = await Promise.all([
+      const [projectsRes, usersRes, customEntriesRes, weeklyReportsRes, monthlyReportsRes] = await Promise.all([
         fetch("/api/projects"),
         fetch("/api/users"),
         fetch("/api/estimate/custom-entries"),
+        fetch("/api/bonan/reports?report_type=weekly"),
+        fetch("/api/bonan/reports?report_type=monthly"),
       ]);
       const projectsData = await projectsRes.json();
       const usersData = await usersRes.json();
       const customEntriesData = customEntriesRes.ok ? await customEntriesRes.json() : { entries: [] };
+      const weeklyReportsData = weeklyReportsRes.ok ? await weeklyReportsRes.json() : { reports: [] };
+      const monthlyReportsData = monthlyReportsRes.ok ? await monthlyReportsRes.json() : { reports: [] };
+
+      const weeklyReports = (weeklyReportsData.reports || []) as BonanHighlightReport[];
+      const monthlyReports = (monthlyReportsData.reports || []) as BonanHighlightReport[];
+      const newestWeekly = weeklyReports[0] || null;
+      const newestMonthly = monthlyReports[0] || null;
 
       setProjects(projectsData.projects || []);
       setUsers(usersData.users || []);
       setCustomEntries(customEntriesData.entries || []);
+      setLatestWeeklyReport(newestWeekly);
+      setLatestMonthlyReport(newestMonthly);
+
+      const weeklySummaryPromise: Promise<Response | null> = newestWeekly
+        ? fetch(`/api/bonan/reports/${newestWeekly.id}/summary`)
+        : Promise.resolve(null);
+      const monthlySummaryPromise: Promise<Response | null> = newestMonthly
+        ? fetch(`/api/bonan/reports/${newestMonthly.id}/summary`)
+        : Promise.resolve(null);
+
+      const [weeklySummaryRes, monthlySummaryRes] = await Promise.all([
+        weeklySummaryPromise,
+        monthlySummaryPromise,
+      ]);
+
+      if (weeklySummaryRes && weeklySummaryRes.ok) {
+        const data = await weeklySummaryRes.json();
+        setWeeklySummary((data.summary || null) as BonanHighlightSummary | null);
+      } else {
+        setWeeklySummary(null);
+      }
+
+      if (monthlySummaryRes && monthlySummaryRes.ok) {
+        const data = await monthlySummaryRes.json();
+        setMonthlySummary((data.summary || null) as BonanHighlightSummary | null);
+      } else {
+        setMonthlySummary(null);
+      }
+
+      if (!weeklyReportsRes.ok || !monthlyReportsRes.ok) {
+        setBonanHighlightsError("Bonan highlights are temporarily unavailable.");
+      } else {
+        setBonanHighlightsError("");
+      }
     } catch (error) {
       console.error("Failed to fetch data:", error);
+      setBonanHighlightsError("Bonan highlights are temporarily unavailable.");
     } finally {
       setLoading(false);
     }
@@ -401,6 +497,11 @@ export default function AdminDashboard() {
     completed: "border-l-4 border-l-green-500 bg-green-50/30",
   };
 
+  const bonanStatusStyles: Record<BonanReportStatus, string> = {
+    draft: "bg-amber-100 text-amber-700",
+    submitted: "bg-green-100 text-green-700",
+  };
+
   function formatCurrency(amount: number) {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -408,6 +509,31 @@ export default function AdminDashboard() {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
+  }
+
+  function getWalkthroughCompletion(
+    report: BonanHighlightReport | null,
+    summary: BonanHighlightSummary | null
+  ) {
+    const explicitValue = report?.payload?.collectiveSummary?.dailyWalkthroughCompletion?.trim();
+    if (explicitValue) return explicitValue;
+    if (!summary) return "Not set";
+    return `${summary.daily_reports.submitted}/${summary.daily_reports.due}`;
+  }
+
+  function getCheckupCompletion(
+    report: BonanHighlightReport | null,
+    mode: "weekly" | "monthly"
+  ) {
+    const summary = report?.payload?.collectiveSummary;
+    if (!summary) return "Not set";
+
+    const raw =
+      mode === "weekly"
+        ? summary.criticalCheckupsCompletion
+        : summary.monthlyCheckupCompletion;
+    const trimmed = raw?.trim();
+    return trimmed || "Not set";
   }
 
   if (loading) {
@@ -419,9 +545,16 @@ export default function AdminDashboard() {
     0
   );
   const fundedProjects = projects.filter((p) => p.is_funded).length;
+  const bonanLatestSummary = monthlySummary || weeklySummary;
+  const bonanOpenWorkOrders = bonanLatestSummary
+    ? bonanLatestSummary.work_orders.pending + bonanLatestSummary.work_orders.in_progress
+    : 0;
+  const bonanActiveIncidents = bonanLatestSummary
+    ? bonanLatestSummary.incidents.open + bonanLatestSummary.incidents.in_progress
+    : 0;
 
   return (
-    <div className="space-y-4 md:space-y-8">
+    <div className="space-y-3 md:space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl md:text-2xl font-semibold text-(--text)">
@@ -441,8 +574,138 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      <div className="tl-card border border-cyan-200/80 bg-cyan-50/40 p-3 md:p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <p className="text-[10px] md:text-xs font-semibold uppercase tracking-[0.15em] text-cyan-800/70">
+              Bonan Towers Operations
+            </p>
+            <h3 className="text-sm md:text-base font-semibold text-cyan-950 mt-1">
+              Weekly + Monthly Review Highlights
+            </h3>
+            <p className="text-xs text-cyan-900/75 mt-1">
+              Work orders, incident reports, checkups, and daily walkthrough completion in one view.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/dashboard/bonan"
+              className="rounded-full border border-cyan-300 bg-white px-3 py-1.5 text-xs font-semibold text-cyan-800 hover:bg-cyan-50 transition"
+            >
+              Open Bonan Hub
+            </Link>
+            <Link
+              href="/dashboard/bonan/daily"
+              className="rounded-full border border-cyan-300 bg-white px-3 py-1.5 text-xs font-semibold text-cyan-800 hover:bg-cyan-50 transition"
+            >
+              Daily Walkthroughs
+            </Link>
+            <Link
+              href="/dashboard/bonan/weekly"
+              className="rounded-full border border-cyan-300 bg-white px-3 py-1.5 text-xs font-semibold text-cyan-800 hover:bg-cyan-50 transition"
+            >
+              Weekly
+            </Link>
+            <Link
+              href="/dashboard/bonan/monthly"
+              className="rounded-full border border-cyan-300 bg-white px-3 py-1.5 text-xs font-semibold text-cyan-800 hover:bg-cyan-50 transition"
+            >
+              Monthly
+            </Link>
+          </div>
+        </div>
+
+        {bonanHighlightsError && (
+          <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+            {bonanHighlightsError}
+          </p>
+        )}
+
+        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-3">
+          <div className="rounded-xl border border-blue-200 bg-white/90 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Latest Weekly</p>
+              {latestWeeklyReport && (
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    bonanStatusStyles[latestWeeklyReport.status]
+                  }`}
+                >
+                  {latestWeeklyReport.status === "submitted" ? "Submitted" : "Draft"}
+                </span>
+              )}
+            </div>
+            {latestWeeklyReport ? (
+              <>
+                <p className="mt-1 text-xs font-medium text-slate-700">
+                  {latestWeeklyReport.report_date} to {getWeekEndSaturday(latestWeeklyReport.report_date)}
+                </p>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                  <p className="rounded-lg bg-slate-50 px-2 py-1 text-slate-700">
+                    Work Orders: <strong>{weeklySummary?.work_orders.total ?? 0}</strong>
+                  </p>
+                  <p className="rounded-lg bg-slate-50 px-2 py-1 text-slate-700">
+                    Incidents: <strong>{weeklySummary?.incidents.total ?? 0}</strong>
+                  </p>
+                  <p className="rounded-lg bg-slate-50 px-2 py-1 text-slate-700">
+                    Checkups: <strong>{getCheckupCompletion(latestWeeklyReport, "weekly")}</strong>
+                  </p>
+                  <p className="rounded-lg bg-slate-50 px-2 py-1 text-slate-700">
+                    Walkthroughs: <strong>{getWalkthroughCompletion(latestWeeklyReport, weeklySummary)}</strong>
+                  </p>
+                </div>
+                <p className="mt-2 text-[10px] text-slate-500">
+                  Updated {formatUsCentralDateTime(latestWeeklyReport.updated_at)}
+                </p>
+              </>
+            ) : (
+              <p className="mt-2 text-xs text-slate-500">No weekly report available yet.</p>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-orange-200 bg-white/90 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Latest Monthly</p>
+              {latestMonthlyReport && (
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    bonanStatusStyles[latestMonthlyReport.status]
+                  }`}
+                >
+                  {latestMonthlyReport.status === "submitted" ? "Submitted" : "Draft"}
+                </span>
+              )}
+            </div>
+            {latestMonthlyReport ? (
+              <>
+                <p className="mt-1 text-xs font-medium text-slate-700">{getMonthKey(latestMonthlyReport.report_date)}</p>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                  <p className="rounded-lg bg-slate-50 px-2 py-1 text-slate-700">
+                    Work Orders: <strong>{monthlySummary?.work_orders.total ?? 0}</strong>
+                  </p>
+                  <p className="rounded-lg bg-slate-50 px-2 py-1 text-slate-700">
+                    Incidents: <strong>{monthlySummary?.incidents.total ?? 0}</strong>
+                  </p>
+                  <p className="rounded-lg bg-slate-50 px-2 py-1 text-slate-700">
+                    Checkups: <strong>{getCheckupCompletion(latestMonthlyReport, "monthly")}</strong>
+                  </p>
+                  <p className="rounded-lg bg-slate-50 px-2 py-1 text-slate-700">
+                    Walkthroughs: <strong>{getWalkthroughCompletion(latestMonthlyReport, monthlySummary)}</strong>
+                  </p>
+                </div>
+                <p className="mt-2 text-[10px] text-slate-500">
+                  Updated {formatUsCentralDateTime(latestMonthlyReport.updated_at)}
+                </p>
+              </>
+            ) : (
+              <p className="mt-2 text-xs text-slate-500">No monthly report available yet.</p>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-6 gap-2 md:gap-3">
         <div className="tl-card p-3 md:p-5">
           <p className="text-[10px] md:text-xs uppercase tracking-[0.15em] md:tracking-[0.2em] text-(--text)">
             Total Projects
@@ -478,9 +741,25 @@ export default function AdminDashboard() {
             </span>
           </p>
         </div>
+        <div className="tl-card p-3 md:p-5">
+          <p className="text-[10px] md:text-xs uppercase tracking-[0.15em] md:tracking-[0.2em] text-(--text)">
+            Bonan Open WOs
+          </p>
+          <p className="text-2xl md:text-3xl font-semibold text-(--text) mt-1 md:mt-2">
+            {bonanOpenWorkOrders}
+          </p>
+        </div>
+        <div className="tl-card p-3 md:p-5">
+          <p className="text-[10px] md:text-xs uppercase tracking-[0.15em] md:tracking-[0.2em] text-(--text)">
+            Bonan Active Incidents
+          </p>
+          <p className="text-2xl md:text-3xl font-semibold text-(--text) mt-1 md:mt-2">
+            {bonanActiveIncidents}
+          </p>
+        </div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-4 md:gap-8">
+      <div className="grid lg:grid-cols-2 gap-4 md:gap-5">
         {/* Projects List */}
         <div className="tl-card p-4 md:p-6">
           <h3 className="text-base md:text-lg font-semibold text-(--text) mb-3 md:mb-4">

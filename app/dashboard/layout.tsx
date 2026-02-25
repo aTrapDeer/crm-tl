@@ -155,6 +155,7 @@ export default function DashboardLayout({
   const isBonanRoute =
     pathname.startsWith("/dashboard/bonan") ||
     pathname.startsWith("/dashboard/management/bonan");
+  const isAdminHomeRoute = pathname === "/dashboard/admin";
 
   const roleLabel = {
     admin: "Administrator",
@@ -384,7 +385,11 @@ export default function DashboardLayout({
           {/* Main Content with sidebar offset */}
           <main
             className={`relative z-10 flex-1 min-w-0 overflow-x-hidden py-4 md:py-8 ${
-              isBonanRoute ? "w-full px-2 md:px-3 lg:px-4 max-w-none" : "px-4 md:px-6 lg:px-8 max-w-6xl mx-auto"
+              isBonanRoute
+                ? "w-full px-2 md:px-3 lg:px-4 max-w-none"
+                : isAdminHomeRoute
+                  ? "mx-auto w-full max-w-[1480px] px-3 md:px-5 lg:px-6 xl:px-8"
+                  : "px-4 md:px-6 lg:px-8 max-w-6xl mx-auto"
             }`}
           >
             {children}

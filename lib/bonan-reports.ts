@@ -7,8 +7,24 @@ import {
   type BonanSite,
   type DailyReportPayload,
 } from "./bonan-types";
+import {
+  createDefaultWeeklyReportPayload,
+  createDefaultMonthlyReportPayload,
+  normalizeWeeklyReportPayload,
+  normalizeMonthlyReportPayload,
+  type WeeklyReportPayload,
+  type MonthlyReportPayload,
+} from "./bonan-period-payloads";
 import { createWorkOrder, generateWorkOrderNumber } from "./work-orders";
-import { getUsCentralDate, getUsCentralTimeHHMM } from "./us-central-time";
+import {
+  getDaysInIsoMonth,
+  getMonthEndDate,
+  getMonthStartDate,
+  getUsCentralDate,
+  getUsCentralTimeHHMM,
+  getWeekEndSaturday,
+  getWeekStartSunday,
+} from "./us-central-time";
 
 export interface BonanReport {
   id: string;
@@ -20,11 +36,54 @@ export interface BonanReport {
   work_order_number?: string;
   created_by: string | null;
   creator_name?: string;
-  payload: DailyReportPayload | Record<string, unknown>;
+  payload: DailyReportPayload | WeeklyReportPayload | MonthlyReportPayload | Record<string, unknown>;
   created_at: string;
   updated_at: string;
   last_autosaved_at: string | null;
   submitted_at: string | null;
+}
+
+export interface BonanLinkedReportSummary {
+  id: string;
+  report_date: string;
+  status: BonanReportStatus;
+  work_order_number: string | null;
+}
+
+export interface BonanCollectiveSummary {
+  report_id: string;
+  report_type: BonanReportType;
+  period_start: string;
+  period_end: string;
+  period_days: number;
+  daily_reports: {
+    due: number;
+    total: number;
+    draft: number;
+    submitted: number;
+    linked: BonanLinkedReportSummary[];
+  };
+  weekly_reports: {
+    total: number;
+    draft: number;
+    submitted: number;
+    linked: BonanLinkedReportSummary[];
+  };
+  incidents: {
+    total: number;
+    open: number;
+    in_progress: number;
+    closed: number;
+  };
+  work_orders: {
+    total: number;
+    pending: number;
+    in_progress: number;
+    completed: number;
+    cancelled: number;
+    emergency: number;
+    high: number;
+  };
 }
 
 export interface BonanReportFilters {
@@ -46,9 +105,16 @@ export interface BonanAssociatedWorkOrder {
   created_at: string;
 }
 
-function parsePayload(type: BonanReportType, payloadJson: string | null): DailyReportPayload | Record<string, unknown> {
+function parsePayload(
+  type: BonanReportType,
+  payloadJson: string | null,
+  reportDate?: string
+): DailyReportPayload | WeeklyReportPayload | MonthlyReportPayload | Record<string, unknown> {
   if (!payloadJson) {
-    return type === "daily" ? createDefaultDailyReportPayload() : {};
+    if (type === "daily") return createDefaultDailyReportPayload();
+    if (type === "weekly") return createDefaultWeeklyReportPayload(reportDate || getUsCentralDate());
+    if (type === "monthly") return createDefaultMonthlyReportPayload(reportDate || getUsCentralDate());
+    return {};
   }
 
   try {
@@ -56,12 +122,18 @@ function parsePayload(type: BonanReportType, payloadJson: string | null): DailyR
     if (type === "daily") {
       return normalizeDailyReportPayload(parsed);
     }
-    if (parsed && typeof parsed === "object") {
-      return parsed as Record<string, unknown>;
+    if (type === "weekly") {
+      return normalizeWeeklyReportPayload(parsed, reportDate || getUsCentralDate());
+    }
+    if (type === "monthly") {
+      return normalizeMonthlyReportPayload(parsed, reportDate || getUsCentralDate());
     }
     return {};
   } catch {
-    return type === "daily" ? createDefaultDailyReportPayload() : {};
+    if (type === "daily") return createDefaultDailyReportPayload();
+    if (type === "weekly") return createDefaultWeeklyReportPayload(reportDate || getUsCentralDate());
+    if (type === "monthly") return createDefaultMonthlyReportPayload(reportDate || getUsCentralDate());
+    return {};
   }
 }
 
@@ -78,7 +150,7 @@ function mapRowToBonanReport(row: Record<string, unknown>): BonanReport {
     work_order_number: row.work_order_number as string | undefined,
     created_by: row.created_by as string | null,
     creator_name: row.creator_name as string | undefined,
-    payload: parsePayload(reportType, row.payload_json as string | null),
+    payload: parsePayload(reportType, row.payload_json as string | null, row.report_date as string | undefined),
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
     last_autosaved_at: row.last_autosaved_at as string | null,
@@ -92,6 +164,13 @@ function getTodayDate(): string {
 
 function getCurrentTime(): string {
   return getUsCentralTimeHHMM();
+}
+
+function normalizeReportDateForType(reportType: BonanReportType, reportDate?: string): string {
+  const baseDate = reportDate || getTodayDate();
+  if (reportType === "weekly") return getWeekStartSunday(baseDate);
+  if (reportType === "monthly") return getMonthStartDate(baseDate);
+  return baseDate;
 }
 
 function mapRowToAssociatedWorkOrder(row: Record<string, unknown>): BonanAssociatedWorkOrder {
@@ -217,24 +296,22 @@ export async function createBonanReport(data: {
 }): Promise<BonanReport> {
   const id = crypto.randomUUID().replace(/-/g, "");
   const site = data.site || "bonan_towers";
+  const reportDate = normalizeReportDateForType(data.report_type, data.report_date);
 
-  let payload: DailyReportPayload | Record<string, unknown>;
-  let normalizedDailyPayload: DailyReportPayload | null = null;
-  let reportDate = getTodayDate();
+  let payload: DailyReportPayload | WeeklyReportPayload | MonthlyReportPayload | Record<string, unknown>;
 
   if (data.report_type === "daily") {
     const dailyPayload = createDefaultDailyReportPayload();
-    if (data.report_date) {
-      dailyPayload.metadata.date = data.report_date;
-      dailyPayload.fridgeLogs = dailyPayload.fridgeLogs.map((row) => ({
-        ...row,
-        date: data.report_date as string,
-      }));
-    }
-
-    normalizedDailyPayload = normalizeDailyReportPayload(dailyPayload);
-    payload = normalizedDailyPayload;
-    reportDate = data.report_date || normalizedDailyPayload.metadata.date || getTodayDate();
+    dailyPayload.metadata.date = reportDate;
+    dailyPayload.fridgeLogs = dailyPayload.fridgeLogs.map((row) => ({
+      ...row,
+      date: reportDate,
+    }));
+    payload = normalizeDailyReportPayload(dailyPayload);
+  } else if (data.report_type === "weekly") {
+    payload = createDefaultWeeklyReportPayload(reportDate);
+  } else if (data.report_type === "monthly") {
+    payload = createDefaultMonthlyReportPayload(reportDate);
   } else {
     payload = {};
   }
@@ -277,12 +354,27 @@ export async function updateBonanReport(
   const nextStatus = data.status || existing.status;
   const nowIso = new Date().toISOString();
 
-  let payloadToSave: DailyReportPayload | Record<string, unknown>;
+  let payloadToSave: DailyReportPayload | WeeklyReportPayload | MonthlyReportPayload | Record<string, unknown>;
   let reportDate = existing.report_date;
 
   if (existing.report_type === "daily") {
     payloadToSave = normalizeDailyReportPayload(data.payload ?? existing.payload);
-    reportDate = payloadToSave.metadata.date || existing.report_date;
+    reportDate = normalizeReportDateForType(
+      "daily",
+      (payloadToSave as DailyReportPayload).metadata.date || existing.report_date
+    );
+  } else if (existing.report_type === "weekly") {
+    payloadToSave = normalizeWeeklyReportPayload(data.payload ?? existing.payload, existing.report_date);
+    reportDate = normalizeReportDateForType(
+      "weekly",
+      (payloadToSave as WeeklyReportPayload).metadata.weekStart || existing.report_date
+    );
+  } else if (existing.report_type === "monthly") {
+    payloadToSave = normalizeMonthlyReportPayload(data.payload ?? existing.payload, existing.report_date);
+    reportDate = normalizeReportDateForType(
+      "monthly",
+      (payloadToSave as MonthlyReportPayload).metadata.monthStart || existing.report_date
+    );
   } else {
     const candidate = data.payload ?? existing.payload;
     payloadToSave =
@@ -319,19 +411,184 @@ export async function updateBonanReport(
     ],
   });
 
-  if (existing.report_type === "daily" && existing.work_order_id) {
-    const dailyPayload = payloadToSave as DailyReportPayload;
+  if (existing.work_order_id) {
+    const timeReceived =
+      existing.report_type === "daily"
+        ? (payloadToSave as DailyReportPayload).metadata.start || null
+        : null;
     await turso.execute({
       sql: `UPDATE work_orders
             SET date = ?,
                 time_received = ?,
                 updated_at = datetime('now')
             WHERE id = ?`,
-      args: [reportDate, dailyPayload.metadata.start || null, existing.work_order_id],
+      args: [reportDate, timeReceived, existing.work_order_id],
     });
   }
 
   return getBonanReportById(id);
+}
+
+function asNumber(value: unknown): number {
+  if (typeof value === "number") return value;
+  if (typeof value === "bigint") return Number(value);
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+function getReportPeriod(report: BonanReport): { start: string; end: string; days: number } {
+  if (report.report_type === "weekly") {
+    return {
+      start: getWeekStartSunday(report.report_date),
+      end: getWeekEndSaturday(report.report_date),
+      days: 7,
+    };
+  }
+
+  if (report.report_type === "monthly") {
+    const start = getMonthStartDate(report.report_date);
+    return {
+      start,
+      end: getMonthEndDate(report.report_date),
+      days: getDaysInIsoMonth(start),
+    };
+  }
+
+  return {
+    start: report.report_date,
+    end: report.report_date,
+    days: 1,
+  };
+}
+
+export async function getBonanCollectiveSummary(reportId: string): Promise<BonanCollectiveSummary | null> {
+  const report = await getBonanReportById(reportId);
+  if (!report) return null;
+
+  const period = getReportPeriod(report);
+
+  const [dailyReportsResult, weeklyReportsResult, incidentsResult, workOrdersResult] = await Promise.all([
+    turso.execute({
+      sql: `SELECT br.id,
+                   br.report_date,
+                   br.status,
+                   wo.work_order_number
+            FROM bonan_reports br
+            LEFT JOIN work_orders wo ON wo.id = br.work_order_id
+            WHERE br.site = 'bonan_towers'
+              AND br.report_type = 'daily'
+              AND br.report_date BETWEEN ? AND ?
+            ORDER BY br.report_date ASC, br.created_at ASC`,
+      args: [period.start, period.end],
+    }),
+    turso.execute({
+      sql: `SELECT br.id,
+                   br.report_date,
+                   br.status,
+                   wo.work_order_number
+            FROM bonan_reports br
+            LEFT JOIN work_orders wo ON wo.id = br.work_order_id
+            WHERE br.site = 'bonan_towers'
+              AND br.report_type = 'weekly'
+              AND br.report_date BETWEEN ? AND ?
+            ORDER BY br.report_date ASC, br.created_at ASC`,
+      args: [period.start, period.end],
+    }),
+    turso.execute({
+      sql: `SELECT
+              COUNT(*) as total,
+              SUM(CASE WHEN ir.status = 'open' THEN 1 ELSE 0 END) as open_count,
+              SUM(CASE WHEN ir.status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_count,
+              SUM(CASE WHEN ir.status = 'closed' THEN 1 ELSE 0 END) as closed_count
+            FROM incident_reports ir
+            INNER JOIN bonan_reports br ON br.id = ir.bonan_report_id
+            WHERE br.site = 'bonan_towers'
+              AND ir.report_date BETWEEN ? AND ?`,
+      args: [period.start, period.end],
+    }),
+    turso.execute({
+      sql: `WITH linked_work_orders AS (
+              SELECT wo.id, wo.work_completed, wo.priority
+              FROM bonan_reports br
+              INNER JOIN work_orders wo ON wo.id = br.work_order_id
+              WHERE br.site = 'bonan_towers'
+                AND br.report_date BETWEEN ? AND ?
+              UNION
+              SELECT wo.id, wo.work_completed, wo.priority
+              FROM bonan_report_work_orders brwo
+              INNER JOIN bonan_reports br ON br.id = brwo.bonan_report_id
+              INNER JOIN work_orders wo ON wo.id = brwo.work_order_id
+              WHERE br.site = 'bonan_towers'
+                AND br.report_date BETWEEN ? AND ?
+            )
+            SELECT
+              COUNT(*) as total,
+              SUM(CASE WHEN work_completed = 'pending' THEN 1 ELSE 0 END) as pending_count,
+              SUM(CASE WHEN work_completed = 'in_progress' THEN 1 ELSE 0 END) as in_progress_count,
+              SUM(CASE WHEN work_completed = 'completed' THEN 1 ELSE 0 END) as completed_count,
+              SUM(CASE WHEN work_completed = 'cancelled' THEN 1 ELSE 0 END) as cancelled_count,
+              SUM(CASE WHEN priority = 'emergency' THEN 1 ELSE 0 END) as emergency_count,
+              SUM(CASE WHEN priority = 'high' THEN 1 ELSE 0 END) as high_count
+            FROM linked_work_orders`,
+      args: [period.start, period.end, period.start, period.end],
+    }),
+  ]);
+
+  const dailyReports = dailyReportsResult.rows.map((row) => ({
+    id: row.id as string,
+    report_date: row.report_date as string,
+    status: row.status as BonanReportStatus,
+    work_order_number: (row.work_order_number as string | null) || null,
+  }));
+
+  const weeklyReports = weeklyReportsResult.rows.map((row) => ({
+    id: row.id as string,
+    report_date: row.report_date as string,
+    status: row.status as BonanReportStatus,
+    work_order_number: (row.work_order_number as string | null) || null,
+  }));
+
+  const incidentsRow = incidentsResult.rows[0] || {};
+  const workOrdersRow = workOrdersResult.rows[0] || {};
+
+  return {
+    report_id: report.id,
+    report_type: report.report_type,
+    period_start: period.start,
+    period_end: period.end,
+    period_days: period.days,
+    daily_reports: {
+      due: report.report_type === "daily" ? 1 : period.days,
+      total: dailyReports.length,
+      draft: dailyReports.filter((row) => row.status === "draft").length,
+      submitted: dailyReports.filter((row) => row.status === "submitted").length,
+      linked: dailyReports,
+    },
+    weekly_reports: {
+      total: weeklyReports.length,
+      draft: weeklyReports.filter((row) => row.status === "draft").length,
+      submitted: weeklyReports.filter((row) => row.status === "submitted").length,
+      linked: weeklyReports,
+    },
+    incidents: {
+      total: asNumber(incidentsRow.total),
+      open: asNumber(incidentsRow.open_count),
+      in_progress: asNumber(incidentsRow.in_progress_count),
+      closed: asNumber(incidentsRow.closed_count),
+    },
+    work_orders: {
+      total: asNumber(workOrdersRow.total),
+      pending: asNumber(workOrdersRow.pending_count),
+      in_progress: asNumber(workOrdersRow.in_progress_count),
+      completed: asNumber(workOrdersRow.completed_count),
+      cancelled: asNumber(workOrdersRow.cancelled_count),
+      emergency: asNumber(workOrdersRow.emergency_count),
+      high: asNumber(workOrdersRow.high_count),
+    },
+  };
 }
 
 export async function getBonanAssociatedWorkOrders(reportId: string): Promise<BonanAssociatedWorkOrder[]> {

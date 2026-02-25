@@ -52,11 +52,23 @@ interface Stats {
   emergency: number;
 }
 
+interface IncidentReport {
+  id: string;
+  report_number: string;
+  report_date: string;
+  section_name: string;
+  location: string | null;
+  status: "open" | "in_progress" | "closed";
+  description: string;
+  created_at: string;
+}
+
 export default function ManagementPage() {
   const router = useRouter();
   const [user, setUser] = useState<{ role: "admin" | "employee" } | null>(null);
-  const [activeTab, setActiveTab] = useState<"work-orders" | "documents">("work-orders");
+  const [activeTab, setActiveTab] = useState<"work-orders" | "incident-reports" | "documents">("work-orders");
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
+  const [incidentReports, setIncidentReports] = useState<IncidentReport[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedWorkOrder, setSelectedWorkOrder] = useState<WorkOrder | null>(null);
@@ -109,18 +121,21 @@ export default function ManagementPage() {
 
     async function loadData() {
       try {
-        const [workOrdersRes, statsRes] = await Promise.all([
+        const [workOrdersRes, statsRes, incidentReportsRes] = await Promise.all([
           fetch("/api/work-orders"),
           fetch("/api/work-orders/stats"),
+          fetch("/api/incident-reports"),
         ]);
-        const [workOrdersData, statsData] = await Promise.all([
+        const [workOrdersData, statsData, incidentReportsData] = await Promise.all([
           workOrdersRes.json(),
           statsRes.json(),
+          incidentReportsRes.json(),
         ]);
 
         if (!cancelled) {
           setWorkOrders(workOrdersData.workOrders || []);
           setStats(statsData.stats || null);
+          setIncidentReports(incidentReportsData.incidentReports || []);
           setLoading(false);
         }
       } catch (error) {
@@ -202,7 +217,7 @@ export default function ManagementPage() {
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-2xl font-bold text-(--text)">Management Portal</h1>
-            <p className="text-sm text-(--text)/60">Manage work orders and documents</p>
+            <p className="text-sm text-(--text)/60">Manage work orders, incident reports, and documents</p>
           </div>
           {activeTab === "work-orders" && (
             <div className="flex items-center gap-2">
@@ -217,7 +232,7 @@ export default function ManagementPage() {
         </div>
 
         {/* Stats Cards */}
-        {stats && (
+        {stats && activeTab === "work-orders" && (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
             <div className="tl-card p-4">
               <p className="text-xs text-(--text)/60 uppercase tracking-wide">Total</p>
@@ -259,6 +274,16 @@ export default function ManagementPage() {
             Work Orders
           </button>
           <button
+            onClick={() => setActiveTab("incident-reports")}
+            className={`px-4 py-3 text-sm font-medium border-b-2 transition ${
+              activeTab === "incident-reports"
+                ? "border-(--text) text-(--text)"
+                : "border-transparent text-(--text)/60 hover:text-(--text)"
+            }`}
+          >
+            Incident Reports
+          </button>
+          <button
             onClick={() => setActiveTab("documents")}
             className={`px-4 py-3 text-sm font-medium border-b-2 transition ${
               activeTab === "documents"
@@ -285,6 +310,50 @@ export default function ManagementPage() {
             onDeleteWorkOrder={(wo) => openDeleteWorkOrderWarning(wo as WorkOrder)}
             loading={loading}
           />
+        ) : activeTab === "incident-reports" ? (
+          <div className="tl-card overflow-hidden">
+            {loading ? (
+              <div className="p-6 text-sm text-(--text)/60">Loading incident reports...</div>
+            ) : incidentReports.length === 0 ? (
+              <div className="p-6 text-sm text-(--text)/60">No incident reports found.</div>
+            ) : (
+              <div className="divide-y divide-(--border)/10">
+                {incidentReports.map((incident) => (
+                  <button
+                    key={incident.id}
+                    type="button"
+                    onClick={() => router.push(`/dashboard/management/incident-reports/${incident.id}`)}
+                    className="w-full px-4 py-3 text-left hover:bg-(--bg) transition"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-(--text)">
+                          {incident.report_number} · {incident.section_name}
+                        </p>
+                        <p className="text-xs text-(--text)/55 mt-1 truncate">
+                          {incident.location || "Bonan Towers"} · {incident.description}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize ${
+                            incident.status === "closed"
+                              ? "bg-green-100 text-green-700"
+                              : incident.status === "in_progress"
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-amber-100 text-amber-700"
+                          }`}
+                        >
+                          {incident.status.replace("_", " ")}
+                        </span>
+                        <p className="text-[10px] text-(--text)/50 mt-1">{incident.report_date}</p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         ) : (
           <DocumentManager userRole={user.role} />
         )}

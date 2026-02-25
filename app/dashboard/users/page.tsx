@@ -63,6 +63,13 @@ export default function UsersPage() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [pendingDeleteUser, setPendingDeleteUser] = useState<User | null>(null);
+  const [pendingRoleEditUser, setPendingRoleEditUser] = useState<User | null>(null);
+  const [roleDraft, setRoleDraft] = useState<User["role"]>("employee");
+  const [updatingRoleUserId, setUpdatingRoleUserId] = useState<string | null>(null);
+  const [resettingPasswordUserId, setResettingPasswordUserId] = useState<string | null>(null);
+  const [pendingPasswordResetUser, setPendingPasswordResetUser] = useState<User | null>(null);
+  const [userActionError, setUserActionError] = useState("");
+  const [userActionSuccess, setUserActionSuccess] = useState("");
 
   useEffect(() => {
     async function fetchUsers() {
@@ -160,6 +167,95 @@ export default function UsersPage() {
 
   function handleRequestDeleteUser(target: User) {
     setPendingDeleteUser(target);
+  }
+
+  function openRoleEditor(target: User) {
+    setPendingRoleEditUser(target);
+    setRoleDraft(target.role);
+    setUserActionError("");
+    setUserActionSuccess("");
+  }
+
+  async function handleSaveUserRole() {
+    if (!pendingRoleEditUser || updatingRoleUserId) return;
+    setUserActionError("");
+    setUserActionSuccess("");
+    setUpdatingRoleUserId(pendingRoleEditUser.id);
+
+    try {
+      const res = await fetch("/api/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update-role",
+          userId: pendingRoleEditUser.id,
+          role: roleDraft,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setUserActionError(data.error || "Failed to update role.");
+        return;
+      }
+
+      setUsers((prev) =>
+        prev.map((user) =>
+          user.id === pendingRoleEditUser.id
+            ? { ...user, role: roleDraft }
+            : user
+        )
+      );
+      setPendingRoleEditUser(null);
+      setUserActionSuccess("User role updated successfully.");
+    } catch (err) {
+      console.error("Failed to update user role:", err);
+      setUserActionError("Unable to update role right now.");
+    } finally {
+      setUpdatingRoleUserId(null);
+    }
+  }
+
+  async function handleSendPasswordReset(target: User) {
+    if (resettingPasswordUserId) return;
+    setUserActionError("");
+    setUserActionSuccess("");
+    setResettingPasswordUserId(target.id);
+
+    try {
+      const res = await fetch("/api/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "send-password-reset",
+          userId: target.id,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setUserActionError(data.error || "Failed to send password reset.");
+        return;
+      }
+
+      setUserActionSuccess(`Password reset sent to ${target.email}.`);
+    } catch (err) {
+      console.error("Failed to send password reset:", err);
+      setUserActionError("Unable to send password reset right now.");
+    } finally {
+      setResettingPasswordUserId(null);
+    }
+  }
+
+  function requestPasswordReset(target: User) {
+    setPendingPasswordResetUser(target);
+    setUserActionError("");
+    setUserActionSuccess("");
+  }
+
+  async function handleConfirmPasswordReset() {
+    if (!pendingPasswordResetUser) return;
+    const target = pendingPasswordResetUser;
+    await handleSendPasswordReset(target);
+    setPendingPasswordResetUser(null);
   }
 
   async function handleConfirmDeleteUser() {
@@ -374,6 +470,12 @@ export default function UsersPage() {
             className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
           />
         </div>
+        {userActionError && (
+          <p className="mt-3 text-sm text-red-600">{userActionError}</p>
+        )}
+        {userActionSuccess && (
+          <p className="mt-3 text-sm text-emerald-700">{userActionSuccess}</p>
+        )}
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3 min-w-0">
@@ -405,18 +507,44 @@ export default function UsersPage() {
                         <p className="text-sm font-semibold text-(--text) truncate" title={`${user.first_name} ${user.last_name}`}>
                           {user.first_name} {user.last_name}
                         </p>
-                        <button
-                          type="button"
-                          disabled={deletingUserId === user.id || currentUser?.id === user.id}
-                          onClick={() => handleRequestDeleteUser(user)}
-                          className="inline-flex items-center justify-center rounded-full border border-red-200 bg-red-50 p-1.5 text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                          aria-label={`Delete ${user.first_name} ${user.last_name}`}
-                          title={currentUser?.id === user.id ? "You cannot delete your own account" : "Delete user"}
-                        >
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            disabled={updatingRoleUserId === user.id || currentUser?.id === user.id}
+                            onClick={() => openRoleEditor(user)}
+                            className="inline-flex items-center justify-center rounded-full border border-blue-200 bg-blue-50 p-1.5 text-blue-600 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            aria-label={`Edit role for ${user.first_name} ${user.last_name}`}
+                            title={currentUser?.id === user.id ? "You cannot change your own role" : "Edit role"}
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5M16.5 3.5a2.121 2.121 0 013 3L12 14l-4 1 1-4 7.5-7.5z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={resettingPasswordUserId === user.id}
+                            onClick={() => requestPasswordReset(user)}
+                            className="inline-flex items-center justify-center rounded-full border border-amber-200 bg-amber-50 p-1.5 text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            aria-label={`Send password reset for ${user.first_name} ${user.last_name}`}
+                            title="Send password reset"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c1.657 0 3-1.343 3-3V7a3 3 0 10-6 0v1c0 1.657 1.343 3 3 3zm0 0v3m-6 0h12a2 2 0 012 2v1H4v-1a2 2 0 012-2z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={deletingUserId === user.id || currentUser?.id === user.id}
+                            onClick={() => handleRequestDeleteUser(user)}
+                            className="inline-flex items-center justify-center rounded-full border border-red-200 bg-red-50 p-1.5 text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            aria-label={`Delete ${user.first_name} ${user.last_name}`}
+                            title={currentUser?.id === user.id ? "You cannot delete your own account" : "Delete user"}
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
                       <p className="text-xs text-(--text) mt-1 truncate" title={user.email}>
                         {user.email}
@@ -432,6 +560,55 @@ export default function UsersPage() {
           );
         })}
       </section>
+
+      {pendingRoleEditUser && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4">
+          <div className="tl-card w-full max-w-md rounded-none md:rounded-3xl p-5 md:p-6">
+            <h3 className="text-lg font-semibold text-(--text)">Update User Role</h3>
+            <p className="mt-2 text-sm text-(--text)">
+              Change role for{" "}
+              <span className="font-semibold">
+                {pendingRoleEditUser.first_name} {pendingRoleEditUser.last_name}
+              </span>{" "}
+              ({pendingRoleEditUser.email}).
+            </p>
+
+            <label className="block mt-4">
+              <span className="text-xs font-medium text-(--text)/70 uppercase tracking-[0.16em]">
+                Role
+              </span>
+              <select
+                value={roleDraft}
+                onChange={(event) => setRoleDraft(event.target.value as User["role"])}
+                className="mt-1 w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+              >
+                <option value="admin">Admin</option>
+                <option value="employee">Employee</option>
+                <option value="client">Client</option>
+              </select>
+            </label>
+
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingRoleEditUser(null)}
+                disabled={Boolean(updatingRoleUserId)}
+                className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSaveUserRole()}
+                disabled={Boolean(updatingRoleUserId)}
+                className="flex-1 rounded-full bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition disabled:opacity-50"
+              >
+                {updatingRoleUserId ? "Saving..." : "Save Role"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pendingDeleteUser && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4">
@@ -462,6 +639,43 @@ export default function UsersPage() {
                 className="flex-1 rounded-full bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 transition disabled:opacity-50"
               >
                 {deletingUserId ? "Deleting..." : "Confirm Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingPasswordResetUser && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4">
+          <div className="tl-card w-full max-w-md rounded-none md:rounded-3xl p-5 md:p-6">
+            <h3 className="text-lg font-semibold text-(--text)">Confirm Password Reset</h3>
+            <p className="mt-2 text-sm text-(--text)">
+              Send a password reset email to{" "}
+              <span className="font-semibold">
+                {pendingPasswordResetUser.first_name} {pendingPasswordResetUser.last_name}
+              </span>{" "}
+              ({pendingPasswordResetUser.email})?
+            </p>
+            <p className="mt-1 text-sm text-amber-700">
+              This generates a new temporary password and invalidates their current password.
+            </p>
+
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingPasswordResetUser(null)}
+                disabled={Boolean(resettingPasswordUserId)}
+                className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmPasswordReset()}
+                disabled={Boolean(resettingPasswordUserId)}
+                className="flex-1 rounded-full bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-700 transition disabled:opacity-50"
+              >
+                {resettingPasswordUserId ? "Sending..." : "Confirm Reset"}
               </button>
             </div>
           </div>

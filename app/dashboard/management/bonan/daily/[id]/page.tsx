@@ -46,6 +46,23 @@ interface AssociatedWorkOrder {
   created_at: string;
 }
 
+interface AssociatedIncidentReport {
+  id: string;
+  bonan_report_id: string;
+  report_number: string;
+  report_date: string;
+  section_key: string | null;
+  section_name: string;
+  incident_time: string | null;
+  location: string | null;
+  system_area: string | null;
+  description: string;
+  actions_taken: string | null;
+  work_order_or_vendor: string | null;
+  status: "open" | "in_progress" | "closed";
+  created_at: string;
+}
+
 const STEP_TITLES = [
   "Coverage Matrix",
   "Critical Systems",
@@ -64,6 +81,7 @@ const STATUS_STYLES: Record<BonanReportStatus, string> = {
 };
 
 type DraftSyncState = "idle" | "cached" | "queued" | "syncing";
+type ActionRecordType = "work-order" | "incident-report";
 
 interface LocalDraftRecord {
   payload: DailyReportPayload;
@@ -71,10 +89,11 @@ interface LocalDraftRecord {
   serverUpdatedAt: string | null;
 }
 
-interface PendingWorkOrderCreation {
+interface PendingSectionAction {
   sectionKey: string;
   sectionName: string;
   details?: string;
+  actionType: ActionRecordType;
 }
 
 const DRAFT_CACHE_PREFIX = "bonan-daily-draft-v1";
@@ -134,7 +153,7 @@ function classNames(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
-function SectionWorkOrderIconButton({
+function SectionActionIconButton({
   onClick,
   disabled,
   title,
@@ -168,6 +187,16 @@ function SectionWorkOrderIconButton({
   );
 }
 
+function isIncidentEntryFilled(row: IncidentEntry): boolean {
+  return Boolean(
+    row.time.trim() ||
+      row.systemArea.trim() ||
+      row.description.trim() ||
+      row.actionsTaken.trim() ||
+      row.workOrderOrVendor.trim()
+  );
+}
+
 function AreaStatusOptions() {
   return (
     <>
@@ -190,9 +219,11 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
-  const [userRole, setUserRole] = useState<"admin" | "employee" | null>(null);
+  const [userRole, setUserRole] = useState<"admin" | "employee" | "client" | null>(null);
   const [associatedWorkOrders, setAssociatedWorkOrders] = useState<AssociatedWorkOrder[]>([]);
+  const [associatedIncidentReports, setAssociatedIncidentReports] = useState<AssociatedIncidentReport[]>([]);
   const [creatingAssociatedWorkOrder, setCreatingAssociatedWorkOrder] = useState(false);
+  const [creatingAssociatedIncidentReport, setCreatingAssociatedIncidentReport] = useState(false);
   const [deletingReport, setDeletingReport] = useState(false);
   const [showDeleteDailyWarning, setShowDeleteDailyWarning] = useState(false);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
@@ -201,9 +232,9 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
   const [isOnline, setIsOnline] = useState(true);
   const [syncState, setSyncState] = useState<DraftSyncState>("idle");
   const [lastCachedAt, setLastCachedAt] = useState("");
-  const [pendingWorkOrderCreation, setPendingWorkOrderCreation] = useState<PendingWorkOrderCreation | null>(null);
+  const [pendingSectionAction, setPendingSectionAction] = useState<PendingSectionAction | null>(null);
 
-  const isReadOnly = report?.status === "submitted";
+  const isReadOnly = report?.status === "submitted" || userRole === "client";
   const draftCacheKey = useMemo(() => getDraftCacheKey(id), [id]);
   const draftQueueKey = useMemo(() => getDraftQueueKey(id), [id]);
 
@@ -322,10 +353,6 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
           router.push("/login");
           return;
         }
-        if (sessionData.user.role === "client") {
-          router.push("/dashboard");
-          return;
-        }
         setUserRole(sessionData.user.role);
 
         const reportRes = await fetch(`/api/bonan/reports/${id}`);
@@ -369,13 +396,22 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
         setPayload(initialPayload);
 
         try {
-          const associatedRes = await fetch(`/api/bonan/reports/${id}/work-orders`);
-          const associatedData = await associatedRes.json();
-          if (associatedRes.ok) {
-            setAssociatedWorkOrders(associatedData.associatedWorkOrders || []);
+          const [associatedWorkOrdersRes, associatedIncidentReportsRes] = await Promise.all([
+            fetch(`/api/bonan/reports/${id}/work-orders`),
+            fetch(`/api/bonan/reports/${id}/incident-reports`),
+          ]);
+          const [associatedWorkOrdersData, associatedIncidentReportsData] = await Promise.all([
+            associatedWorkOrdersRes.json(),
+            associatedIncidentReportsRes.json(),
+          ]);
+          if (associatedWorkOrdersRes.ok) {
+            setAssociatedWorkOrders(associatedWorkOrdersData.associatedWorkOrders || []);
+          }
+          if (associatedIncidentReportsRes.ok) {
+            setAssociatedIncidentReports(associatedIncidentReportsData.associatedIncidentReports || []);
           }
         } catch (associatedError) {
-          console.error("Failed to load associated work orders:", associatedError);
+          console.error("Failed to load associated records:", associatedError);
         }
       } catch (fetchError) {
         console.error("Failed to initialize Bonan daily report editor:", fetchError);
@@ -695,6 +731,18 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
     }
   }
 
+  async function refreshAssociatedIncidentReports() {
+    try {
+      const associatedRes = await fetch(`/api/bonan/reports/${id}/incident-reports`);
+      const associatedData = await associatedRes.json();
+      if (associatedRes.ok) {
+        setAssociatedIncidentReports(associatedData.associatedIncidentReports || []);
+      }
+    } catch (fetchError) {
+      console.error("Failed to refresh associated incident reports:", fetchError);
+    }
+  }
+
   function shortSectionLabel(label: string): string {
     const beforeColon = label.split(":")[0]?.trim();
     return beforeColon && beforeColon.length > 0 ? beforeColon : label;
@@ -711,8 +759,32 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
     });
   }
 
-  function isSectionLinked(sectionKey: string): boolean {
-    return Boolean(getLinkedSectionWorkOrder(sectionKey));
+  function getLinkedSectionIncidentReport(
+    sectionKey: string,
+    fallbackSectionName?: string
+  ): AssociatedIncidentReport | undefined {
+    return associatedIncidentReports.find((incidentReport) => {
+      if (incidentReport.section_key === sectionKey) return true;
+      if (fallbackSectionName && incidentReport.section_name === fallbackSectionName) return true;
+      return false;
+    });
+  }
+
+  function isSectionLinked(
+    sectionKey: string,
+    sectionName?: string,
+    type?: ActionRecordType
+  ): boolean {
+    if (!type) {
+      return Boolean(
+        getLinkedSectionWorkOrder(sectionKey, sectionName) ||
+          getLinkedSectionIncidentReport(sectionKey, sectionName)
+      );
+    }
+    if (type === "incident-report") {
+      return Boolean(getLinkedSectionIncidentReport(sectionKey, sectionName));
+    }
+    return Boolean(getLinkedSectionWorkOrder(sectionKey, sectionName));
   }
 
   async function handleCreateAssociatedWorkOrder(options?: {
@@ -768,28 +840,103 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
     }
   }
 
-  function handleSectionWorkOrderAction(options: {
+  async function handleCreateAssociatedIncidentReport(options?: {
+    sectionKey?: string;
+    sectionName?: string;
+    details?: string;
+    incidentTime?: string;
+    systemArea?: string;
+    workOrderOrVendor?: string;
+  }) {
+    if (!report || creatingAssociatedIncidentReport) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setError("You are offline. Reconnect to create a linked incident report.");
+      return;
+    }
+
+    const sectionKey = options?.sectionKey?.trim() || "";
+    const sectionName = options?.sectionName?.trim() || "General Daily Walk-Through";
+    const details = options?.details?.trim() || "";
+    const descriptionPrefix = `${sectionName} - Incident / Alarm Report`;
+    const descriptionBody = details
+      ? `${descriptionPrefix}. ${details}`
+      : `${descriptionPrefix}. Incident observed during ${report.report_date} walkthrough.`;
+
+    setCreatingAssociatedIncidentReport(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/bonan/reports/${id}/incident-reports`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          section_key: sectionKey || undefined,
+          section_name: sectionName,
+          description: descriptionBody,
+          incident_time: options?.incidentTime,
+          location: "Bonan Towers",
+          system_area: options?.systemArea,
+          actions_taken: options?.details,
+          work_order_or_vendor: options?.workOrderOrVendor,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 409 && data?.existingAssociatedIncidentReport?.id) {
+          setError(data.error || "An incident report already exists for this section.");
+          router.push(`/dashboard/management/incident-reports/${data.existingAssociatedIncidentReport.id}`);
+          return;
+        }
+        setError(data.error || "Failed to create associated incident report.");
+        return;
+      }
+
+      await refreshAssociatedIncidentReports();
+      router.push(`/dashboard/management/incident-reports/${data.associatedIncidentReport.id}`);
+    } catch (createError) {
+      console.error("Failed to create associated incident report:", createError);
+      setError("Failed to create associated incident report.");
+    } finally {
+      setCreatingAssociatedIncidentReport(false);
+    }
+  }
+
+  function handleSectionActionMenuOpen(options: {
     sectionKey: string;
     sectionName: string;
     details?: string;
   }) {
-    const existing = getLinkedSectionWorkOrder(options.sectionKey, options.sectionName);
-    if (existing) {
-      router.push(`/dashboard/management/work-orders/${existing.work_order_id}`);
-      return;
-    }
-
-    setPendingWorkOrderCreation({
+    setPendingSectionAction({
       sectionKey: options.sectionKey,
       sectionName: options.sectionName,
       details: options.details,
+      actionType: "work-order",
     });
   }
 
-  function confirmPendingWorkOrderCreation() {
-    if (!pendingWorkOrderCreation) return;
-    const request = pendingWorkOrderCreation;
-    setPendingWorkOrderCreation(null);
+  function confirmPendingSectionAction() {
+    if (!pendingSectionAction) return;
+    const request = pendingSectionAction;
+    setPendingSectionAction(null);
+
+    if (request.actionType === "incident-report") {
+      const existingIncident = getLinkedSectionIncidentReport(request.sectionKey, request.sectionName);
+      if (existingIncident) {
+        router.push(`/dashboard/management/incident-reports/${existingIncident.id}`);
+        return;
+      }
+      void handleCreateAssociatedIncidentReport({
+        sectionKey: request.sectionKey,
+        sectionName: request.sectionName,
+        details: request.details,
+      });
+      return;
+    }
+
+    const existingWorkOrder = getLinkedSectionWorkOrder(request.sectionKey, request.sectionName);
+    if (existingWorkOrder) {
+      router.push(`/dashboard/management/work-orders/${existingWorkOrder.work_order_id}`);
+      return;
+    }
     void handleCreateAssociatedWorkOrder({
       sectionKey: request.sectionKey,
       sectionName: request.sectionName,
@@ -797,9 +944,9 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
     });
   }
 
-  function closePendingWorkOrderCreationPrompt() {
-    if (creatingAssociatedWorkOrder) return;
-    setPendingWorkOrderCreation(null);
+  function closePendingSectionActionPrompt() {
+    if (creatingAssociatedWorkOrder || creatingAssociatedIncidentReport) return;
+    setPendingSectionAction(null);
   }
 
   function openDeleteDailyReportWarning() {
@@ -846,6 +993,11 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
         row.fountain !== "NA" ||
         row.elecCloset !== "NA"
     ).length;
+  }, [payload]);
+
+  const reportedIncidentCount = useMemo(() => {
+    if (!payload) return 0;
+    return payload.incidents.filter((row) => isIncidentEntryFilled(row)).length;
   }, [payload]);
 
   const syncStatusText = useMemo(() => {
@@ -1014,7 +1166,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
             <button
               type="button"
               onClick={() => void handleCreateAssociatedWorkOrder()}
-              disabled={creatingAssociatedWorkOrder}
+              disabled={creatingAssociatedWorkOrder || creatingAssociatedIncidentReport}
               className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-700 transition disabled:opacity-60"
             >
               {creatingAssociatedWorkOrder ? "Creating..." : "+ New WO"}
@@ -1044,6 +1196,62 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                         : "bg-slate-100 text-slate-600"
                     )}>
                       {associated.work_completed.replace("_", " ")}
+                    </span>
+                    <svg className="h-3.5 w-3.5 text-(--text)/30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-(--border)/20 bg-white/80 backdrop-blur-sm overflow-hidden">
+          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-(--border)/10">
+            <h2 className="text-sm font-semibold text-(--text)">
+              Incident Reports
+              {associatedIncidentReports.length > 0 && (
+                <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-100 px-1.5 text-[10px] font-bold text-emerald-700">
+                  {associatedIncidentReports.length}
+                </span>
+              )}
+            </h2>
+            <button
+              type="button"
+              onClick={() => void handleCreateAssociatedIncidentReport()}
+              disabled={creatingAssociatedIncidentReport}
+              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-700 transition disabled:opacity-60"
+            >
+              {creatingAssociatedIncidentReport ? "Creating..." : "+ New IR"}
+            </button>
+          </div>
+          {associatedIncidentReports.length === 0 ? (
+            <p className="px-4 py-3 text-xs text-(--text)/50">
+              No incident reports linked yet. Create one from any section.
+            </p>
+          ) : (
+            <div className="divide-y divide-(--border)/10">
+              {associatedIncidentReports.map((associated) => (
+                <Link
+                  key={associated.id}
+                  href={`/dashboard/management/incident-reports/${associated.id}`}
+                  className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-(--bg) transition"
+                >
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-(--text)">{associated.report_number}</p>
+                    <p className="text-[11px] text-(--text)/50 mt-0.5 truncate">{associated.description}</p>
+                  </div>
+                  <div className="shrink-0 flex items-center gap-2">
+                    <span
+                      className={classNames(
+                        "rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize",
+                        associated.status === "closed"
+                          ? "bg-green-100 text-green-700"
+                          : associated.status === "in_progress"
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-amber-100 text-amber-700"
+                      )}
+                    >
+                      {associated.status.replace("_", " ")}
                     </span>
                     <svg className="h-3.5 w-3.5 text-(--text)/30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                   </div>
@@ -1210,20 +1418,20 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                   <div key={row.area} className="px-3 py-3 space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-bold text-(--text)">{row.area}</p>
-                      <SectionWorkOrderIconButton
+                      <SectionActionIconButton
                         onClick={() =>
-                          handleSectionWorkOrderAction({
+                          handleSectionActionMenuOpen({
                             sectionKey: `coverage:${row.area}`,
                             sectionName: row.area,
                             details: row.notes || "Coverage matrix deficiency follow-up.",
                           })
                         }
-                        disabled={creatingAssociatedWorkOrder}
+                        disabled={creatingAssociatedWorkOrder || creatingAssociatedIncidentReport}
                         linked={isSectionLinked(`coverage:${row.area}`)}
                         title={
                           isSectionLinked(`coverage:${row.area}`)
-                            ? `Open linked work order for ${row.area}`
-                            : `Create work order for ${row.area}`
+                            ? `Open linked record for ${row.area}`
+                            : `Create follow-up record for ${row.area}`
                         }
                       />
                     </div>
@@ -1391,20 +1599,20 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                           />
                         </td>
                         <td className="px-2 py-2 text-center">
-                          <SectionWorkOrderIconButton
+                          <SectionActionIconButton
                             onClick={() =>
-                              handleSectionWorkOrderAction({
+                              handleSectionActionMenuOpen({
                                 sectionKey: `coverage:${row.area}`,
                                 sectionName: row.area,
                                 details: row.notes || "Coverage matrix deficiency follow-up.",
                               })
                             }
-                            disabled={creatingAssociatedWorkOrder}
+                            disabled={creatingAssociatedWorkOrder || creatingAssociatedIncidentReport}
                             linked={isSectionLinked(`coverage:${row.area}`)}
                             title={
                               isSectionLinked(`coverage:${row.area}`)
-                                ? `Open linked work order for ${row.area}`
-                                : `Create work order for ${row.area}`
+                                ? `Open linked record for ${row.area}`
+                                : `Create follow-up record for ${row.area}`
                             }
                           />
                         </td>
@@ -1433,20 +1641,20 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                         />
                         <span className="text-xs font-medium text-(--text) leading-relaxed">{item.label}</span>
                       </label>
-                      <SectionWorkOrderIconButton
+                      <SectionActionIconButton
                         onClick={() =>
-                          handleSectionWorkOrderAction({
+                          handleSectionActionMenuOpen({
                             sectionKey: `common:${index}`,
                             sectionName: shortSectionLabel(item.label),
                             details: item.notes || item.label,
                           })
                         }
-                        disabled={creatingAssociatedWorkOrder}
+                        disabled={creatingAssociatedWorkOrder || creatingAssociatedIncidentReport}
                         linked={isSectionLinked(`common:${index}`)}
                         title={
                           isSectionLinked(`common:${index}`)
-                            ? `Open linked work order for ${shortSectionLabel(item.label)}`
-                            : `Create work order for ${shortSectionLabel(item.label)}`
+                            ? `Open linked record for ${shortSectionLabel(item.label)}`
+                            : `Create follow-up record for ${shortSectionLabel(item.label)}`
                         }
                       />
                     </div>
@@ -1472,9 +1680,9 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                   <h2 className="text-sm font-semibold text-(--text)">Critical Systems & Life Safety</h2>
                   <p className="text-[11px] text-(--text)/50 mt-0.5">Temperature readings</p>
                 </div>
-                <SectionWorkOrderIconButton
+                <SectionActionIconButton
                   onClick={() =>
-                    handleSectionWorkOrderAction({
+                    handleSectionActionMenuOpen({
                       sectionKey: "critical-systems",
                       sectionName: "Critical Systems & Life Safety",
                       details:
@@ -1482,12 +1690,12 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                         `Atrium: ${payload.temperatures.atrium || "n/a"}.`,
                     })
                   }
-                  disabled={creatingAssociatedWorkOrder}
+                  disabled={creatingAssociatedWorkOrder || creatingAssociatedIncidentReport}
                   linked={isSectionLinked("critical-systems")}
                   title={
                     isSectionLinked("critical-systems")
-                      ? "Open linked work order for Critical Systems & Life Safety"
-                      : "Create work order for Critical Systems & Life Safety"
+                      ? "Open linked record for Critical Systems & Life Safety"
+                      : "Create follow-up record for Critical Systems & Life Safety"
                   }
                 />
               </div>
@@ -1559,20 +1767,20 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                         />
                         <span className="text-xs font-medium text-(--text) leading-relaxed">{item.label}</span>
                       </label>
-                      <SectionWorkOrderIconButton
+                      <SectionActionIconButton
                         onClick={() =>
-                          handleSectionWorkOrderAction({
+                          handleSectionActionMenuOpen({
                             sectionKey: `risk:${index}`,
                             sectionName: shortSectionLabel(item.label),
                             details: item.notes || item.label,
                           })
                         }
-                        disabled={creatingAssociatedWorkOrder}
+                        disabled={creatingAssociatedWorkOrder || creatingAssociatedIncidentReport}
                         linked={isSectionLinked(`risk:${index}`)}
                         title={
                           isSectionLinked(`risk:${index}`)
-                            ? `Open linked work order for ${shortSectionLabel(item.label)}`
-                            : `Create work order for ${shortSectionLabel(item.label)}`
+                            ? `Open linked record for ${shortSectionLabel(item.label)}`
+                            : `Create follow-up record for ${shortSectionLabel(item.label)}`
                         }
                       />
                     </div>
@@ -1615,20 +1823,20 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-[10px] font-bold text-(--text)/50 uppercase tracking-wider">Incident {index + 1}</p>
                       <div className="flex items-center gap-1.5">
-                        <SectionWorkOrderIconButton
+                        <SectionActionIconButton
                           onClick={() =>
-                            handleSectionWorkOrderAction({
+                            handleSectionActionMenuOpen({
                               sectionKey: `incident:${index}`,
                               sectionName: row.systemArea || `Incident Row ${index + 1}`,
                               details: row.description || row.actionsTaken || "Incident follow-up required.",
                             })
                           }
-                          disabled={creatingAssociatedWorkOrder}
+                          disabled={creatingAssociatedWorkOrder || creatingAssociatedIncidentReport}
                           linked={isSectionLinked(`incident:${index}`)}
                           title={
                             isSectionLinked(`incident:${index}`)
-                              ? `Open linked work order for incident row ${index + 1}`
-                              : `Create work order for incident row ${index + 1}`
+                              ? `Open linked record for incident row ${index + 1}`
+                              : `Create follow-up record for incident row ${index + 1}`
                           }
                         />
                         {!isReadOnly && (
@@ -1760,20 +1968,20 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                           />
                         </td>
                         <td className="px-2 py-2 text-center">
-                          <SectionWorkOrderIconButton
+                          <SectionActionIconButton
                             onClick={() =>
-                              handleSectionWorkOrderAction({
+                              handleSectionActionMenuOpen({
                                 sectionKey: `incident:${index}`,
                                 sectionName: row.systemArea || `Incident Row ${index + 1}`,
                                 details: row.description || row.actionsTaken || "Incident follow-up required.",
                               })
                             }
-                            disabled={creatingAssociatedWorkOrder}
+                            disabled={creatingAssociatedWorkOrder || creatingAssociatedIncidentReport}
                             linked={isSectionLinked(`incident:${index}`)}
                             title={
                               isSectionLinked(`incident:${index}`)
-                                ? `Open linked work order for incident row ${index + 1}`
-                                : `Create work order for incident row ${index + 1}`
+                                ? `Open linked record for incident row ${index + 1}`
+                                : `Create follow-up record for incident row ${index + 1}`
                             }
                           />
                         </td>
@@ -1834,9 +2042,9 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-[10px] font-bold text-(--text)/50 uppercase tracking-wider">Reading {index + 1}</p>
                       <div className="flex items-center gap-1.5">
-                        <SectionWorkOrderIconButton
+                        <SectionActionIconButton
                           onClick={() =>
-                            handleSectionWorkOrderAction({
+                            handleSectionActionMenuOpen({
                               sectionKey: `fridge:${index}`,
                               sectionName: "Retail Fridge",
                               details:
@@ -1844,12 +2052,12 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                                 `${row.correctiveAction || "Follow-up required."}`,
                             })
                           }
-                          disabled={creatingAssociatedWorkOrder}
+                          disabled={creatingAssociatedWorkOrder || creatingAssociatedIncidentReport}
                           linked={isSectionLinked(`fridge:${index}`)}
                           title={
                             isSectionLinked(`fridge:${index}`)
-                              ? `Open linked work order for fridge entry ${index + 1}`
-                              : `Create work order for fridge entry ${index + 1}`
+                              ? `Open linked record for fridge entry ${index + 1}`
+                              : `Create follow-up record for fridge entry ${index + 1}`
                           }
                         />
                         {!isReadOnly && (
@@ -2011,9 +2219,9 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                           />
                         </td>
                         <td className="px-2 py-2 text-center">
-                          <SectionWorkOrderIconButton
+                          <SectionActionIconButton
                             onClick={() =>
-                              handleSectionWorkOrderAction({
+                              handleSectionActionMenuOpen({
                                 sectionKey: `fridge:${index}`,
                                 sectionName: "Retail Fridge",
                                 details:
@@ -2021,12 +2229,12 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                                   `${row.correctiveAction || "Follow-up required."}`,
                               })
                             }
-                            disabled={creatingAssociatedWorkOrder}
+                            disabled={creatingAssociatedWorkOrder || creatingAssociatedIncidentReport}
                             linked={isSectionLinked(`fridge:${index}`)}
                             title={
                               isSectionLinked(`fridge:${index}`)
-                                ? `Open linked work order for fridge entry ${index + 1}`
-                                : `Create work order for fridge entry ${index + 1}`
+                                ? `Open linked record for fridge entry ${index + 1}`
+                                : `Create follow-up record for fridge entry ${index + 1}`
                             }
                           />
                         </td>
@@ -2118,9 +2326,9 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-[10px] font-bold text-(--text)/50 uppercase tracking-wider">Entry {index + 1}</p>
                       <div className="flex items-center gap-1.5">
-                        <SectionWorkOrderIconButton
+                        <SectionActionIconButton
                           onClick={() =>
-                            handleSectionWorkOrderAction({
+                            handleSectionActionMenuOpen({
                               sectionKey: `fire-alarm:${index}`,
                               sectionName: row.panel ? `Fire Alarm - ${row.panel}` : "Fire Alarm",
                               details:
@@ -2128,12 +2336,12 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                                 "Fire alarm event follow-up required.",
                             })
                           }
-                          disabled={creatingAssociatedWorkOrder}
+                          disabled={creatingAssociatedWorkOrder || creatingAssociatedIncidentReport}
                           linked={isSectionLinked(`fire-alarm:${index}`)}
                           title={
                             isSectionLinked(`fire-alarm:${index}`)
-                              ? `Open linked work order for fire alarm entry ${index + 1}`
-                              : `Create work order for fire alarm entry ${index + 1}`
+                              ? `Open linked record for fire alarm entry ${index + 1}`
+                              : `Create follow-up record for fire alarm entry ${index + 1}`
                           }
                         />
                         {!isReadOnly && (
@@ -2327,9 +2535,9 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                           />
                         </td>
                         <td className="px-2 py-2 text-center">
-                          <SectionWorkOrderIconButton
+                          <SectionActionIconButton
                             onClick={() =>
-                              handleSectionWorkOrderAction({
+                              handleSectionActionMenuOpen({
                                 sectionKey: `fire-alarm:${index}`,
                                 sectionName: row.panel ? `Fire Alarm - ${row.panel}` : "Fire Alarm",
                                 details:
@@ -2337,12 +2545,12 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                                   "Fire alarm event follow-up required.",
                               })
                             }
-                            disabled={creatingAssociatedWorkOrder}
+                            disabled={creatingAssociatedWorkOrder || creatingAssociatedIncidentReport}
                             linked={isSectionLinked(`fire-alarm:${index}`)}
                             title={
                               isSectionLinked(`fire-alarm:${index}`)
-                                ? `Open linked work order for fire alarm entry ${index + 1}`
-                                : `Create work order for fire alarm entry ${index + 1}`
+                                ? `Open linked record for fire alarm entry ${index + 1}`
+                                : `Create follow-up record for fire alarm entry ${index + 1}`
                             }
                           />
                         </td>
@@ -2369,14 +2577,18 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                 <h2 className="text-sm font-semibold text-(--text)">Submission Review</h2>
                 <p className="text-[11px] text-(--text)/50 mt-0.5">Confirm all sections are complete before submitting</p>
               </div>
-              <div className="px-4 py-3 grid grid-cols-2 md:grid-cols-4 gap-2">
+              <div className="px-4 py-3 grid grid-cols-2 md:grid-cols-5 gap-2">
                 <div className="rounded-xl bg-slate-50 p-3 text-center">
                   <p className="text-xl font-bold text-(--text)">{completedCoverage}<span className="text-sm font-normal text-(--text)/40">/{payload.coverageMatrix.length}</span></p>
                   <p className="text-[10px] text-(--text)/50 font-medium mt-0.5">Coverage</p>
                 </div>
                 <div className="rounded-xl bg-slate-50 p-3 text-center">
-                  <p className="text-xl font-bold text-(--text)">{payload.incidents.length}</p>
+                  <p className="text-xl font-bold text-(--text)">{reportedIncidentCount}</p>
                   <p className="text-[10px] text-(--text)/50 font-medium mt-0.5">Incidents</p>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3 text-center">
+                  <p className="text-xl font-bold text-(--text)">{associatedIncidentReports.length}</p>
+                  <p className="text-[10px] text-(--text)/50 font-medium mt-0.5">Incident Reports</p>
                 </div>
                 <div className="rounded-xl bg-slate-50 p-3 text-center">
                   <p className="text-xl font-bold text-(--text)">{payload.fridgeLogs.length}</p>
@@ -2488,35 +2700,64 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
         </div>
       </div>
 
-      {pendingWorkOrderCreation && (
+      {pendingSectionAction && (
         <div
           className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
-          onClick={closePendingWorkOrderCreationPrompt}
+          onClick={closePendingSectionActionPrompt}
         >
           <div
             className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-white p-5 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <h3 className="text-base font-semibold text-slate-900">Create Work Order</h3>
+            <h3 className="text-base font-semibold text-slate-900">Create Follow-up</h3>
             <p className="mt-2 text-sm text-slate-600">
-              Create a work order for <strong>{pendingWorkOrderCreation.sectionName}</strong>?
+              Choose which follow-up to create for <strong>{pendingSectionAction.sectionName}</strong>.
             </p>
+            <label className="mt-3 block">
+              <span className="text-xs font-medium text-slate-500">Record type</span>
+              <select
+                value={pendingSectionAction.actionType}
+                onChange={(event) =>
+                  setPendingSectionAction((current) =>
+                    current
+                      ? {
+                          ...current,
+                          actionType: event.target.value as ActionRecordType,
+                        }
+                      : null
+                  )
+                }
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              >
+                <option value="work-order">Create Work Order</option>
+                <option value="incident-report">Create Incident Report</option>
+              </select>
+            </label>
             <div className="mt-4 grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={closePendingWorkOrderCreationPrompt}
+                onClick={closePendingSectionActionPrompt}
                 className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-                disabled={creatingAssociatedWorkOrder}
+                disabled={creatingAssociatedWorkOrder || creatingAssociatedIncidentReport}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={confirmPendingWorkOrderCreation}
-                className="rounded-xl bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-                disabled={creatingAssociatedWorkOrder}
+                onClick={confirmPendingSectionAction}
+                className={classNames(
+                  "rounded-xl px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-60",
+                  pendingSectionAction.actionType === "incident-report"
+                    ? "bg-emerald-600 hover:bg-emerald-700"
+                    : "bg-blue-600 hover:bg-blue-700"
+                )}
+                disabled={creatingAssociatedWorkOrder || creatingAssociatedIncidentReport}
               >
-                {creatingAssociatedWorkOrder ? "Creating..." : "Create"}
+                {creatingAssociatedWorkOrder || creatingAssociatedIncidentReport
+                  ? "Creating..."
+                  : pendingSectionAction.actionType === "incident-report"
+                    ? "Create Incident Report"
+                    : "Create Work Order"}
               </button>
             </div>
           </div>
@@ -2539,7 +2780,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
           >
             <h3 className="text-base font-semibold text-red-600">Delete Report</h3>
             <p className="mt-2 text-sm text-slate-600">
-              This permanently deletes <strong>{report.report_date}</strong> and its linked work order.
+              This permanently deletes <strong>{report.report_date}</strong> and its linked follow-up records.
             </p>
             <p className="mt-2 text-xs text-slate-500">
               Type <strong>{report.report_date}</strong> to confirm.

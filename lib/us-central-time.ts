@@ -2,6 +2,19 @@ export const US_CENTRAL_TIME_ZONE = "America/Chicago";
 
 type DateInput = Date | string | number;
 
+function toIsoDateUtc(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function toUtcDateOnly(value: DateInput): Date | null {
+  const parsed = parseDateInput(value);
+  if (!parsed) return null;
+  return new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()));
+}
+
 function toPartsMap(parts: Intl.DateTimeFormatPart[]): Record<string, string> {
   const map: Record<string, string> = {};
   for (const part of parts) {
@@ -88,3 +101,53 @@ export function formatUsCentralTime(value: DateInput): string {
   }).format(date);
 }
 
+export function getWeekStartSunday(value: DateInput = new Date()): string {
+  const date = toUtcDateOnly(value);
+  if (!date) return getUsCentralDate();
+
+  const dayIndex = date.getUTCDay();
+  const start = new Date(date);
+  start.setUTCDate(start.getUTCDate() - dayIndex);
+  return toIsoDateUtc(start);
+}
+
+export function getWeekEndSaturday(value: DateInput = new Date()): string {
+  const weekStart = getWeekStartSunday(value);
+  return addDaysToIsoDate(weekStart, 6);
+}
+
+export function getMonthStartDate(value: DateInput = new Date()): string {
+  const date = toUtcDateOnly(value);
+  if (!date) return getUsCentralDate();
+
+  const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+  return toIsoDateUtc(start);
+}
+
+export function getMonthEndDate(value: DateInput = new Date()): string {
+  const date = toUtcDateOnly(value);
+  if (!date) return getUsCentralDate();
+
+  const end = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
+  return toIsoDateUtc(end);
+}
+
+export function getMonthKey(value: DateInput = new Date()): string {
+  const start = getMonthStartDate(value);
+  return start.slice(0, 7);
+}
+
+export function getDaysInIsoMonth(value: DateInput = new Date()): number {
+  const date = toUtcDateOnly(value);
+  if (!date) return 30;
+
+  const end = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
+  return end.getUTCDate();
+}
+
+export function addDaysToIsoDate(isoDate: string, days: number): string {
+  const date = toUtcDateOnly(isoDate);
+  if (!date) return isoDate;
+  date.setUTCDate(date.getUTCDate() + days);
+  return toIsoDateUtc(date);
+}

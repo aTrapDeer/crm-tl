@@ -242,6 +242,30 @@ CREATE TABLE IF NOT EXISTS bonan_report_work_orders (
 CREATE INDEX IF NOT EXISTS idx_bonan_report_work_orders_report ON bonan_report_work_orders(bonan_report_id);
 CREATE INDEX IF NOT EXISTS idx_bonan_report_work_orders_work_order ON bonan_report_work_orders(work_order_id);
 
+CREATE TABLE IF NOT EXISTS incident_reports (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  bonan_report_id TEXT NOT NULL REFERENCES bonan_reports(id) ON DELETE CASCADE,
+  report_number TEXT NOT NULL UNIQUE,
+  report_date TEXT NOT NULL DEFAULT (date('now')),
+  section_key TEXT,
+  section_name TEXT NOT NULL,
+  incident_time TEXT,
+  location TEXT,
+  system_area TEXT,
+  description TEXT NOT NULL,
+  actions_taken TEXT,
+  work_order_or_vendor TEXT,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'closed')),
+  created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_incident_reports_bonan_report ON incident_reports(bonan_report_id);
+CREATE INDEX IF NOT EXISTS idx_incident_reports_report_number ON incident_reports(report_number);
+CREATE INDEX IF NOT EXISTS idx_incident_reports_status ON incident_reports(status);
+CREATE INDEX IF NOT EXISTS idx_incident_reports_date ON incident_reports(report_date);
+
 -- ============ WORK ORDER MATERIALS ============
 
 CREATE TABLE IF NOT EXISTS work_order_materials (

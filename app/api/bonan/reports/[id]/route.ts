@@ -4,6 +4,7 @@ import { deleteBonanReport, getBonanReportById, updateBonanReport } from "@/lib/
 import { sendNotificationEmail } from "@/lib/email";
 import { turso } from "@/lib/turso";
 import type { BonanReportStatus, DailyReportPayload } from "@/lib/bonan-types";
+import type { MonthlyReportPayload, WeeklyReportPayload } from "@/lib/bonan-period-payloads";
 
 function isValidReportStatus(value: string): value is BonanReportStatus {
   return value === "draft" || value === "submitted";
@@ -48,14 +49,35 @@ async function getSubmissionRecipientEmails(reportId: string): Promise<string[]>
   return [...new Set(emails.filter(Boolean))];
 }
 
-async function sendDailySubmissionNotification(report: Awaited<ReturnType<typeof getBonanReportById>>) {
-  if (!report || report.report_type !== "daily") return;
+async function sendBonanSubmissionNotification(report: Awaited<ReturnType<typeof getBonanReportById>>) {
+  if (!report) return;
 
   const recipients = await getSubmissionRecipientEmails(report.id);
   if (recipients.length === 0) return;
 
-  const payload = report.payload as DailyReportPayload;
-  const inspector = payload.metadata.inspector || "Unspecified inspector";
+  const reportPath =
+    report.report_type === "daily"
+      ? "daily"
+      : report.report_type === "weekly"
+        ? "weekly"
+        : "monthly";
+
+  let submitter = "Unspecified submitter";
+  if (report.report_type === "daily") {
+    submitter = (report.payload as DailyReportPayload).metadata.inspector || submitter;
+  } else if (report.report_type === "weekly") {
+    submitter = (report.payload as WeeklyReportPayload).metadata.preparedBy || submitter;
+  } else if (report.report_type === "monthly") {
+    submitter = (report.payload as MonthlyReportPayload).metadata.preparedBy || submitter;
+  }
+
+  const reportTypeLabel =
+    report.report_type === "daily"
+      ? "Daily Walk-Through"
+      : report.report_type === "weekly"
+        ? "Weekly Work Orders Conversion"
+        : "Monthly Work Orders Conversion";
+
   const appUrl = (
     process.env.APP_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
@@ -65,11 +87,11 @@ async function sendDailySubmissionNotification(report: Awaited<ReturnType<typeof
 
   await sendNotificationEmail({
     to: recipients,
-    subject: `[Bonan Daily Submitted] ${report.report_date} (${report.work_order_number || "No WO"})`,
-    title: "Bonan Towers Daily Walk-Through Submitted",
-    message: `A daily Bonan Towers walk-through was submitted by ${inspector} for ${report.report_date}.`,
-    actionUrl: `${appUrl}/dashboard/bonan/daily/${report.id}`,
-    actionLabel: "View Daily Report",
+    subject: `[Bonan ${report.report_type.toUpperCase()} Submitted] ${report.report_date} (${report.work_order_number || "No WO"})`,
+    title: `Bonan Towers Operations ${reportTypeLabel} Submitted`,
+    message: `${reportTypeLabel} was submitted by ${submitter} for ${report.report_date}.`,
+    actionUrl: `${appUrl}/dashboard/bonan/${reportPath}/${report.id}`,
+    actionLabel: "View Report",
   });
 }
 
@@ -81,9 +103,6 @@ export async function GET(
     const user = await getAuthenticatedUser();
     if (!user) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    if (user.role === "client") {
-      return Response.json({ error: "Access denied" }, { status: 403 });
     }
 
     const { id } = await params;
@@ -137,8 +156,8 @@ export async function PATCH(
     }
 
     if (existing.status !== "submitted" && report.status === "submitted") {
-      sendDailySubmissionNotification(report).catch((error) => {
-        console.error("Failed to send Bonan daily submission notification:", error);
+      sendBonanSubmissionNotification(report).catch((error) => {
+        console.error("Failed to send Bonan submission notification:", error);
       });
     }
 

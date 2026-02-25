@@ -803,3 +803,47 @@ export async function sendChangeRequestApprovalNotification(data: {
     html: getEmailTemplate(content, "Change Request Update"),
   });
 }
+
+export async function sendUserPasswordResetEmail(data: {
+  to: string;
+  fullName: string;
+  temporaryPassword: string;
+}): Promise<boolean> {
+  const loginUrl = `${APP_URL}/login`;
+
+  const content = `
+    <h2 style="margin: 0 0 16px; color: #01224f; font-size: 20px; font-weight: 600;">
+      Password Reset
+    </h2>
+    <p style="margin: 0 0 16px; color: #0d3e8d; font-size: 16px; line-height: 1.6;">
+      Hi ${data.fullName || "there"},
+    </p>
+    <p style="margin: 0 0 20px; color: #0d3e8d; font-size: 16px; line-height: 1.6;">
+      An administrator reset your password. Use the temporary password below to sign in.
+    </p>
+    <div style="background-color: #f7f8fb; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+      <p style="margin: 0 0 8px; color: #6b7280; font-size: 12px; text-transform: uppercase;">Temporary Password</p>
+      <p style="margin: 0; color: #01224f; font-size: 20px; font-weight: 700; letter-spacing: 0.06em;">
+        ${data.temporaryPassword}
+      </p>
+    </div>
+    <p style="margin: 0 0 24px; color: #0d3e8d; font-size: 15px; line-height: 1.6;">
+      For security, please sign in and change your password immediately.
+    </p>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td align="center">
+          <a href="${loginUrl}" style="display: inline-block; padding: 16px 32px; background-color: #01224f; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; border-radius: 12px;">
+            Go to Login
+          </a>
+        </td>
+      </tr>
+    </table>
+  `;
+
+  return sendEmail({
+    to: data.to,
+    subject: "Your password was reset",
+    html: getEmailTemplate(content, "Password Reset"),
+  });
+}

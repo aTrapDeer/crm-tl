@@ -17,10 +17,6 @@ export default function BonanDashboardPage() {
           router.push("/login");
           return;
         }
-        if (data.user.role === "client") {
-          router.push("/dashboard");
-          return;
-        }
       } catch {
         router.push("/login");
         return;
@@ -47,7 +43,7 @@ export default function BonanDashboardPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.15em] text-(--text)/55">
             Bonan Towers
           </p>
-          <h1 className="text-2xl font-bold text-(--text)">Bonan Operations</h1>
+          <h1 className="text-2xl font-bold text-(--text)">Bonan Towers Operations</h1>
           <p className="text-sm text-(--text)/60 mt-1">
             Dedicated reporting systems for daily, weekly, and monthly compliance workflows.
           </p>
@@ -67,23 +63,23 @@ export default function BonanDashboardPage() {
 
           <Link
             href="/dashboard/bonan/weekly"
-            className="tl-card p-5 border border-slate-200 bg-slate-50/70 hover:shadow-lg transition"
+            className="tl-card p-5 border border-blue-200 bg-blue-50/70 hover:shadow-lg transition"
           >
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Next</p>
-            <h2 className="text-lg font-semibold text-slate-900 mt-2">Weekly Systems</h2>
-            <p className="text-sm text-slate-700/80 mt-2">
-              Sprinkler pump test logs and daily rollup linkage.
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Active</p>
+            <h2 className="text-lg font-semibold text-blue-950 mt-2">Weekly Systems</h2>
+            <p className="text-sm text-blue-900/80 mt-2">
+              Collective weekly summary with work orders, incident reports, checkups, and daily rollups.
             </p>
           </Link>
 
           <Link
             href="/dashboard/bonan/monthly"
-            className="tl-card p-5 border border-slate-200 bg-slate-50/70 hover:shadow-lg transition"
+            className="tl-card p-5 border border-orange-200 bg-orange-50/70 hover:shadow-lg transition"
           >
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Upcoming</p>
-            <h2 className="text-lg font-semibold text-slate-900 mt-2">Monthly Closeout</h2>
-            <p className="text-sm text-slate-700/80 mt-2">
-              Deficiency register, compliance checks, and executive certification.
+            <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Active</p>
+            <h2 className="text-lg font-semibold text-orange-950 mt-2">Monthly Closeout</h2>
+            <p className="text-sm text-orange-900/80 mt-2">
+              Collective monthly summary linking weekly and daily activity for PM and construction review.
             </p>
           </Link>
         </div>

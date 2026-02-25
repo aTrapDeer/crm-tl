@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { getSession, getUserById } from "@/lib/auth";
 import { createBonanReport, getBonanReportByDate, getBonanReports } from "@/lib/bonan-reports";
 import type { BonanReportStatus, BonanReportType } from "@/lib/bonan-types";
+import { getMonthStartDate, getUsCentralDate, getWeekStartSunday } from "@/lib/us-central-time";
 
 function isValidReportType(value: string): value is BonanReportType {
   return value === "daily" || value === "weekly" || value === "monthly";
@@ -16,6 +17,13 @@ function isValidIsoDate(value: string): boolean {
   const date = new Date(`${value}T00:00:00Z`);
   if (!Number.isFinite(date.getTime())) return false;
   return date.toISOString().slice(0, 10) === value;
+}
+
+function normalizeReportDateForType(reportType: BonanReportType, reportDate?: string): string {
+  const baseDate = reportDate || getUsCentralDate();
+  if (reportType === "weekly") return getWeekStartSunday(baseDate);
+  if (reportType === "monthly") return getMonthStartDate(baseDate);
+  return baseDate;
 }
 
 async function getAuthenticatedUser() {
@@ -35,9 +43,6 @@ export async function GET(request: Request) {
     const user = await getAuthenticatedUser();
     if (!user) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    if (user.role === "client") {
-      return Response.json({ error: "Access denied" }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -89,13 +94,6 @@ export async function POST(request: Request) {
       return Response.json({ error: "Invalid report type" }, { status: 400 });
     }
 
-    if (reportTypeRaw !== "daily") {
-      return Response.json(
-        { error: "Weekly and monthly Bonan reports are not enabled yet." },
-        { status: 400 }
-      );
-    }
-
     let reportDate: string | undefined;
     if (body.report_date !== undefined) {
       if (typeof body.report_date !== "string" || !isValidIsoDate(body.report_date)) {
@@ -104,32 +102,33 @@ export async function POST(request: Request) {
       reportDate = body.report_date;
     }
 
-    if (reportDate) {
-      const existingReport = await getBonanReportByDate({
-        report_type: reportTypeRaw,
-        report_date: reportDate,
-        site: "bonan_towers",
-      });
-      if (existingReport) {
-        return Response.json(
-          {
-            error: "A daily report already exists for that date.",
-            existingReport: {
-              id: existingReport.id,
-              report_date: existingReport.report_date,
-              status: existingReport.status,
-            },
+    const normalizedReportDate = normalizeReportDateForType(reportTypeRaw, reportDate);
+
+    const existingReport = await getBonanReportByDate({
+      report_type: reportTypeRaw,
+      report_date: normalizedReportDate,
+      site: "bonan_towers",
+    });
+    if (existingReport) {
+      const typeLabel = reportTypeRaw === "daily" ? "daily" : reportTypeRaw === "weekly" ? "weekly" : "monthly";
+      return Response.json(
+        {
+          error: `A ${typeLabel} report already exists for this period.`,
+          existingReport: {
+            id: existingReport.id,
+            report_date: existingReport.report_date,
+            status: existingReport.status,
           },
-          { status: 409 }
-        );
-      }
+        },
+        { status: 409 }
+      );
     }
 
     const report = await createBonanReport({
       report_type: reportTypeRaw,
       created_by: user.id,
       site: "bonan_towers",
-      report_date: reportDate,
+      report_date: normalizedReportDate,
     });
 
     return Response.json({ report }, { status: 201 });
