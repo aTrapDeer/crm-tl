@@ -328,6 +328,10 @@ export default function BonanWeeklyReportEditorPage({ params }: { params: Promis
     return `${Math.round((summary.daily_reports.submitted / summary.daily_reports.due) * 100)}%`;
   }, [summary]);
 
+  const parentMonthlyPathBase = userRole === "client"
+    ? "/dashboard/bonan/monthly-summaries"
+    : "/dashboard/bonan/monthly";
+
   if (loading || !report || !payload) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -460,10 +464,12 @@ export default function BonanWeeklyReportEditorPage({ params }: { params: Promis
             <div className="col-span-2 rounded-lg border border-(--border)/20 bg-slate-50 p-2 flex items-center justify-center gap-2">
               {parentMonthly ? (
                 <Link
-                  href={`/dashboard/bonan/monthly/${parentMonthly.id}`}
+                  href={`${parentMonthlyPathBase}/${parentMonthly.id}`}
                   className="text-xs font-semibold text-blue-700 hover:underline"
                 >
-                  Open Parent Monthly ({getMonthKey(parentMonthly.report_date)})
+                  {userRole === "client" ? "Open Parent Monthly Summary" : "Open Parent Monthly"}
+                  {" "}
+                  ({getMonthKey(parentMonthly.report_date)})
                 </Link>
               ) : (
                 <span className="text-xs text-(--text)/55">No monthly report linked for this month.</span>

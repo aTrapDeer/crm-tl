@@ -31,6 +31,11 @@ interface BonanPeriodReportListProps {
   title: string;
   subtitle: string;
   createLabel: string;
+  detailPathBase?: string;
+  showCreate?: boolean;
+  allowedRoles?: Array<"admin" | "employee" | "client">;
+  disallowedRedirectPath?: string;
+  contextLinks?: Array<{ href: string; label: string }>;
 }
 
 const STATUS_STYLES: Record<BonanReportStatus, string> = {
@@ -43,6 +48,11 @@ export default function BonanPeriodReportList({
   title,
   subtitle,
   createLabel,
+  detailPathBase,
+  showCreate = true,
+  allowedRoles = ["admin", "employee", "client"],
+  disallowedRedirectPath = "/dashboard/bonan",
+  contextLinks = [],
 }: BonanPeriodReportListProps) {
   const router = useRouter();
   const [userRole, setUserRole] = useState<"admin" | "employee" | "client" | null>(null);
@@ -66,7 +76,12 @@ export default function BonanPeriodReportList({
           router.push("/login");
           return;
         }
-        setUserRole(sessionData.user.role);
+        const nextRole = sessionData.user.role as "admin" | "employee" | "client";
+        if (!allowedRoles.includes(nextRole)) {
+          router.push(disallowedRedirectPath);
+          return;
+        }
+        setUserRole(nextRole);
 
         const reportsRes = await fetch(`/api/bonan/reports?report_type=${reportType}`);
         const reportsData = await reportsRes.json();
@@ -85,13 +100,14 @@ export default function BonanPeriodReportList({
     }
 
     void init();
-  }, [reportType, router]);
+  }, [allowedRoles, disallowedRedirectPath, reportType, router]);
 
   const periodPlaceholder = useMemo(
     () => (reportType === "monthly" ? "Select month" : "Select week date"),
     [reportType]
   );
-  const canCreate = userRole !== "client";
+  const canCreate = showCreate && userRole !== "client";
+  const reportDetailPathBase = detailPathBase || `/dashboard/bonan/${reportType}`;
 
   function getDisplayPeriod(reportDate: string): string {
     if (reportType === "weekly") {
@@ -128,9 +144,9 @@ export default function BonanPeriodReportList({
       });
       const data = await res.json();
 
-      if (!res.ok) {
-        if (res.status === 409 && data.existingReport?.id) {
-          router.push(`/dashboard/bonan/${reportType}/${data.existingReport.id}`);
+        if (!res.ok) {
+          if (res.status === 409 && data.existingReport?.id) {
+          router.push(`${reportDetailPathBase}/${data.existingReport.id}`);
           return;
         }
         setError(data.error || `Failed to create ${reportType} report.`);
@@ -138,7 +154,7 @@ export default function BonanPeriodReportList({
       }
 
       setShowCreateModal(false);
-      router.push(`/dashboard/bonan/${reportType}/${data.report.id}`);
+      router.push(`${reportDetailPathBase}/${data.report.id}`);
     } catch (createError) {
       console.error(`Failed to create ${reportType} report:`, createError);
       setError(`Failed to create ${reportType} report.`);
@@ -203,6 +219,49 @@ export default function BonanPeriodReportList({
             </button>
           )}
         </div>
+        {contextLinks.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-4">
+            {contextLinks.map((link) => {
+              // Determine styling based on the link label to give them distinct visual hierarchy
+              let linkStyle = "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300";
+              let icon = null;
+
+              if (link.label.includes("Monthly")) {
+                linkStyle = "bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 hover:border-blue-300";
+                icon = (
+                  <svg className="mr-1.5 h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                );
+              } else if (link.label.includes("Weekly")) {
+                linkStyle = "bg-teal-50 border border-teal-200 text-teal-700 hover:bg-teal-100 hover:border-teal-300";
+                icon = (
+                  <svg className="mr-1.5 h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                );
+              } else if (link.label.includes("Daily")) {
+                linkStyle = "bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300";
+                icon = (
+                  <svg className="mr-1.5 h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                );
+              }
+
+              return (
+                <Link
+                  key={`${link.href}:${link.label}`}
+                  href={link.href}
+                  className={`inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm transition-all ${linkStyle}`}
+                >
+                  {icon}
+                  {link.label}
+                </Link>
+              );
+            })}
+          </div>
+        )}
 
         {error && (
           <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-xs font-medium text-red-700">
@@ -226,7 +285,7 @@ export default function BonanPeriodReportList({
               return (
                 <Link
                   key={report.id}
-                  href={`/dashboard/bonan/${reportType}/${report.id}`}
+                  href={`${reportDetailPathBase}/${report.id}`}
                   className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-(--bg)/50 transition"
                 >
                   <div className="min-w-0">

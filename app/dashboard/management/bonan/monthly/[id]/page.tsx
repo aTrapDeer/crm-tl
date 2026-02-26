@@ -104,8 +104,12 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
           router.push("/login");
           return;
         }
-
-        setUserRole(sessionData.user.role as UserRole);
+        const role = sessionData.user.role as UserRole;
+        if (role === "client") {
+          router.push(`/dashboard/bonan/monthly-summaries/${id}`);
+          return;
+        }
+        setUserRole(role);
 
         const reportRes = await fetch(`/api/bonan/reports/${id}`);
         const reportData = await reportRes.json();
@@ -337,6 +341,11 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
               <span className={classNames("rounded-full px-2.5 py-1 text-[10px] font-semibold", statusClass(report.status))}>{statusLabel(report.status)}</span>
               <p className="text-[10px] text-(--text)/45 mt-1">Updated {formatUsCentralDateTime(report.updated_at)}</p>
               <p className="text-[11px] text-(--text)/55 mt-0.5">{saveMessage || " "}</p>
+              {userRole === "admin" && (
+                <Link href={`/dashboard/bonan/monthly-summaries/${report.id}`} className="text-xs font-semibold text-blue-700 hover:underline">
+                  Open Summary View
+                </Link>
+              )}
             </div>
           </div>
 

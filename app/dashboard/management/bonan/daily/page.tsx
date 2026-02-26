@@ -28,12 +28,11 @@ const STATUS_STYLES: Record<BonanReportStatus, string> = {
 
 export default function BonanDailyReportsPage() {
   const router = useRouter();
-  const [userRole, setUserRole] = useState<"admin" | "employee" | null>(null);
+  const [userRole, setUserRole] = useState<"admin" | "employee" | "client" | null>(null);
   const [reports, setReports] = useState<BonanReportSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [showCreatePrompt, setShowCreatePrompt] = useState(false);
-  const [existingTodayReport, setExistingTodayReport] = useState<BonanReportSummary | null>(null);
   const [newReportDate, setNewReportDate] = useState("");
   const [createPromptError, setCreatePromptError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -52,11 +51,7 @@ export default function BonanDailyReportsPage() {
           router.push("/login");
           return;
         }
-        if (sessionData.user.role === "client") {
-          router.push("/dashboard");
-          return;
-        }
-        setUserRole(sessionData.user.role);
+        setUserRole(sessionData.user.role as "admin" | "employee" | "client");
 
         const reportsRes = await fetch("/api/bonan/reports?report_type=daily");
         const reportsData = await reportsRes.json();
@@ -94,7 +89,9 @@ export default function BonanDailyReportsPage() {
       const data = await res.json();
       if (!res.ok) {
         if (res.status === 409 && data.existingReport?.id) {
-          router.push(`/dashboard/bonan/daily/${data.existingReport.id}`);
+          setShowCreatePrompt(true);
+          setCreatePromptError("One has been made for this day already select another day.");
+          setNewReportDate(reportDate || data.existingReport.report_date || getUsCentralDate(new Date()));
           return;
         }
         const message = data.error || "Failed to create daily report.";
@@ -130,16 +127,9 @@ export default function BonanDailyReportsPage() {
       return;
     }
 
-    setExistingTodayReport(todayReport);
     setNewReportDate(todayDate);
-    setCreatePromptError("");
+    setCreatePromptError("One has been made for this day already select another day.");
     setShowCreatePrompt(true);
-  }
-
-  function handleResumeTodayReport() {
-    if (!existingTodayReport) return;
-    setShowCreatePrompt(false);
-    router.push(`/dashboard/bonan/daily/${existingTodayReport.id}`);
   }
 
   function handleCreateOrOpenSelectedDate() {
@@ -150,8 +140,7 @@ export default function BonanDailyReportsPage() {
 
     const selectedExisting = reports.find((report) => report.report_date === newReportDate);
     if (selectedExisting) {
-      setShowCreatePrompt(false);
-      router.push(`/dashboard/bonan/daily/${selectedExisting.id}`);
+      setCreatePromptError("One has been made for this day already select another day.");
       return;
     }
 
@@ -208,17 +197,19 @@ export default function BonanDailyReportsPage() {
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
           </Link>
           <div className="min-w-0 flex-1">
-            <h1 className="text-lg font-bold text-(--text)">Daily Walk-Through</h1>
-            <p className="text-xs text-(--text)/50 mt-0.5">Bonan Towers</p>
+            <h1 className="text-lg font-bold text-(--text)">Daily Walk-Throughs & Reviews</h1>
+            <p className="text-xs text-(--text)/50 mt-0.5">Bonan Towers Operations</p>
           </div>
-          <button
-            type="button"
-            onClick={handleCreateDailyReportClick}
-            disabled={creating || loading}
-            className="shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition disabled:opacity-50"
-          >
-            {creating ? "Creating..." : loading ? "Loading..." : "+ New Report"}
-          </button>
+          {userRole !== "client" && (
+            <button
+              type="button"
+              onClick={handleCreateDailyReportClick}
+              disabled={creating || loading}
+              className="shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition disabled:opacity-50"
+            >
+              {creating ? "Creating..." : loading ? "Loading..." : "+ New Report"}
+            </button>
+          )}
         </div>
 
         {error && (
@@ -234,7 +225,11 @@ export default function BonanDailyReportsPage() {
         ) : reports.length === 0 ? (
           <div className="rounded-2xl border border-(--border)/20 bg-white/80 p-8 text-center">
             <p className="text-sm text-(--text)/60">No daily reports yet.</p>
-            <p className="mt-1 text-xs text-(--text)/40">Create your first daily walk-through to get started.</p>
+            <p className="mt-1 text-xs text-(--text)/40">
+              {userRole === "client"
+                ? "No daily submissions are available for review yet."
+                : "Create your first daily walk-through to get started."}
+            </p>
           </div>
         ) : (
           <div className="rounded-2xl border border-(--border)/20 bg-white/80 backdrop-blur-sm overflow-hidden divide-y divide-(--border)/10">
@@ -288,7 +283,7 @@ export default function BonanDailyReportsPage() {
         )}
       </div>
 
-      {showCreatePrompt && existingTodayReport && (
+      {showCreatePrompt && (
         <div
           className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
           onClick={() => {
@@ -301,35 +296,34 @@ export default function BonanDailyReportsPage() {
             className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-white p-5 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <h3 className="text-base font-semibold text-slate-900">Report Exists for Today</h3>
-
-            <div className="mt-3 rounded-xl bg-slate-50 p-3">
-              <p className="text-xs text-slate-500">Existing report</p>
-              <p className="text-sm font-semibold text-slate-800 mt-0.5">
-                {existingTodayReport.report_date} ({existingTodayReport.status})
-              </p>
-              <button
-                type="button"
-                onClick={handleResumeTodayReport}
-                className="mt-2 w-full rounded-xl bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition"
-                disabled={creating}
-              >
-                Resume This Report
-              </button>
-            </div>
+            <h3 className="text-base font-semibold text-slate-900">Create Daily Walk-Through</h3>
 
             <div className="mt-4 space-y-2">
-              <p className="text-xs font-medium text-slate-500">Or pick a different date</p>
-              <input
-                type="date"
-                value={newReportDate}
-                onChange={(event) => {
-                  setNewReportDate(event.target.value);
-                  if (createPromptError) setCreatePromptError("");
-                }}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                disabled={creating}
-              />
+              <p className="text-xs font-medium text-slate-500">Select date</p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={newReportDate}
+                  onChange={(event) => {
+                    setNewReportDate(event.target.value);
+                    if (createPromptError) setCreatePromptError("");
+                  }}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                  disabled={creating}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (creating) return;
+                    setNewReportDate("");
+                    if (createPromptError) setCreatePromptError("");
+                  }}
+                  className="shrink-0 rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
+                  disabled={creating}
+                >
+                  Clear Day
+                </button>
+              </div>
             </div>
 
             {createPromptError && <p className="mt-2 text-xs text-red-600">{createPromptError}</p>}
@@ -353,7 +347,7 @@ export default function BonanDailyReportsPage() {
                 className="rounded-xl bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
                 disabled={creating}
               >
-                {creating ? "Working..." : "Open Date"}
+                {creating ? "Working..." : "Create for Day"}
               </button>
             </div>
           </div>
