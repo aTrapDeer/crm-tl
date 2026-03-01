@@ -1064,7 +1064,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
   }
 
   return (
-    <div className="min-h-screen bg-(--bg) overflow-x-hidden">
+    <div className="bonan-daily-editor min-h-screen bg-(--bg) overflow-x-hidden">
       <div className="w-full max-w-5xl mx-auto px-3 md:px-4 lg:px-6 py-4 pb-36 md:pb-6 space-y-4">
 
         {/* ── Top Bar ── */}
@@ -1465,8 +1465,8 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                         }
                       />
                     </div>
-                    <div className="grid grid-cols-4 gap-2">
-                      <label className="space-y-0.5 text-[10px]">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                      <label className="min-w-0 space-y-0.5 text-[10px]">
                         <span className="text-(--text)/50 font-medium">Male</span>
                         <select
                           value={row.restroomsMale}
@@ -1479,7 +1479,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                           <AreaStatusOptions />
                         </select>
                       </label>
-                      <label className="space-y-0.5 text-[10px]">
+                      <label className="min-w-0 space-y-0.5 text-[10px]">
                         <span className="text-(--text)/50 font-medium">Female</span>
                         <select
                           value={row.restroomsFemale}
@@ -1492,7 +1492,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                           <AreaStatusOptions />
                         </select>
                       </label>
-                      <label className="space-y-0.5 text-[10px]">
+                      <label className="min-w-0 space-y-0.5 text-[10px]">
                         <span className="text-(--text)/50 font-medium">Fountain</span>
                         <select
                           value={row.fountain}
@@ -1505,7 +1505,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                           <AreaStatusOptions />
                         </select>
                       </label>
-                      <label className="space-y-0.5 text-[10px]">
+                      <label className="min-w-0 space-y-0.5 text-[10px]">
                         <span className="text-(--text)/50 font-medium">Elec</span>
                         <select
                           value={row.elecCloset}
@@ -1519,8 +1519,8 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                         </select>
                       </label>
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <label className="col-span-2 space-y-0.5 text-[10px]">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <label className="sm:col-span-2 space-y-0.5 text-[10px]">
                         <span className="text-(--text)/50 font-medium">Notes</span>
                         <input
                           type="text"
@@ -1729,8 +1729,8 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                   }
                 />
               </div>
-              <div className="px-4 py-4 grid grid-cols-3 gap-3">
-                <label className="space-y-1 text-xs">
+              <div className="px-4 py-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <label className="min-w-0 space-y-1 text-xs">
                   <span className="font-medium text-(--text)/60">Pump Room (F)</span>
                   <input
                     type="text"
@@ -1745,7 +1745,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                     className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) text-center font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
-                <label className="space-y-1 text-xs">
+                <label className="min-w-0 space-y-1 text-xs">
                   <span className="font-medium text-(--text)/60">Boiler Room (F)</span>
                   <input
                     type="text"
@@ -1760,7 +1760,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                     className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) text-center font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
-                <label className="space-y-1 text-xs">
+                <label className="min-w-0 space-y-1 text-xs">
                   <span className="font-medium text-(--text)/60">Atrium (F)</span>
                   <input
                     type="text"
@@ -1954,7 +1954,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                     ] as const).map((boiler) => (
                       <div key={boiler.key} className="rounded-lg border border-(--border)/20 p-2">
                         <p className="text-[11px] font-semibold text-(--text)">{boiler.label}</p>
-                        <div className="mt-2 grid grid-cols-2 gap-2">
+                        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
                           <label className="space-y-1 text-xs">
                             <span className="font-medium text-(--text)/60">Function</span>
                             <select
@@ -1999,7 +1999,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                           </label>
                           <label className="space-y-1 text-xs col-span-2">
                             <span className="font-medium text-(--text)/60">SH1 / SH2 / SH3 / DHW Temps</span>
-                            <div className="grid grid-cols-4 gap-1">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
                               {(["sh1Temp", "sh2Temp", "sh3Temp", "dhwTemp"] as const).map((field) => (
                                 <input
                                   key={`${boiler.key}-${field}`}
@@ -2200,8 +2200,8 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                         )}
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <label className="space-y-0.5 text-[10px]">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <label className="min-w-0 space-y-0.5 text-[10px]">
                         <span className="text-(--text)/50 font-medium">Time</span>
                         <input
                           type="text"
@@ -2211,7 +2211,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                           className="w-full rounded-lg border border-(--border)/30 px-2 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
                         />
                       </label>
-                      <label className="space-y-0.5 text-[10px]">
+                      <label className="min-w-0 space-y-0.5 text-[10px]">
                         <span className="text-(--text)/50 font-medium">System / Area</span>
                         <input
                           type="text"
@@ -2421,8 +2421,8 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                         )}
                       </div>
                     </div>
-                    <div className="grid grid-cols-4 gap-2">
-                      <label className="space-y-0.5 text-[10px]">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                      <label className="min-w-0 space-y-0.5 text-[10px]">
                         <span className="text-(--text)/50 font-medium">Date</span>
                         <input
                           type="date"
@@ -2432,7 +2432,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                           className="w-full rounded-lg border border-(--border)/30 px-1.5 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
                         />
                       </label>
-                      <label className="space-y-0.5 text-[10px]">
+                      <label className="min-w-0 space-y-0.5 text-[10px]">
                         <span className="text-(--text)/50 font-medium">Time</span>
                         <input
                           type="time"
@@ -2442,7 +2442,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                           className="w-full rounded-lg border border-(--border)/30 px-1.5 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
                         />
                       </label>
-                      <label className="space-y-0.5 text-[10px]">
+                      <label className="min-w-0 space-y-0.5 text-[10px]">
                         <span className="text-(--text)/50 font-medium">Temp (F)</span>
                         <input
                           type="text"
@@ -2452,7 +2452,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                           className="w-full rounded-lg border border-(--border)/30 px-1.5 py-2 text-xs text-(--text) bg-white text-center font-semibold disabled:opacity-60"
                         />
                       </label>
-                      <label className="space-y-0.5 text-[10px]">
+                      <label className="min-w-0 space-y-0.5 text-[10px]">
                         <span className="text-(--text)/50 font-medium">In Range?</span>
                         <select
                           value={row.withinTarget}
@@ -2467,8 +2467,8 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                         </select>
                       </label>
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <label className="col-span-2 space-y-0.5 text-[10px]">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <label className="sm:col-span-2 space-y-0.5 text-[10px]">
                         <span className="text-(--text)/50 font-medium">Corrective Action</span>
                         <input
                           type="text"
@@ -2613,8 +2613,8 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                 <h2 className="text-sm font-semibold text-(--text)">Fire Alarm Panel Status</h2>
                 <p className="text-[11px] text-(--text)/50 mt-0.5">Main (Sprinkler Pump Room) & Sub-Panel (Boiler Room)</p>
               </div>
-              <div className="px-4 py-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-                <label className="space-y-1 text-xs">
+              <div className="px-4 py-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                <label className="min-w-0 space-y-1 text-xs">
                   <span className="font-medium text-(--text)/60">Date Range</span>
                   <input
                     type="text"
@@ -2624,7 +2624,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                     className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
-                <label className="space-y-1 text-xs">
+                <label className="min-w-0 space-y-1 text-xs">
                   <span className="font-medium text-(--text)/60">Prepared By</span>
                   <input
                     type="text"
@@ -2634,7 +2634,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                     className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
-                <label className="space-y-1 text-xs">
+                <label className="min-w-0 space-y-1 text-xs">
                   <span className="font-medium text-(--text)/60">Supervisor</span>
                   <input
                     type="text"
@@ -2644,7 +2644,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                     className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
-                <label className="space-y-1 text-xs">
+                <label className="min-w-0 space-y-1 text-xs">
                   <span className="font-medium text-(--text)/60">Signature</span>
                   <input
                     type="text"
@@ -2705,8 +2705,8 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                         )}
                       </div>
                     </div>
-                    <div className="grid grid-cols-4 gap-2">
-                      <label className="space-y-0.5 text-[10px]">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                      <label className="min-w-0 space-y-0.5 text-[10px]">
                         <span className="text-(--text)/50 font-medium">Date</span>
                         <input
                           type="date"
@@ -2716,7 +2716,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                           className="w-full rounded-lg border border-(--border)/30 px-1.5 py-2 text-xs bg-white text-(--text) disabled:opacity-60"
                         />
                       </label>
-                      <label className="space-y-0.5 text-[10px]">
+                      <label className="min-w-0 space-y-0.5 text-[10px]">
                         <span className="text-(--text)/50 font-medium">Time</span>
                         <input
                           type="time"
@@ -2726,7 +2726,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                           className="w-full rounded-lg border border-(--border)/30 px-1.5 py-2 text-xs bg-white text-(--text) disabled:opacity-60"
                         />
                       </label>
-                      <label className="space-y-0.5 text-[10px]">
+                      <label className="min-w-0 space-y-0.5 text-[10px]">
                         <span className="text-(--text)/50 font-medium">Panel</span>
                         <input
                           type="text"
@@ -2736,7 +2736,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                           className="w-full rounded-lg border border-(--border)/30 px-1.5 py-2 text-xs bg-white text-(--text) disabled:opacity-60"
                         />
                       </label>
-                      <label className="space-y-0.5 text-[10px]">
+                      <label className="min-w-0 space-y-0.5 text-[10px]">
                         <span className="text-(--text)/50 font-medium">Type</span>
                         <input
                           type="text"

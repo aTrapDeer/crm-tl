@@ -341,7 +341,7 @@ export default function BonanWeeklyReportEditorPage({ params }: { params: Promis
   }
 
   return (
-    <div className="min-h-screen bg-(--bg)">
+    <div className="bonan-weekly-editor min-h-screen bg-(--bg) overflow-x-hidden">
       <div className="mx-auto w-full max-w-[1320px] px-3 md:px-4 py-4 md:py-5 space-y-3 md:space-y-4">
         <header className="rounded-2xl border border-(--border)/20 bg-white/90 p-3 md:p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -444,7 +444,7 @@ export default function BonanWeeklyReportEditorPage({ params }: { params: Promis
             </label>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-2">
             <div className="rounded-lg bg-slate-50 p-2 text-center">
               <p className="text-lg font-semibold text-(--text)">{summary?.work_orders.total ?? 0}</p>
               <p className="text-[10px] text-(--text)/55 uppercase tracking-wide">Work Orders</p>

@@ -359,7 +359,7 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
         </header>
 
         <section className="rounded-2xl border border-(--border)/20 bg-white/90 p-3 md:p-4 space-y-3">
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-2">
             <div className="rounded-lg bg-slate-50 p-2 text-center">
               <p className="text-lg font-semibold text-(--text)">{summary?.work_orders.total ?? 0}</p>
               <p className="text-[10px] text-(--text)/55 uppercase tracking-wide">Work Orders</p>

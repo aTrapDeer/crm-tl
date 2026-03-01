@@ -36,13 +36,18 @@ body {
   margin: 0;
 }
 
-/* Keep monthly editor form controls inside mobile cards on iOS Safari */
-.bonan-monthly-editor input:not([type="checkbox"]):not([type="radio"]),
-.bonan-monthly-editor select,
-.bonan-monthly-editor textarea {
+/* Keep Bonan editor form controls inside mobile cards on iOS Safari */
+:where(.bonan-daily-editor, .bonan-weekly-editor, .bonan-monthly-editor)
+  input:not([type="checkbox"]):not([type="radio"]),
+:where(.bonan-daily-editor, .bonan-weekly-editor, .bonan-monthly-editor) select,
+:where(.bonan-daily-editor, .bonan-weekly-editor, .bonan-monthly-editor) textarea {
   width: 100%;
   min-width: 0;
   max-width: 100%;
+}
+
+:where(.bonan-daily-editor, .bonan-weekly-editor, .bonan-monthly-editor) label {
+  min-width: 0;
 }
 
 h1,
