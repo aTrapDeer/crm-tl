@@ -42,6 +42,52 @@ export interface TemperatureReadings {
   atrium: string;
 }
 
+export interface BoilerUnitStatus {
+  functioning: string;
+  loadPercent: string;
+  sh1Temp: string;
+  sh2Temp: string;
+  sh3Temp: string;
+  dhwTemp: string;
+}
+
+export interface BoilerRoomSystems {
+  boiler1: BoilerUnitStatus;
+  boiler2: BoilerUnitStatus;
+  gaugeLeftSuctionPsi: string;
+  gaugeRightDischargePsi: string;
+  pump1SuctionPsi: string;
+  pump1DischargePsi: string;
+  pump2SuctionPsi: string;
+  pump2DischargePsi: string;
+  airCompressorPsi: string;
+  floorDrainClear: string;
+  musicStatus: string;
+}
+
+export interface CriticalWaterStructuralChecks {
+  buildingMainShutoff: {
+    locationFound: string;
+    valveCondition: string;
+    accessible: string;
+    signageIntact: string;
+    leaks: string;
+  };
+  pumpSprinklerRoom: {
+    roomTemperature: string;
+    pumpMotorDrainClogged: string;
+    notes: string;
+  };
+  boilerRoom: BoilerRoomSystems;
+  pumpRoom: {
+    noVisibleWaterAccumulation: string;
+    pressureReading1: string;
+    pressureReading2: string;
+    domesticWaterLines: string;
+    notes: string;
+  };
+}
+
 export interface IncidentEntry {
   time: string;
   systemArea: string;
@@ -82,6 +128,7 @@ export interface DailyReportPayload {
   coverageMatrix: CoverageMatrixRow[];
   commonAreas: ChecklistItem[];
   temperatures: TemperatureReadings;
+  criticalWaterStructuralChecks: CriticalWaterStructuralChecks;
   riskControls: ChecklistItem[];
   incidents: IncidentEntry[];
   incidentDocumentationReference: string;
@@ -152,6 +199,33 @@ function createChecklistItem(label: string): ChecklistItem {
   };
 }
 
+function createBoilerUnitStatus(): BoilerUnitStatus {
+  return {
+    functioning: "",
+    loadPercent: "",
+    sh1Temp: "",
+    sh2Temp: "",
+    sh3Temp: "",
+    dhwTemp: "",
+  };
+}
+
+function createBoilerRoomSystems(): BoilerRoomSystems {
+  return {
+    boiler1: createBoilerUnitStatus(),
+    boiler2: createBoilerUnitStatus(),
+    gaugeLeftSuctionPsi: "",
+    gaugeRightDischargePsi: "",
+    pump1SuctionPsi: "",
+    pump1DischargePsi: "",
+    pump2SuctionPsi: "",
+    pump2DischargePsi: "",
+    airCompressorPsi: "",
+    floorDrainClear: "",
+    musicStatus: "",
+  };
+}
+
 function createIncidentEntry(): IncidentEntry {
   return {
     time: "",
@@ -209,6 +283,28 @@ export function createDefaultDailyReportPayload(now = new Date()): DailyReportPa
       pumpRoom: "",
       boilerRoom: "",
       atrium: "",
+    },
+    criticalWaterStructuralChecks: {
+      buildingMainShutoff: {
+        locationFound: "",
+        valveCondition: "",
+        accessible: "",
+        signageIntact: "",
+        leaks: "",
+      },
+      pumpSprinklerRoom: {
+        roomTemperature: "",
+        pumpMotorDrainClogged: "",
+        notes: "secure; no leaks; gauges normal; pump controller normal; housekeeping compliant",
+      },
+      boilerRoom: createBoilerRoomSystems(),
+      pumpRoom: {
+        noVisibleWaterAccumulation: "",
+        pressureReading1: "",
+        pressureReading2: "",
+        domesticWaterLines: "",
+        notes: "",
+      },
     },
     riskControls: RISK_CONTROL_ITEMS.map(createChecklistItem),
     incidents: [createIncidentEntry()],
@@ -362,6 +458,15 @@ export function normalizeDailyReportPayload(input: unknown): DailyReportPayload 
   const normalizedDate = asString(metadata.date) || defaults.metadata.date;
 
   const temperaturesInput = (payload.temperatures as Record<string, unknown> | undefined) || {};
+  const criticalChecksInput = (payload.criticalWaterStructuralChecks as Record<string, unknown> | undefined) || {};
+  const buildingMainShutoffInput =
+    (criticalChecksInput.buildingMainShutoff as Record<string, unknown> | undefined) || {};
+  const pumpSprinklerRoomInput =
+    (criticalChecksInput.pumpSprinklerRoom as Record<string, unknown> | undefined) || {};
+  const boilerRoomInput = (criticalChecksInput.boilerRoom as Record<string, unknown> | undefined) || {};
+  const boiler1Input = (boilerRoomInput.boiler1 as Record<string, unknown> | undefined) || {};
+  const boiler2Input = (boilerRoomInput.boiler2 as Record<string, unknown> | undefined) || {};
+  const pumpRoomChecksInput = (criticalChecksInput.pumpRoom as Record<string, unknown> | undefined) || {};
   const fireAlarmMetaInput = (payload.fireAlarmMeta as Record<string, unknown> | undefined) || {};
 
   return {
@@ -383,6 +488,56 @@ export function normalizeDailyReportPayload(input: unknown): DailyReportPayload 
       pumpRoom: asString(temperaturesInput.pumpRoom),
       boilerRoom: asString(temperaturesInput.boilerRoom),
       atrium: asString(temperaturesInput.atrium),
+    },
+    criticalWaterStructuralChecks: {
+      buildingMainShutoff: {
+        locationFound: asString(buildingMainShutoffInput.locationFound),
+        valveCondition: asString(buildingMainShutoffInput.valveCondition),
+        accessible: asString(buildingMainShutoffInput.accessible),
+        signageIntact: asString(buildingMainShutoffInput.signageIntact),
+        leaks: asString(buildingMainShutoffInput.leaks),
+      },
+      pumpSprinklerRoom: {
+        roomTemperature: asString(pumpSprinklerRoomInput.roomTemperature),
+        pumpMotorDrainClogged: asString(pumpSprinklerRoomInput.pumpMotorDrainClogged),
+        notes:
+          asString(pumpSprinklerRoomInput.notes) ||
+          defaults.criticalWaterStructuralChecks.pumpSprinklerRoom.notes,
+      },
+      boilerRoom: {
+        boiler1: {
+          functioning: asString(boiler1Input.functioning),
+          loadPercent: asString(boiler1Input.loadPercent),
+          sh1Temp: asString(boiler1Input.sh1Temp),
+          sh2Temp: asString(boiler1Input.sh2Temp),
+          sh3Temp: asString(boiler1Input.sh3Temp),
+          dhwTemp: asString(boiler1Input.dhwTemp),
+        },
+        boiler2: {
+          functioning: asString(boiler2Input.functioning),
+          loadPercent: asString(boiler2Input.loadPercent),
+          sh1Temp: asString(boiler2Input.sh1Temp),
+          sh2Temp: asString(boiler2Input.sh2Temp),
+          sh3Temp: asString(boiler2Input.sh3Temp),
+          dhwTemp: asString(boiler2Input.dhwTemp),
+        },
+        gaugeLeftSuctionPsi: asString(boilerRoomInput.gaugeLeftSuctionPsi),
+        gaugeRightDischargePsi: asString(boilerRoomInput.gaugeRightDischargePsi),
+        pump1SuctionPsi: asString(boilerRoomInput.pump1SuctionPsi),
+        pump1DischargePsi: asString(boilerRoomInput.pump1DischargePsi),
+        pump2SuctionPsi: asString(boilerRoomInput.pump2SuctionPsi),
+        pump2DischargePsi: asString(boilerRoomInput.pump2DischargePsi),
+        airCompressorPsi: asString(boilerRoomInput.airCompressorPsi),
+        floorDrainClear: asString(boilerRoomInput.floorDrainClear),
+        musicStatus: asString(boilerRoomInput.musicStatus),
+      },
+      pumpRoom: {
+        noVisibleWaterAccumulation: asString(pumpRoomChecksInput.noVisibleWaterAccumulation),
+        pressureReading1: asString(pumpRoomChecksInput.pressureReading1),
+        pressureReading2: asString(pumpRoomChecksInput.pressureReading2),
+        domesticWaterLines: asString(pumpRoomChecksInput.domesticWaterLines),
+        notes: asString(pumpRoomChecksInput.notes),
+      },
     },
     riskControls: normalizeChecklist(payload.riskControls, RISK_CONTROL_ITEMS),
     incidents: normalizeIncidents(payload.incidents),

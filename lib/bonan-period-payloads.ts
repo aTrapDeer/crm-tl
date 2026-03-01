@@ -174,8 +174,7 @@ export interface MonthlyFireExtinguisherRow {
 export interface MonthlyEmergencyLightingRow {
   date: string;
   areaDevice: string;
-  duration: string;
-  passFail: string;
+  condition: string;
   correctiveActionWorkOrder: string;
   initials: string;
 }
@@ -462,8 +461,7 @@ function makeMonthlyEmergencyLightingRow(): MonthlyEmergencyLightingRow {
   return {
     date: "",
     areaDevice: "",
-    duration: "",
-    passFail: "",
+    condition: "Good",
     correctiveActionWorkOrder: "",
     initials: "",
   };
@@ -959,8 +957,7 @@ export function normalizeMonthlyReportPayload(input: unknown, fallbackDate = get
         (row) => ({
           date: asString(row.date),
           areaDevice: asString(row.areaDevice),
-          duration: asString(row.duration),
-          passFail: asString(row.passFail),
+          condition: asString(row.condition || row.passFail) || "Good",
           correctiveActionWorkOrder: asString(row.correctiveActionWorkOrder),
           initials: asString(row.initials),
         })

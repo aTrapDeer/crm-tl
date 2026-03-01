@@ -34,6 +34,8 @@ export default function EmployeeDashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [workOrderCount, setWorkOrderCount] = useState(0);
   const [dailyReportCount, setDailyReportCount] = useState(0);
+  const [weeklyReportCount, setWeeklyReportCount] = useState(0);
+  const [monthlyReportCount, setMonthlyReportCount] = useState(0);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [updates, setUpdates] = useState<ProjectUpdate[]>([]);
@@ -83,19 +85,29 @@ export default function EmployeeDashboard() {
 
   async function fetchOperationsSummary() {
     try {
-      const [workOrdersRes, dailyReportsRes] = await Promise.all([
+      const [workOrdersRes, dailyReportsRes, weeklyReportsRes, monthlyReportsRes] = await Promise.all([
         fetch("/api/work-orders"),
         fetch("/api/bonan/reports?report_type=daily"),
+        fetch("/api/bonan/reports?report_type=weekly"),
+        fetch("/api/bonan/reports?report_type=monthly"),
       ]);
 
       const workOrdersData = await workOrdersRes.json().catch(() => ({ workOrders: [] }));
       const dailyReportsData = await dailyReportsRes.json().catch(() => ({ reports: [] }));
+      const weeklyReportsData = await weeklyReportsRes.json().catch(() => ({ reports: [] }));
+      const monthlyReportsData = await monthlyReportsRes.json().catch(() => ({ reports: [] }));
 
       if (workOrdersRes.ok) {
         setWorkOrderCount((workOrdersData.workOrders || []).length);
       }
       if (dailyReportsRes.ok) {
         setDailyReportCount((dailyReportsData.reports || []).length);
+      }
+      if (weeklyReportsRes.ok) {
+        setWeeklyReportCount((weeklyReportsData.reports || []).length);
+      }
+      if (monthlyReportsRes.ok) {
+        setMonthlyReportCount((monthlyReportsData.reports || []).length);
       }
     } catch (error) {
       console.error("Failed to fetch employee operations summary:", error);
@@ -198,7 +210,7 @@ export default function EmployeeDashboard() {
         </p>
       </div>
 
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <Link
           href="/dashboard/work-orders"
           className="tl-card p-5 border border-blue-200 bg-blue-50/70 hover:shadow-lg transition"
@@ -224,6 +236,34 @@ export default function EmployeeDashboard() {
           </p>
           <p className="mt-3 inline-flex rounded-full bg-white/70 px-2.5 py-1 text-xs font-semibold text-emerald-800">
             {dailyReportCount} reports
+          </p>
+        </Link>
+
+        <Link
+          href="/dashboard/bonan/weekly"
+          className="tl-card p-5 border border-teal-200 bg-teal-50/70 hover:shadow-lg transition"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Bonan</p>
+          <h3 className="text-lg font-semibold text-teal-950 mt-2">Weekly Reports</h3>
+          <p className="text-sm text-teal-900/80 mt-2">
+            Review and update weekly system checks tied to daily walkthroughs.
+          </p>
+          <p className="mt-3 inline-flex rounded-full bg-white/70 px-2.5 py-1 text-xs font-semibold text-teal-800">
+            {weeklyReportCount} reports
+          </p>
+        </Link>
+
+        <Link
+          href="/dashboard/bonan/monthly"
+          className="tl-card p-5 border border-amber-200 bg-amber-50/70 hover:shadow-lg transition"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Bonan</p>
+          <h3 className="text-lg font-semibold text-amber-950 mt-2">Monthly Reports</h3>
+          <p className="text-sm text-amber-900/80 mt-2">
+            Access monthly checklists and summary views connected to weekly and daily reports.
+          </p>
+          <p className="mt-3 inline-flex rounded-full bg-white/70 px-2.5 py-1 text-xs font-semibold text-amber-800">
+            {monthlyReportCount} reports
           </p>
         </Link>
       </section>

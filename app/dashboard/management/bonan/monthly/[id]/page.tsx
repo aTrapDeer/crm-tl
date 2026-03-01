@@ -528,8 +528,7 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
                 <tr>
                   <th className="px-2.5 py-2 text-left font-semibold">Date</th>
                   <th className="px-2.5 py-2 text-left font-semibold">Area / Device</th>
-                  <th className="px-2.5 py-2 text-left font-semibold">Duration</th>
-                  <th className="px-2.5 py-2 text-left font-semibold">P/F</th>
+                  <th className="px-2.5 py-2 text-left font-semibold">Condition (Good/Bad)</th>
                   <th className="px-2.5 py-2 text-left font-semibold">Corrective Action / WO#</th>
                   <th className="px-2.5 py-2 text-left font-semibold">Init.</th>
                 </tr>
@@ -539,8 +538,12 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
                   <tr key={`light-${rowIndex}`}>
                     <td className="px-2.5 py-1.5"><input type="date" value={row.date} onChange={(event) => updateEmergencyRow(rowIndex, "date", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
                     <td className="px-2.5 py-1.5"><input value={row.areaDevice} onChange={(event) => updateEmergencyRow(rowIndex, "areaDevice", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
-                    <td className="px-2.5 py-1.5"><input value={row.duration} onChange={(event) => updateEmergencyRow(rowIndex, "duration", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
-                    <td className="px-2.5 py-1.5"><input value={row.passFail} onChange={(event) => updateEmergencyRow(rowIndex, "passFail", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
+                    <td className="px-2.5 py-1.5">
+                      <select value={row.condition} onChange={(event) => updateEmergencyRow(rowIndex, "condition", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50">
+                        <option value="Good">Good</option>
+                        <option value="Bad">Bad</option>
+                      </select>
+                    </td>
                     <td className="px-2.5 py-1.5"><input value={row.correctiveActionWorkOrder} onChange={(event) => updateEmergencyRow(rowIndex, "correctiveActionWorkOrder", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
                     <td className="px-2.5 py-1.5"><input value={row.initials} onChange={(event) => updateEmergencyRow(rowIndex, "initials", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
                   </tr>

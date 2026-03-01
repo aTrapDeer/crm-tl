@@ -11,7 +11,7 @@ export default function BonanMonthlySummariesPage() {
       createLabel="+ New Monthly Summary"
       detailPathBase="/dashboard/bonan/monthly-summaries"
       showCreate={false}
-      allowedRoles={["admin", "client"]}
+      allowedRoles={["admin", "employee", "client"]}
       disallowedRedirectPath="/dashboard/bonan/monthly"
       contextLinks={[
         { href: "/dashboard/bonan/monthly", label: "Monthly Checklists" },

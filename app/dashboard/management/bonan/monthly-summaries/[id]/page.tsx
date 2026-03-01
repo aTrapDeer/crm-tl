@@ -95,10 +95,6 @@ export default function BonanMonthlySummaryDetailPage({ params }: { params: Prom
         }
 
         const role = sessionData.user.role as UserRole;
-        if (role === "employee") {
-          router.push(`/dashboard/bonan/monthly/${id}`);
-          return;
-        }
         setUserRole(role);
 
         const reportRes = await fetch(`/api/bonan/reports/${id}`);
@@ -210,7 +206,7 @@ export default function BonanMonthlySummaryDetailPage({ params }: { params: Prom
                 {statusLabel(report.status)}
               </span>
               <p className="text-[10px] text-(--text)/45 mt-1">Updated {formatUsCentralDateTime(report.updated_at)}</p>
-              {userRole === "admin" && (
+              {userRole !== "client" && (
                 <Link href={`/dashboard/bonan/monthly/${report.id}`} className="text-xs font-semibold text-blue-700 hover:underline">
                   Open Checklist Editor
                 </Link>

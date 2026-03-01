@@ -439,6 +439,28 @@ function asNumber(value: unknown): number {
   return 0;
 }
 
+function isIsoWeekday(isoDate: string): boolean {
+  const parsed = new Date(`${isoDate}T00:00:00Z`);
+  if (!Number.isFinite(parsed.getTime())) return false;
+  const day = parsed.getUTCDay();
+  return day >= 1 && day <= 5;
+}
+
+function countWeekdaysInRange(startIsoDate: string, endIsoDate: string): number {
+  const start = new Date(`${startIsoDate}T00:00:00Z`);
+  const end = new Date(`${endIsoDate}T00:00:00Z`);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || start > end) return 0;
+
+  let weekdays = 0;
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    const day = cursor.getUTCDay();
+    if (day >= 1 && day <= 5) weekdays += 1;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return weekdays;
+}
+
 function getReportPeriod(report: BonanReport): { start: string; end: string; days: number } {
   if (report.report_type === "weekly") {
     return {
@@ -551,6 +573,14 @@ export async function getBonanCollectiveSummary(reportId: string): Promise<Bonan
     work_order_number: (row.work_order_number as string | null) || null,
   }));
 
+  const complianceDailyReports =
+    report.report_type === "daily"
+      ? dailyReports
+      : dailyReports.filter((row) => isIsoWeekday(row.report_date));
+  const complianceDailyDue = report.report_type === "daily"
+    ? 1
+    : countWeekdaysInRange(period.start, period.end);
+
   const incidentsRow = incidentsResult.rows[0] || {};
   const workOrdersRow = workOrdersResult.rows[0] || {};
 
@@ -561,10 +591,10 @@ export async function getBonanCollectiveSummary(reportId: string): Promise<Bonan
     period_end: period.end,
     period_days: period.days,
     daily_reports: {
-      due: report.report_type === "daily" ? 1 : period.days,
-      total: dailyReports.length,
-      draft: dailyReports.filter((row) => row.status === "draft").length,
-      submitted: dailyReports.filter((row) => row.status === "submitted").length,
+      due: complianceDailyDue,
+      total: complianceDailyReports.length,
+      draft: complianceDailyReports.filter((row) => row.status === "draft").length,
+      submitted: complianceDailyReports.filter((row) => row.status === "submitted").length,
       linked: dailyReports,
     },
     weekly_reports: {

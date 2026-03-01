@@ -200,9 +200,19 @@ function isIncidentEntryFilled(row: IncidentEntry): boolean {
 function AreaStatusOptions() {
   return (
     <>
-      <option value="O">✅</option>
-      <option value="D">❌</option>
+      <option value="O">OK</option>
+      <option value="D">Deficiency</option>
       <option value="NA">NA</option>
+    </>
+  );
+}
+
+function YesNoOptions() {
+  return (
+    <>
+      <option value="">Select</option>
+      <option value="Yes">Yes</option>
+      <option value="No">No</option>
     </>
   );
 }
@@ -541,6 +551,17 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
       [field]: current[field].map((item, itemIndex) =>
         itemIndex === index ? { ...item, ...nextValue } : item
       ),
+    }));
+  }
+
+  function updateCriticalWaterStructuralChecks(
+    updater: (
+      current: DailyReportPayload["criticalWaterStructuralChecks"]
+    ) => DailyReportPayload["criticalWaterStructuralChecks"]
+  ) {
+    updatePayload((current) => ({
+      ...current,
+      criticalWaterStructuralChecks: updater(current.criticalWaterStructuralChecks),
     }));
   }
 
@@ -1154,111 +1175,120 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
 
         {/* ── Associated Work Orders ── */}
         <section className="rounded-2xl border border-(--border)/20 bg-white/80 backdrop-blur-sm overflow-hidden">
-          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-(--border)/10">
-            <h2 className="text-sm font-semibold text-(--text)">
-              Work Orders
-              {associatedWorkOrders.length > 0 && (
-                <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-100 px-1.5 text-[10px] font-bold text-blue-700">
-                  {associatedWorkOrders.length}
-                </span>
-              )}
-            </h2>
-            <button
-              type="button"
-              onClick={() => void handleCreateAssociatedWorkOrder()}
-              disabled={creatingAssociatedWorkOrder || creatingAssociatedIncidentReport}
-              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-700 transition disabled:opacity-60"
-            >
-              {creatingAssociatedWorkOrder ? "Creating..." : "+ New WO"}
-            </button>
+          <div className="px-4 py-3 border-b border-(--border)/10">
+            <h2 className="text-sm font-semibold text-(--text)">Work Orders | Incident Reports</h2>
+            <p className="text-[11px] text-(--text)/50 mt-0.5">Linked follow-up records for this daily walkthrough</p>
           </div>
-          {associatedWorkOrders.length === 0 ? (
-            <p className="px-4 py-3 text-xs text-(--text)/50">
-              No work orders linked yet. Create one from any section.
-            </p>
-          ) : (
-            <div className="divide-y divide-(--border)/10">
-              {associatedWorkOrders.map((associated) => (
-                <Link
-                  key={associated.id}
-                  href={`/dashboard/management/work-orders/${associated.work_order_id}`}
-                  className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-(--bg) transition"
-                >
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-(--text)">WO #{associated.work_order_number}</p>
-                    <p className="text-[11px] text-(--text)/50 mt-0.5 truncate">{associated.description}</p>
-                  </div>
-                  <div className="shrink-0 flex items-center gap-2">
-                    <span className={classNames(
-                      "rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize",
-                      associated.work_completed === "completed" ? "bg-green-100 text-green-700"
-                        : associated.work_completed === "in_progress" ? "bg-blue-100 text-blue-700"
-                        : "bg-slate-100 text-slate-600"
-                    )}>
-                      {associated.work_completed.replace("_", " ")}
-                    </span>
-                    <svg className="h-3.5 w-3.5 text-(--text)/30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
 
-        <section className="rounded-2xl border border-(--border)/20 bg-white/80 backdrop-blur-sm overflow-hidden">
-          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-(--border)/10">
-            <h2 className="text-sm font-semibold text-(--text)">
-              Incident Reports
-              {associatedIncidentReports.length > 0 && (
-                <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-100 px-1.5 text-[10px] font-bold text-emerald-700">
-                  {associatedIncidentReports.length}
-                </span>
-              )}
-            </h2>
-            <button
-              type="button"
-              onClick={() => void handleCreateAssociatedIncidentReport()}
-              disabled={creatingAssociatedIncidentReport}
-              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-700 transition disabled:opacity-60"
-            >
-              {creatingAssociatedIncidentReport ? "Creating..." : "+ New IR"}
-            </button>
-          </div>
-          {associatedIncidentReports.length === 0 ? (
-            <p className="px-4 py-3 text-xs text-(--text)/50">
-              No incident reports linked yet. Create one from any section.
-            </p>
-          ) : (
-            <div className="divide-y divide-(--border)/10">
-              {associatedIncidentReports.map((associated) => (
-                <Link
-                  key={associated.id}
-                  href={`/dashboard/management/incident-reports/${associated.id}`}
-                  className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-(--bg) transition"
-                >
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-(--text)">{associated.report_number}</p>
-                    <p className="text-[11px] text-(--text)/50 mt-0.5 truncate">{associated.description}</p>
-                  </div>
-                  <div className="shrink-0 flex items-center gap-2">
-                    <span
-                      className={classNames(
-                        "rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize",
-                        associated.status === "closed"
-                          ? "bg-green-100 text-green-700"
-                          : associated.status === "in_progress"
-                            ? "bg-blue-100 text-blue-700"
-                            : "bg-amber-100 text-amber-700"
-                      )}
-                    >
-                      {associated.status.replace("_", " ")}
+          <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-(--border)/10">
+            <div className="min-w-0">
+              <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-(--border)/10">
+                <h3 className="text-xs font-semibold text-(--text)">
+                  Work Orders
+                  {associatedWorkOrders.length > 0 && (
+                    <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-100 px-1.5 text-[10px] font-bold text-blue-700">
+                      {associatedWorkOrders.length}
                     </span>
-                    <svg className="h-3.5 w-3.5 text-(--text)/30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                  </div>
-                </Link>
-              ))}
+                  )}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => void handleCreateAssociatedWorkOrder()}
+                  disabled={creatingAssociatedWorkOrder || creatingAssociatedIncidentReport}
+                  className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-700 transition disabled:opacity-60"
+                >
+                  {creatingAssociatedWorkOrder ? "Creating..." : "+ New WO"}
+                </button>
+              </div>
+              {associatedWorkOrders.length === 0 ? (
+                <p className="px-4 py-3 text-xs text-(--text)/50">
+                  No work orders linked yet. Create one from any section.
+                </p>
+              ) : (
+                <div className="divide-y divide-(--border)/10">
+                  {associatedWorkOrders.map((associated) => (
+                    <Link
+                      key={associated.id}
+                      href={`/dashboard/management/work-orders/${associated.work_order_id}`}
+                      className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-(--bg) transition"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-(--text)">WO #{associated.work_order_number}</p>
+                        <p className="text-[11px] text-(--text)/50 mt-0.5 truncate">{associated.description}</p>
+                      </div>
+                      <div className="shrink-0 flex items-center gap-2">
+                        <span className={classNames(
+                          "rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize",
+                          associated.work_completed === "completed" ? "bg-green-100 text-green-700"
+                            : associated.work_completed === "in_progress" ? "bg-blue-100 text-blue-700"
+                            : "bg-slate-100 text-slate-600"
+                        )}>
+                          {associated.work_completed.replace("_", " ")}
+                        </span>
+                        <svg className="h-3.5 w-3.5 text-(--text)/30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+
+            <div className="min-w-0">
+              <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-(--border)/10">
+                <h3 className="text-xs font-semibold text-(--text)">
+                  Incident Reports
+                  {associatedIncidentReports.length > 0 && (
+                    <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-100 px-1.5 text-[10px] font-bold text-emerald-700">
+                      {associatedIncidentReports.length}
+                    </span>
+                  )}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => void handleCreateAssociatedIncidentReport()}
+                  disabled={creatingAssociatedIncidentReport || creatingAssociatedWorkOrder}
+                  className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-700 transition disabled:opacity-60"
+                >
+                  {creatingAssociatedIncidentReport ? "Creating..." : "+ New IR"}
+                </button>
+              </div>
+              {associatedIncidentReports.length === 0 ? (
+                <p className="px-4 py-3 text-xs text-(--text)/50">
+                  No incident reports linked yet. Create one from any section.
+                </p>
+              ) : (
+                <div className="divide-y divide-(--border)/10">
+                  {associatedIncidentReports.map((associated) => (
+                    <Link
+                      key={associated.id}
+                      href={`/dashboard/management/incident-reports/${associated.id}`}
+                      className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-(--bg) transition"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-(--text)">{associated.report_number}</p>
+                        <p className="text-[11px] text-(--text)/50 mt-0.5 truncate">{associated.description}</p>
+                      </div>
+                      <div className="shrink-0 flex items-center gap-2">
+                        <span
+                          className={classNames(
+                            "rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize",
+                            associated.status === "closed"
+                              ? "bg-green-100 text-green-700"
+                              : associated.status === "in_progress"
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-amber-100 text-amber-700"
+                          )}
+                        >
+                          {associated.status.replace("_", " ")}
+                        </span>
+                        <svg className="h-3.5 w-3.5 text-(--text)/30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </section>
 
         {/* ── Header Fields ── */}
@@ -1745,6 +1775,325 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                     className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) text-center font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-(--border)/20 bg-white/80 backdrop-blur-sm overflow-hidden">
+              <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-(--border)/10">
+                <div>
+                  <h2 className="text-sm font-semibold text-(--text)">Critical Water & Structural Checks</h2>
+                  <p className="text-[11px] text-(--text)/50 mt-0.5">Main shutoff, sprinkler room, boiler room, and pump room checks</p>
+                </div>
+                <SectionActionIconButton
+                  onClick={() =>
+                    handleSectionActionMenuOpen({
+                      sectionKey: "critical-water-structural",
+                      sectionName: "Critical Water & Structural Checks",
+                      details:
+                        `Main shutoff: ${payload.criticalWaterStructuralChecks.buildingMainShutoff.locationFound || "n/a"}, ` +
+                        `Pump sprinkler temp: ${payload.criticalWaterStructuralChecks.pumpSprinklerRoom.roomTemperature || "n/a"}, ` +
+                        `Boiler 1 function: ${payload.criticalWaterStructuralChecks.boilerRoom.boiler1.functioning || "n/a"}`,
+                    })
+                  }
+                  disabled={creatingAssociatedWorkOrder || creatingAssociatedIncidentReport}
+                  linked={isSectionLinked("critical-water-structural")}
+                  title={
+                    isSectionLinked("critical-water-structural")
+                      ? "Open linked record for Critical Water & Structural Checks"
+                      : "Create follow-up record for Critical Water & Structural Checks"
+                  }
+                />
+              </div>
+
+              <div className="space-y-4 px-4 py-4">
+                <div className="rounded-xl border border-(--border)/20 bg-white p-3">
+                  <h3 className="text-xs font-semibold text-(--text)">Building Main Shutoff</h3>
+                  <div className="mt-2 grid grid-cols-1 md:grid-cols-5 gap-2">
+                    <label className="space-y-1 text-xs">
+                      <span className="font-medium text-(--text)/60">Location Found</span>
+                      <select
+                        value={payload.criticalWaterStructuralChecks.buildingMainShutoff.locationFound}
+                        onChange={(event) =>
+                          updateCriticalWaterStructuralChecks((checks) => ({
+                            ...checks,
+                            buildingMainShutoff: { ...checks.buildingMainShutoff, locationFound: event.target.value },
+                          }))
+                        }
+                        disabled={isReadOnly}
+                        className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50"
+                      >
+                        <YesNoOptions />
+                      </select>
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="font-medium text-(--text)/60">Valve Condition</span>
+                      <select
+                        value={payload.criticalWaterStructuralChecks.buildingMainShutoff.valveCondition}
+                        onChange={(event) =>
+                          updateCriticalWaterStructuralChecks((checks) => ({
+                            ...checks,
+                            buildingMainShutoff: { ...checks.buildingMainShutoff, valveCondition: event.target.value },
+                          }))
+                        }
+                        disabled={isReadOnly}
+                        className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50"
+                      >
+                        <option value="">Select</option>
+                        <option value="Check">Check</option>
+                        <option value="X">X</option>
+                      </select>
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="font-medium text-(--text)/60">Accessible</span>
+                      <select
+                        value={payload.criticalWaterStructuralChecks.buildingMainShutoff.accessible}
+                        onChange={(event) =>
+                          updateCriticalWaterStructuralChecks((checks) => ({
+                            ...checks,
+                            buildingMainShutoff: { ...checks.buildingMainShutoff, accessible: event.target.value },
+                          }))
+                        }
+                        disabled={isReadOnly}
+                        className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50"
+                      >
+                        <YesNoOptions />
+                      </select>
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="font-medium text-(--text)/60">Signage Intact</span>
+                      <select
+                        value={payload.criticalWaterStructuralChecks.buildingMainShutoff.signageIntact}
+                        onChange={(event) =>
+                          updateCriticalWaterStructuralChecks((checks) => ({
+                            ...checks,
+                            buildingMainShutoff: { ...checks.buildingMainShutoff, signageIntact: event.target.value },
+                          }))
+                        }
+                        disabled={isReadOnly}
+                        className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50"
+                      >
+                        <YesNoOptions />
+                      </select>
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="font-medium text-(--text)/60">Leaks</span>
+                      <select
+                        value={payload.criticalWaterStructuralChecks.buildingMainShutoff.leaks}
+                        onChange={(event) =>
+                          updateCriticalWaterStructuralChecks((checks) => ({
+                            ...checks,
+                            buildingMainShutoff: { ...checks.buildingMainShutoff, leaks: event.target.value },
+                          }))
+                        }
+                        disabled={isReadOnly}
+                        className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50"
+                      >
+                        <YesNoOptions />
+                      </select>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-(--border)/20 bg-white p-3">
+                  <h3 className="text-xs font-semibold text-(--text)">Pump Sprinkler Room</h3>
+                  <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <label className="space-y-1 text-xs">
+                      <span className="font-medium text-(--text)/60">Room Temperature</span>
+                      <input
+                        value={payload.criticalWaterStructuralChecks.pumpSprinklerRoom.roomTemperature}
+                        onChange={(event) =>
+                          updateCriticalWaterStructuralChecks((checks) => ({
+                            ...checks,
+                            pumpSprinklerRoom: { ...checks.pumpSprinklerRoom, roomTemperature: event.target.value },
+                          }))
+                        }
+                        disabled={isReadOnly}
+                        className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50"
+                      />
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="font-medium text-(--text)/60">Pump Motor Drain Clogged</span>
+                      <select
+                        value={payload.criticalWaterStructuralChecks.pumpSprinklerRoom.pumpMotorDrainClogged}
+                        onChange={(event) =>
+                          updateCriticalWaterStructuralChecks((checks) => ({
+                            ...checks,
+                            pumpSprinklerRoom: { ...checks.pumpSprinklerRoom, pumpMotorDrainClogged: event.target.value },
+                          }))
+                        }
+                        disabled={isReadOnly}
+                        className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50"
+                      >
+                        <YesNoOptions />
+                      </select>
+                    </label>
+                    <label className="space-y-1 text-xs md:col-span-3">
+                      <span className="font-medium text-(--text)/60">Sprinkler Pump Room Notes</span>
+                      <textarea
+                        rows={2}
+                        value={payload.criticalWaterStructuralChecks.pumpSprinklerRoom.notes}
+                        onChange={(event) =>
+                          updateCriticalWaterStructuralChecks((checks) => ({
+                            ...checks,
+                            pumpSprinklerRoom: { ...checks.pumpSprinklerRoom, notes: event.target.value },
+                          }))
+                        }
+                        disabled={isReadOnly}
+                        className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-(--border)/20 bg-white p-3">
+                  <h3 className="text-xs font-semibold text-(--text)">Boiler Room</h3>
+                  <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {([
+                      { key: "boiler1", label: "Boiler 1" },
+                      { key: "boiler2", label: "Boiler 2" },
+                    ] as const).map((boiler) => (
+                      <div key={boiler.key} className="rounded-lg border border-(--border)/20 p-2">
+                        <p className="text-[11px] font-semibold text-(--text)">{boiler.label}</p>
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                          <label className="space-y-1 text-xs">
+                            <span className="font-medium text-(--text)/60">Function</span>
+                            <select
+                              value={payload.criticalWaterStructuralChecks.boilerRoom[boiler.key].functioning}
+                              onChange={(event) =>
+                                updateCriticalWaterStructuralChecks((checks) => ({
+                                  ...checks,
+                                  boilerRoom: {
+                                    ...checks.boilerRoom,
+                                    [boiler.key]: {
+                                      ...checks.boilerRoom[boiler.key],
+                                      functioning: event.target.value,
+                                    },
+                                  },
+                                }))
+                              }
+                              disabled={isReadOnly}
+                              className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50"
+                            >
+                              <YesNoOptions />
+                            </select>
+                          </label>
+                          <label className="space-y-1 text-xs">
+                            <span className="font-medium text-(--text)/60">Load %</span>
+                            <input
+                              value={payload.criticalWaterStructuralChecks.boilerRoom[boiler.key].loadPercent}
+                              onChange={(event) =>
+                                updateCriticalWaterStructuralChecks((checks) => ({
+                                  ...checks,
+                                  boilerRoom: {
+                                    ...checks.boilerRoom,
+                                    [boiler.key]: {
+                                      ...checks.boilerRoom[boiler.key],
+                                      loadPercent: event.target.value,
+                                    },
+                                  },
+                                }))
+                              }
+                              disabled={isReadOnly}
+                              className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50"
+                            />
+                          </label>
+                          <label className="space-y-1 text-xs col-span-2">
+                            <span className="font-medium text-(--text)/60">SH1 / SH2 / SH3 / DHW Temps</span>
+                            <div className="grid grid-cols-4 gap-1">
+                              {(["sh1Temp", "sh2Temp", "sh3Temp", "dhwTemp"] as const).map((field) => (
+                                <input
+                                  key={`${boiler.key}-${field}`}
+                                  value={payload.criticalWaterStructuralChecks.boilerRoom[boiler.key][field]}
+                                  onChange={(event) =>
+                                    updateCriticalWaterStructuralChecks((checks) => ({
+                                      ...checks,
+                                      boilerRoom: {
+                                        ...checks.boilerRoom,
+                                        [boiler.key]: {
+                                          ...checks.boilerRoom[boiler.key],
+                                          [field]: event.target.value,
+                                        },
+                                      },
+                                    }))
+                                  }
+                                  disabled={isReadOnly}
+                                  placeholder={field === "dhwTemp" ? "DHW" : field.replace("Temp", "").toUpperCase()}
+                                  className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50"
+                                />
+                              ))}
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <label className="space-y-1 text-xs">
+                      <span className="font-medium text-(--text)/60">Gauge Left Suction PSI</span>
+                      <input value={payload.criticalWaterStructuralChecks.boilerRoom.gaugeLeftSuctionPsi} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, gaugeLeftSuctionPsi: event.target.value } }))} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50" />
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="font-medium text-(--text)/60">Gauge Right Discharge PSI</span>
+                      <input value={payload.criticalWaterStructuralChecks.boilerRoom.gaugeRightDischargePsi} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, gaugeRightDischargePsi: event.target.value } }))} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50" />
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="font-medium text-(--text)/60">Pump 1 Suction / Discharge PSI</span>
+                      <div className="grid grid-cols-2 gap-1">
+                        <input value={payload.criticalWaterStructuralChecks.boilerRoom.pump1SuctionPsi} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, pump1SuctionPsi: event.target.value } }))} disabled={isReadOnly} placeholder="Suction" className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50" />
+                        <input value={payload.criticalWaterStructuralChecks.boilerRoom.pump1DischargePsi} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, pump1DischargePsi: event.target.value } }))} disabled={isReadOnly} placeholder="Discharge" className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50" />
+                      </div>
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="font-medium text-(--text)/60">Pump 2 Suction / Discharge PSI</span>
+                      <div className="grid grid-cols-2 gap-1">
+                        <input value={payload.criticalWaterStructuralChecks.boilerRoom.pump2SuctionPsi} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, pump2SuctionPsi: event.target.value } }))} disabled={isReadOnly} placeholder="Suction" className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50" />
+                        <input value={payload.criticalWaterStructuralChecks.boilerRoom.pump2DischargePsi} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, pump2DischargePsi: event.target.value } }))} disabled={isReadOnly} placeholder="Discharge" className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50" />
+                      </div>
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="font-medium text-(--text)/60">Air Compressor PSI</span>
+                      <input value={payload.criticalWaterStructuralChecks.boilerRoom.airCompressorPsi} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, airCompressorPsi: event.target.value } }))} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50" />
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="font-medium text-(--text)/60">Floor Drain Clear</span>
+                      <select value={payload.criticalWaterStructuralChecks.boilerRoom.floorDrainClear} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, floorDrainClear: event.target.value } }))} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50"><YesNoOptions /></select>
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="font-medium text-(--text)/60">Music</span>
+                      <select value={payload.criticalWaterStructuralChecks.boilerRoom.musicStatus} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, musicStatus: event.target.value } }))} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50">
+                        <option value="">Select</option>
+                        <option value="On">On</option>
+                        <option value="Off">Off</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-(--border)/20 bg-white p-3">
+                  <h3 className="text-xs font-semibold text-(--text)">Pump Room</h3>
+                  <div className="mt-2 grid grid-cols-1 md:grid-cols-4 gap-2">
+                    <label className="space-y-1 text-xs">
+                      <span className="font-medium text-(--text)/60">No Visible Water Accumulation</span>
+                      <select value={payload.criticalWaterStructuralChecks.pumpRoom.noVisibleWaterAccumulation} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, pumpRoom: { ...checks.pumpRoom, noVisibleWaterAccumulation: event.target.value } }))} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50"><YesNoOptions /></select>
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="font-medium text-(--text)/60">Pressure Reading 1</span>
+                      <input value={payload.criticalWaterStructuralChecks.pumpRoom.pressureReading1} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, pumpRoom: { ...checks.pumpRoom, pressureReading1: event.target.value } }))} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50" />
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="font-medium text-(--text)/60">Pressure Reading 2</span>
+                      <input value={payload.criticalWaterStructuralChecks.pumpRoom.pressureReading2} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, pumpRoom: { ...checks.pumpRoom, pressureReading2: event.target.value } }))} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50" />
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="font-medium text-(--text)/60">Domestic Water Lines</span>
+                      <input value={payload.criticalWaterStructuralChecks.pumpRoom.domesticWaterLines} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, pumpRoom: { ...checks.pumpRoom, domesticWaterLines: event.target.value } }))} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50" />
+                    </label>
+                    <label className="space-y-1 text-xs md:col-span-4">
+                      <span className="font-medium text-(--text)/60">Notes</span>
+                      <textarea rows={2} value={payload.criticalWaterStructuralChecks.pumpRoom.notes} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, pumpRoom: { ...checks.pumpRoom, notes: event.target.value } }))} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50" />
+                    </label>
+                  </div>
+                </div>
               </div>
             </section>
 
@@ -2826,3 +3175,4 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
     </div>
   );
 }
+

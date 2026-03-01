@@ -1,6 +1,6 @@
-const APP_CACHE = "bonan-app-cache-v1";
-const API_CACHE = "bonan-api-cache-v1";
-const STATIC_CACHE = "bonan-static-cache-v1";
+const APP_CACHE = "bonan-app-cache-v2";
+const API_CACHE = "bonan-api-cache-v2";
+const STATIC_CACHE = "bonan-static-cache-v2";
 const CACHE_NAMES = [APP_CACHE, API_CACHE, STATIC_CACHE];
 
 const PRECACHE_URLS = [

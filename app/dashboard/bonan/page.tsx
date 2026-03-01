@@ -42,6 +42,9 @@ export default function BonanDashboardPage() {
 
   const showChecklistWorkflows = userRole !== "client";
   const showReviewWorkflows = userRole !== "employee";
+  const monthlyLogsHref = userRole === "client"
+    ? "/dashboard/bonan/monthly-summaries"
+    : "/dashboard/bonan/monthly";
 
   const accessMode =
     userRole === "client"
@@ -151,7 +154,7 @@ export default function BonanDashboardPage() {
             </Link>
 
             <Link
-              href="/dashboard/bonan/monthly-summaries"
+              href={monthlyLogsHref}
               className="group relative flex flex-col justify-between rounded-2xl border border-slate-200 bg-white shadow-sm hover:border-blue-500 hover:ring-1 hover:ring-blue-500 hover:shadow-md transition-all overflow-hidden"
             >
               <div className="p-6 pb-0 flex-1">
@@ -167,7 +170,7 @@ export default function BonanDashboardPage() {
               </div>
               <div className="p-6 pt-5">
                 <div className="tl-btn w-full sm:w-fit px-5 py-2.5 text-sm">
-                  Open Summaries
+                  {userRole === "client" ? "Open Summaries" : "Open Monthly"}
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                   </svg>
@@ -262,7 +265,7 @@ export default function BonanDashboardPage() {
               </div>
               <div className="p-4 border-t border-slate-100 bg-slate-50/50 group-hover:bg-blue-50/30 transition-colors">
                 <Link 
-                  href="/dashboard/bonan/monthly-summaries" 
+                  href={monthlyLogsHref}
                   className="flex w-full items-center justify-center rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 border border-slate-200 shadow-sm group-hover:border-blue-200 group-hover:text-blue-700 transition-all"
                 >
                   View Monthly

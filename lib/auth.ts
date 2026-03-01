@@ -221,6 +221,13 @@ export async function deleteSession(sessionId: string): Promise<void> {
   });
 }
 
+export async function deleteSessionsForUser(userId: string): Promise<void> {
+  await turso.execute({
+    sql: `DELETE FROM sessions WHERE user_id = ?`,
+    args: [userId],
+  });
+}
+
 export async function login(
   email: string,
   password: string

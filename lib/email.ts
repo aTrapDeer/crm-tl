@@ -847,3 +847,42 @@ export async function sendUserPasswordResetEmail(data: {
     html: getEmailTemplate(content, "Password Reset"),
   });
 }
+
+export async function sendPasswordResetLinkEmail(data: {
+  to: string;
+  fullName: string;
+  resetUrl: string;
+}): Promise<boolean> {
+  const content = `
+    <h2 style="margin: 0 0 16px; color: #01224f; font-size: 20px; font-weight: 600;">
+      Reset Your Password
+    </h2>
+    <p style="margin: 0 0 16px; color: #0d3e8d; font-size: 16px; line-height: 1.6;">
+      Hi ${data.fullName || "there"},
+    </p>
+    <p style="margin: 0 0 24px; color: #0d3e8d; font-size: 16px; line-height: 1.6;">
+      We received a request to reset your password. Click the button below to choose a new password.
+    </p>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td align="center">
+          <a href="${data.resetUrl}" style="display: inline-block; padding: 16px 32px; background-color: #01224f; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; border-radius: 12px;">
+            Reset Password
+          </a>
+        </td>
+      </tr>
+    </table>
+    <p style="margin: 24px 0 0; color: #7ba8b3; font-size: 14px; line-height: 1.6;">
+      This link expires in 1 hour and can only be used once.
+    </p>
+    <p style="margin: 12px 0 0; color: #7ba8b3; font-size: 14px; line-height: 1.6;">
+      If you did not request this, you can safely ignore this email.
+    </p>
+  `;
+
+  return sendEmail({
+    to: data.to,
+    subject: "Reset your Taylor Leonard CRM password",
+    html: getEmailTemplate(content, "Reset Password"),
+  });
+}
