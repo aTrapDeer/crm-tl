@@ -1319,38 +1319,38 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
           </button>
           {!headerCollapsed && (
             <div id="daily-form-header-fields" className="border-t border-(--border)/10 px-4 py-4 space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <label className="space-y-1 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                <label className="min-w-0 space-y-1 text-xs">
                   <span className="font-medium text-(--text)/60">Date</span>
                   <input
                     type="date"
                     value={payload.metadata.date}
                     onChange={(event) => updateMetadata("date", event.target.value)}
                     disabled={isReadOnly}
-                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
+                    className="w-full min-w-0 rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
-                <label className="space-y-1 text-xs">
+                <label className="min-w-0 space-y-1 text-xs">
                   <span className="font-medium text-(--text)/60">Start</span>
                   <input
                     type="time"
                     value={payload.metadata.start}
                     onChange={(event) => updateMetadata("start", event.target.value)}
                     disabled={isReadOnly}
-                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
+                    className="w-full min-w-0 rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
-                <label className="space-y-1 text-xs">
+                <label className="min-w-0 space-y-1 text-xs">
                   <span className="font-medium text-(--text)/60">End</span>
                   <input
                     type="time"
                     value={payload.metadata.end}
                     onChange={(event) => updateMetadata("end", event.target.value)}
                     disabled={isReadOnly}
-                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
+                    className="w-full min-w-0 rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
-                <label className="space-y-1 text-xs">
+                <label className="min-w-0 space-y-1 text-xs">
                   <span className="font-medium text-(--text)/60">Inspector</span>
                   <input
                     type="text"
@@ -1358,50 +1358,50 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                     onChange={(event) => updateMetadata("inspector", event.target.value)}
                     disabled={isReadOnly}
                     placeholder="Name"
-                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
+                    className="w-full min-w-0 rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
-                <label className="space-y-1 text-xs">
+                <label className="min-w-0 space-y-1 text-xs">
                   <span className="font-medium text-(--text)/60">Towers</span>
                   <select
                     value={payload.metadata.towers}
                     onChange={(event) => updateMetadata("towers", event.target.value as DailyReportPayload["metadata"]["towers"])}
                     disabled={isReadOnly}
-                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
+                    className="w-full min-w-0 rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   >
                     <option value="north">North</option>
                     <option value="south">South</option>
                     <option value="both">Both</option>
                   </select>
                 </label>
-                <label className="space-y-1 text-xs">
+                <label className="min-w-0 space-y-1 text-xs">
                   <span className="font-medium text-(--text)/60">Weather</span>
                   <input
                     type="text"
                     value={payload.metadata.weather}
                     onChange={(event) => updateMetadata("weather", event.target.value)}
                     disabled={isReadOnly}
-                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
+                    className="w-full min-w-0 rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
-                <label className="space-y-1 text-xs">
+                <label className="min-w-0 space-y-1 text-xs">
                   <span className="font-medium text-(--text)/60">Shift</span>
                   <input
                     type="text"
                     value={payload.metadata.shift}
                     onChange={(event) => updateMetadata("shift", event.target.value)}
                     disabled={isReadOnly}
-                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
+                    className="w-full min-w-0 rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
-                <label className="space-y-1 text-xs">
+                <label className="min-w-0 space-y-1 text-xs">
                   <span className="font-medium text-(--text)/60">Supervisor</span>
                   <input
                     type="text"
                     value={payload.metadata.supervisorReview}
                     onChange={(event) => updateMetadata("supervisorReview", event.target.value)}
                     disabled={isReadOnly}
-                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
+                    className="w-full min-w-0 rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
               </div>

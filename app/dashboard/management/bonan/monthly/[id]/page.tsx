@@ -314,7 +314,7 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
   }
 
   return (
-    <div className="min-h-screen bg-(--bg)">
+    <div className="bonan-monthly-editor min-h-screen bg-(--bg) overflow-x-hidden">
       <div className="mx-auto w-full max-w-[1380px] px-3 md:px-4 py-4 md:py-5 space-y-3 md:space-y-4">
         <header className="rounded-2xl border border-(--border)/20 bg-white/90 p-3 md:p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -564,7 +564,7 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
               <input value={payload.deficiencyRegister.supervisorReview} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, supervisorReview: event.target.value } }))} disabled={isReadOnly} placeholder="Supervisor Review" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
               <input value={payload.deficiencyRegister.signature} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, signature: event.target.value } }))} disabled={isReadOnly} placeholder="Signature" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-8 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-8 gap-2">
               <input value={payload.deficiencyRegister.totalOpenStart} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, totalOpenStart: event.target.value } }))} disabled={isReadOnly} placeholder="Total Open (Start)" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
               <input value={payload.deficiencyRegister.newThisMonth} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, newThisMonth: event.target.value } }))} disabled={isReadOnly} placeholder="New This Month" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
               <input value={payload.deficiencyRegister.closedThisMonth} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, closedThisMonth: event.target.value } }))} disabled={isReadOnly} placeholder="Closed This Month" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />

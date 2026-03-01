@@ -36,6 +36,15 @@ body {
   margin: 0;
 }
 
+/* Keep monthly editor form controls inside mobile cards on iOS Safari */
+.bonan-monthly-editor input:not([type="checkbox"]):not([type="radio"]),
+.bonan-monthly-editor select,
+.bonan-monthly-editor textarea {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
 h1,
 h2,
 h3 {
