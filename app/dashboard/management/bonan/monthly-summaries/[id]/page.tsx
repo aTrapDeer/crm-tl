@@ -224,11 +224,15 @@ export default function BonanMonthlySummaryDetailPage({ params }: { params: Prom
         <section className="rounded-2xl border border-(--border)/20 bg-white/90 p-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-2">
             <div className="rounded-lg bg-slate-50 p-2 text-center">
-              <p className="text-lg font-semibold text-(--text)">{summary?.work_orders.total ?? 0}</p>
+              <Link href={`/dashboard/bonan/reports/${report.id}/related-items?focus=work-orders`} className="text-lg font-semibold text-blue-700 hover:underline">
+                {summary?.work_orders.total ?? 0}
+              </Link>
               <p className="text-[10px] text-(--text)/55 uppercase tracking-wide">Work Orders</p>
             </div>
             <div className="rounded-lg bg-slate-50 p-2 text-center">
-              <p className="text-lg font-semibold text-(--text)">{summary?.incidents.total ?? 0}</p>
+              <Link href={`/dashboard/bonan/reports/${report.id}/related-items?focus=incidents`} className="text-lg font-semibold text-blue-700 hover:underline">
+                {summary?.incidents.total ?? 0}
+              </Link>
               <p className="text-[10px] text-(--text)/55 uppercase tracking-wide">Incidents</p>
             </div>
             <div className="rounded-lg bg-slate-50 p-2 text-center">

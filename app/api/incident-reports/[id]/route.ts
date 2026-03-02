@@ -74,11 +74,25 @@ export async function PATCH(
     if (!existing) {
       return Response.json({ error: "Incident report not found" }, { status: 404 });
     }
+    if (existing.publication_status === "published") {
+      return Response.json(
+        { error: "Published incident reports are locked and cannot be edited." },
+        { status: 409 }
+      );
+    }
 
     const body = await request.json().catch(() => ({}));
     const status =
       body.status === "open" || body.status === "in_progress" || body.status === "closed"
         ? (body.status as IncidentReportStatus)
+        : undefined;
+    const publicationStatus =
+      body.publication_status === "draft" || body.publication_status === "published"
+        ? body.publication_status
+        : undefined;
+    const publishedAt =
+      publicationStatus === "published"
+        ? existing.published_at || new Date().toISOString()
         : undefined;
 
     const incidentReport = await updateIncidentReport(id, {
@@ -92,6 +106,8 @@ export async function PATCH(
       work_order_or_vendor:
         typeof body.work_order_or_vendor === "string" ? body.work_order_or_vendor : undefined,
       status,
+      publication_status: publicationStatus,
+      published_at: publishedAt,
     });
 
     return Response.json({ incidentReport });

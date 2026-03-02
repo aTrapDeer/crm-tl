@@ -30,6 +30,8 @@ export interface WorkOrder {
   work_summary: string | null;
   project_id: string | null;
   project_name?: string;
+  publication_status: "draft" | "published";
+  published_at: string | null;
   created_by: string | null;
   creator_name?: string;
   created_at: string;
@@ -92,6 +94,8 @@ function mapRowToWorkOrder(row: Record<string, unknown>): WorkOrder {
     work_summary: row.work_summary as string | null,
     project_id: row.project_id as string | null,
     project_name: row.project_name as string | undefined,
+    publication_status: row.publication_status as WorkOrder["publication_status"],
+    published_at: row.published_at as string | null,
     created_by: row.created_by as string | null,
     creator_name: row.creator_name as string | undefined,
     created_at: row.created_at as string,
@@ -221,6 +225,8 @@ export async function createWorkOrder(data: {
   scheduled_date?: string;
   scheduled_time?: string;
   project_id?: string;
+  publication_status?: WorkOrder["publication_status"];
+  published_at?: string;
   created_by?: string;
 }): Promise<WorkOrder> {
   const id = crypto.randomUUID().replace(/-/g, "");
@@ -230,8 +236,8 @@ export async function createWorkOrder(data: {
             id, work_order_number, date, time_received, phone, email, company, department,
             location, unit, area, access_needed, preferred_entry_time,
             priority, service_type, description, assigned_to, scheduled_date, scheduled_time,
-            project_id, created_by
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            project_id, publication_status, published_at, created_by
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       data.work_order_number,
@@ -253,6 +259,8 @@ export async function createWorkOrder(data: {
       data.scheduled_date || null,
       data.scheduled_time || null,
       data.project_id || null,
+      data.publication_status || "draft",
+      data.published_at || null,
       data.created_by || null,
     ],
   });
@@ -293,6 +301,8 @@ export async function updateWorkOrder(
     { key: "completed_time", column: "completed_time" },
     { key: "work_summary", column: "work_summary" },
     { key: "project_id", column: "project_id" },
+    { key: "publication_status", column: "publication_status" },
+    { key: "published_at", column: "published_at" },
   ];
 
   for (const { key, column } of fields) {
@@ -537,6 +547,7 @@ export async function deleteWorkOrderSignature(signatureId: string): Promise<voi
 
 export interface WorkOrderFilters {
   status?: WorkOrder["work_completed"];
+  publication_status?: WorkOrder["publication_status"];
   priority?: WorkOrder["priority"];
   service_type?: WorkOrder["service_type"];
   assigned_to?: string;
@@ -553,6 +564,10 @@ export async function searchWorkOrders(filters: WorkOrderFilters): Promise<WorkO
   if (filters.status) {
     conditions.push("wo.work_completed = ?");
     args.push(filters.status);
+  }
+  if (filters.publication_status) {
+    conditions.push("wo.publication_status = ?");
+    args.push(filters.publication_status);
   }
   if (filters.priority) {
     conditions.push("wo.priority = ?");

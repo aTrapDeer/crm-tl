@@ -16,6 +16,8 @@ export interface IncidentReport {
   actions_taken: string | null;
   work_order_or_vendor: string | null;
   status: IncidentReportStatus;
+  publication_status: "draft" | "published";
+  published_at: string | null;
   created_by: string | null;
   creator_name?: string;
   created_at: string;
@@ -37,6 +39,8 @@ function mapRowToIncidentReport(row: Record<string, unknown>): IncidentReport {
     actions_taken: row.actions_taken as string | null,
     work_order_or_vendor: row.work_order_or_vendor as string | null,
     status: row.status as IncidentReportStatus,
+    publication_status: row.publication_status as IncidentReport["publication_status"],
+    published_at: row.published_at as string | null,
     created_by: row.created_by as string | null,
     creator_name: row.creator_name as string | undefined,
     created_at: row.created_at as string,
@@ -75,6 +79,49 @@ export async function getIncidentReports(): Promise<IncidentReport[]> {
     LEFT JOIN users u ON ir.created_by = u.id
     ORDER BY ir.created_at DESC
   `);
+
+  return result.rows.map(mapRowToIncidentReport);
+}
+
+export interface IncidentReportFilters {
+  bonan_report_id?: string;
+  publication_status?: IncidentReport["publication_status"];
+  date_from?: string;
+  date_to?: string;
+}
+
+export async function searchIncidentReports(filters: IncidentReportFilters): Promise<IncidentReport[]> {
+  const conditions: string[] = [];
+  const args: string[] = [];
+
+  if (filters.bonan_report_id) {
+    conditions.push("ir.bonan_report_id = ?");
+    args.push(filters.bonan_report_id);
+  }
+  if (filters.publication_status) {
+    conditions.push("ir.publication_status = ?");
+    args.push(filters.publication_status);
+  }
+  if (filters.date_from) {
+    conditions.push("ir.report_date >= ?");
+    args.push(filters.date_from);
+  }
+  if (filters.date_to) {
+    conditions.push("ir.report_date <= ?");
+    args.push(filters.date_to);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const result = await turso.execute({
+    sql: `SELECT ir.*,
+                 u.first_name || ' ' || u.last_name as creator_name
+          FROM incident_reports ir
+          LEFT JOIN users u ON ir.created_by = u.id
+          ${whereClause}
+          ORDER BY ir.created_at DESC`,
+    args,
+  });
 
   return result.rows.map(mapRowToIncidentReport);
 }
@@ -119,6 +166,8 @@ export async function createIncidentReport(data: {
   actions_taken?: string;
   work_order_or_vendor?: string;
   status?: IncidentReportStatus;
+  publication_status?: IncidentReport["publication_status"];
+  published_at?: string;
   created_by?: string;
 }): Promise<IncidentReport> {
   const id = crypto.randomUUID().replace(/-/g, "");
@@ -139,8 +188,10 @@ export async function createIncidentReport(data: {
             actions_taken,
             work_order_or_vendor,
             status,
+            publication_status,
+            published_at,
             created_by
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       data.bonan_report_id,
@@ -155,6 +206,8 @@ export async function createIncidentReport(data: {
       data.actions_taken?.trim() || null,
       data.work_order_or_vendor?.trim() || null,
       data.status || "open",
+      data.publication_status || "draft",
+      data.published_at || null,
       data.created_by || null,
     ],
   });
@@ -208,6 +261,14 @@ export async function updateIncidentReport(
   if (data.status !== undefined) {
     updates.push("status = ?");
     args.push(data.status);
+  }
+  if (data.publication_status !== undefined) {
+    updates.push("publication_status = ?");
+    args.push(data.publication_status);
+  }
+  if (data.published_at !== undefined) {
+    updates.push("published_at = ?");
+    args.push(data.published_at);
   }
 
   if (updates.length === 0) {

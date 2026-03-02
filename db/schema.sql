@@ -196,6 +196,8 @@ CREATE TABLE IF NOT EXISTS work_orders (
   project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
 
   -- Metadata
+  publication_status TEXT NOT NULL DEFAULT 'draft' CHECK (publication_status IN ('draft', 'published')),
+  published_at TEXT,
   created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -256,6 +258,8 @@ CREATE TABLE IF NOT EXISTS incident_reports (
   actions_taken TEXT,
   work_order_or_vendor TEXT,
   status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'closed')),
+  publication_status TEXT NOT NULL DEFAULT 'draft' CHECK (publication_status IN ('draft', 'published')),
+  published_at TEXT,
   created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))

@@ -36,6 +36,8 @@ interface WorkOrder {
   work_summary: string | null;
   project_id: string | null;
   project_name?: string;
+  publication_status: "draft" | "published";
+  published_at: string | null;
   created_by: string | null;
   creator_name?: string;
   created_at: string;
@@ -123,6 +125,9 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
   const [deletingWorkOrder, setDeletingWorkOrder] = useState(false);
   const [deleteWorkOrderError, setDeleteWorkOrderError] = useState("");
+  const [publishingWorkOrder, setPublishingWorkOrder] = useState(false);
+  const [publishMessage, setPublishMessage] = useState("");
+  const [actionError, setActionError] = useState("");
 
   // Form states
   const [newMaterial, setNewMaterial] = useState({
@@ -282,7 +287,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   }, [userRole, fetchWorkOrder, fetchMaterials, fetchSignatures]);
 
   async function handleStatusChange(newStatus: WorkOrder["work_completed"]) {
-    if (!workOrder) return;
+    if (!workOrder || workOrder.publication_status === "published") return;
     setUpdating(true);
 
     try {
@@ -317,7 +322,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
 
   async function handleAddMaterial(e: React.FormEvent) {
     e.preventDefault();
-    if (!newMaterial.material_name.trim()) return;
+    if (!newMaterial.material_name.trim() || workOrder?.publication_status === "published") return;
 
     try {
       const res = await fetch(`/api/work-orders/${id}/materials`, {
@@ -343,6 +348,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   }
 
   async function handleDeleteMaterial(materialId: string) {
+    if (workOrder?.publication_status === "published") return;
     try {
       const res = await fetch(`/api/work-orders/${id}/materials`, {
         method: "DELETE",
@@ -360,6 +366,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
 
   async function handleUpdateWorkOrder(e: React.FormEvent) {
     e.preventDefault();
+    if (workOrder?.publication_status === "published") return;
     setEditError("");
 
     if (!editForm.description.trim()) {
@@ -426,7 +433,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   }
 
   async function handleSaveSignature(signatureData: string) {
-    if (!showSignatureCapture || !signatureForm.signer_name.trim()) return;
+    if (!showSignatureCapture || !signatureForm.signer_name.trim() || workOrder?.publication_status === "published") return;
 
     try {
       const res = await fetch(`/api/work-orders/${id}/signatures`, {
@@ -452,6 +459,10 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
 
   async function handleDeleteWorkOrder() {
     if (!workOrder || userRole !== "admin" || deletingWorkOrder) return;
+    if (workOrder.publication_status === "published") {
+      setDeleteWorkOrderError("Published work orders are locked and cannot be deleted.");
+      return;
+    }
 
     if (deleteConfirmInput.trim() !== workOrder.work_order_number) {
       setDeleteWorkOrderError(`Type ${workOrder.work_order_number} to confirm deletion.`);
@@ -476,9 +487,42 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
     }
   }
 
+  async function handlePublishWorkOrder() {
+    if (!workOrder || workOrder.publication_status === "published" || publishingWorkOrder) return;
+
+    setPublishingWorkOrder(true);
+    setPublishMessage("");
+    setActionError("");
+    try {
+      const res = await fetch(`/api/work-orders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ publication_status: "published" }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setActionError(data.error || "Failed to publish work order.");
+        return;
+      }
+
+      setWorkOrder(data.workOrder as WorkOrder);
+      setPublishMessage("Work order published. Editing is now locked.");
+      setShowStatusChange(false);
+      setShowAddMaterial(false);
+      setShowSignatureCapture(null);
+    } catch (error) {
+      console.error("Failed to publish work order:", error);
+      setActionError("Failed to publish work order.");
+    } finally {
+      setPublishingWorkOrder(false);
+    }
+  }
+
   const totalMaterialsCost = materials.reduce((sum, m) => sum + (m.total_cost || 0), 0);
   const tlCorpSignature = signatures.find((s) => s.signer_type === "tl_corp_rep");
   const buildingRepSignature = signatures.find((s) => s.signer_type === "building_rep");
+  const isPublished = workOrder?.publication_status === "published";
 
   if (loading || !workOrder) {
     return (
@@ -511,6 +555,13 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
                 <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_COLORS[workOrder.work_completed]}`}>
                   {workOrder.work_completed.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())}
                 </span>
+                <span
+                  className={`text-xs px-2.5 py-1 rounded-full font-medium uppercase tracking-wide ${
+                    isPublished ? "bg-slate-800 text-white" : "bg-amber-100 text-amber-700"
+                  }`}
+                >
+                  {workOrder.publication_status}
+                </span>
               </div>
               <p className="text-sm text-(--text)/60 mt-1">
                 {workOrder.company || "No company"} {workOrder.department ? `- ${workOrder.department}` : ""}
@@ -521,7 +572,8 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
             {userRole === "admin" && (
               <button
                 onClick={() => router.push(`/dashboard/management/work-orders/${id}/edit`)}
-                className="tl-btn px-4 py-2 text-sm"
+                disabled={isPublished}
+                className="tl-btn px-4 py-2 text-sm disabled:opacity-50"
               >
                 Edit Work Order
               </button>
@@ -533,34 +585,47 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
                   setDeleteConfirmInput("");
                   setDeleteWorkOrderError("");
                 }}
-                className="rounded-full border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 transition"
+                disabled={isPublished}
+                className="rounded-full border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 transition disabled:opacity-50"
               >
                 Delete Work Order
               </button>
             )}
+            {userRole === "admin" && !isPublished && (
+              <button
+                onClick={() => void handlePublishWorkOrder()}
+                disabled={publishingWorkOrder}
+                className="rounded-full border border-slate-300 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-200 transition disabled:opacity-60"
+              >
+                {publishingWorkOrder ? "Publishing..." : "Publish Work Order"}
+              </button>
+            )}
             <button
               onClick={() => setShowStatusChange(true)}
-              className="tl-btn px-4 py-2 text-sm"
+              disabled={isPublished}
+              className="tl-btn px-4 py-2 text-sm disabled:opacity-50"
             >
               Change Status
             </button>
           </div>
         </div>
 
-        {/* Success Banner (shown after creation) */}
-        <div className="tl-card p-4 bg-green-50 border border-green-200">
-          <div className="flex items-center gap-3">
-            <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div>
-              <p className="font-medium text-green-800">Work Order Created Successfully</p>
-              <p className="text-sm text-green-600">
-                Work Order #{workOrder.work_order_number} has been created and is ready for processing.
-              </p>
-            </div>
+        {actionError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {actionError}
           </div>
-        </div>
+        )}
+        {publishMessage && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {publishMessage}
+          </div>
+        )}
+        {isPublished && (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            This work order is published and locked from edits.
+            {workOrder.published_at ? ` Published ${new Date(workOrder.published_at).toLocaleString()}.` : ""}
+          </div>
+        )}
 
         {/* Work Details */}
         <div className="tl-card p-6 space-y-4">
@@ -673,7 +738,8 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
             <h2 className="text-lg font-semibold text-(--text)">Materials & Parts</h2>
             <button
               onClick={() => setShowAddMaterial(true)}
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              disabled={isPublished}
+              className="text-sm text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
             >
               + Add Material
             </button>
@@ -701,7 +767,8 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
                       {userRole === "admin" && (
                         <button
                           onClick={() => handleDeleteMaterial(material.id)}
-                          className="text-red-400 hover:text-red-600 transition"
+                          disabled={isPublished}
+                          className="text-red-400 hover:text-red-600 transition disabled:opacity-50"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -738,7 +805,8 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
               ) : (
                 <button
                   onClick={() => setShowSignatureCapture("tl_corp_rep")}
-                  className="w-full border-2 border-dashed border-(--border) rounded-lg p-4 text-sm text-(--text)/60 hover:border-(--ring) hover:text-(--text) transition"
+                  disabled={isPublished}
+                  className="w-full border-2 border-dashed border-(--border) rounded-lg p-4 text-sm text-(--text)/60 hover:border-(--ring) hover:text-(--text) transition disabled:opacity-50"
                 >
                   Click to capture signature
                 </button>
@@ -758,7 +826,8 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
               ) : (
                 <button
                   onClick={() => setShowSignatureCapture("building_rep")}
-                  className="w-full border-2 border-dashed border-(--border) rounded-lg p-4 text-sm text-(--text)/60 hover:border-(--ring) hover:text-(--text) transition"
+                  disabled={isPublished}
+                  className="w-full border-2 border-dashed border-(--border) rounded-lg p-4 text-sm text-(--text)/60 hover:border-(--ring) hover:text-(--text) transition disabled:opacity-50"
                 >
                   Click to capture signature
                 </button>
@@ -775,7 +844,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
       </div>
 
       {/* Status Change Modal */}
-      {showStatusChange && (
+      {showStatusChange && !isPublished && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-10000 p-4" onClick={() => setShowStatusChange(false)}>
           <div className="tl-card p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-(--text) mb-4">Change Status</h3>
@@ -1132,7 +1201,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
       )}
 
       {/* Add Material Modal */}
-      {showAddMaterial && (
+      {showAddMaterial && !isPublished && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-10000 p-4" onClick={() => setShowAddMaterial(false)}>
           <div className="tl-card p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-(--text) mb-4">Add Material</h3>
@@ -1260,7 +1329,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
       )}
 
       {/* Signature Name Modal */}
-      {showSignatureCapture && !signatureForm.signer_name && (
+      {showSignatureCapture && !signatureForm.signer_name && !isPublished && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-10000 p-4" onClick={() => setShowSignatureCapture(null)}>
           <div className="tl-card p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-(--text) mb-4">
@@ -1313,7 +1382,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
       )}
 
       {/* Signature Capture */}
-      {showSignatureCapture && signatureForm.signer_name && (
+      {showSignatureCapture && signatureForm.signer_name && !isPublished && (
         <SignatureCapture
           signerType={showSignatureCapture}
           signerName={signatureForm.signer_name}

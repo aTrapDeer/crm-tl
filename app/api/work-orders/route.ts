@@ -41,6 +41,9 @@ export async function GET(request: Request) {
     if (searchParams.get("status")) {
       filters.status = searchParams.get("status") as WorkOrderFilters["status"];
     }
+    if (searchParams.get("publication_status")) {
+      filters.publication_status = searchParams.get("publication_status") as WorkOrderFilters["publication_status"];
+    }
     if (searchParams.get("priority")) {
       filters.priority = searchParams.get("priority") as WorkOrderFilters["priority"];
     }

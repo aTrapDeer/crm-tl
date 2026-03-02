@@ -92,9 +92,31 @@ export async function PATCH(
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
 
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
+    const requestedPublicationStatus =
+      body.publication_status === "draft" || body.publication_status === "published"
+        ? body.publication_status
+        : undefined;
+
+    if (requestedPublicationStatus === "draft") {
+      return Response.json(
+        { error: "Published work orders cannot be reverted to draft." },
+        { status: 400 }
+      );
+    }
+
+    if (workOrder.publication_status === "published") {
+      return Response.json(
+        { error: "Published work orders are locked and cannot be edited." },
+        { status: 409 }
+      );
+    }
 
     const previousStatus = workOrder.work_completed;
+    const publishedAt =
+      requestedPublicationStatus === "published"
+        ? workOrder.published_at || new Date().toISOString()
+        : undefined;
 
     const updatedWorkOrder = await updateWorkOrder(id, {
       date: body.date,
@@ -122,6 +144,8 @@ export async function PATCH(
       completed_time: body.completed_time,
       work_summary: body.work_summary,
       project_id: body.project_id,
+      publication_status: requestedPublicationStatus,
+      published_at: publishedAt,
     });
 
     // Send email notification based on what changed
@@ -193,6 +217,12 @@ export async function DELETE(
 
     if (!workOrder) {
       return Response.json({ error: "Work order not found" }, { status: 404 });
+    }
+    if (workOrder.publication_status === "published") {
+      return Response.json(
+        { error: "Published work orders are locked and cannot be deleted." },
+        { status: 409 }
+      );
     }
 
     await deleteWorkOrder(id);

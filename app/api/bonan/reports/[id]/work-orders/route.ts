@@ -36,6 +36,12 @@ export async function GET(
     if (!report) {
       return Response.json({ error: "Bonan report not found" }, { status: 404 });
     }
+    if (report.status === "submitted") {
+      return Response.json(
+        { error: "Submitted Bonan reports are locked and cannot create new linked work orders." },
+        { status: 409 }
+      );
+    }
 
     const associatedWorkOrders = await getBonanAssociatedWorkOrders(id);
     return Response.json({ associatedWorkOrders });

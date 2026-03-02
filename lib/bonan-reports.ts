@@ -105,6 +105,38 @@ export interface BonanAssociatedWorkOrder {
   created_at: string;
 }
 
+export interface BonanRelatedIncidentReport {
+  id: string;
+  report_number: string;
+  report_date: string;
+  section_name: string;
+  location: string | null;
+  status: "open" | "in_progress" | "closed";
+  publication_status: "draft" | "published";
+  description: string;
+}
+
+export interface BonanRelatedWorkOrder {
+  id: string;
+  work_order_number: string;
+  date: string;
+  location: string | null;
+  area: string | null;
+  priority: "emergency" | "high" | "normal" | "low";
+  work_completed: "pending" | "in_progress" | "completed" | "cancelled";
+  publication_status: "draft" | "published";
+  description: string;
+}
+
+export interface BonanRelatedItems {
+  report_id: string;
+  report_type: BonanReportType;
+  period_start: string;
+  period_end: string;
+  incident_reports: BonanRelatedIncidentReport[];
+  work_orders: BonanRelatedWorkOrder[];
+}
+
 function parsePayload(
   type: BonanReportType,
   payloadJson: string | null,
@@ -618,6 +650,93 @@ export async function getBonanCollectiveSummary(reportId: string): Promise<Bonan
       emergency: asNumber(workOrdersRow.emergency_count),
       high: asNumber(workOrdersRow.high_count),
     },
+  };
+}
+
+export async function getBonanRelatedItems(reportId: string): Promise<BonanRelatedItems | null> {
+  const report = await getBonanReportById(reportId);
+  if (!report) return null;
+
+  const period = getReportPeriod(report);
+
+  const [incidentsResult, workOrdersResult] = await Promise.all([
+    turso.execute({
+      sql: `SELECT ir.id,
+                   ir.report_number,
+                   ir.report_date,
+                   ir.section_name,
+                   ir.location,
+                   ir.status,
+                   ir.publication_status,
+                   ir.description
+            FROM incident_reports ir
+            INNER JOIN bonan_reports br ON br.id = ir.bonan_report_id
+            WHERE br.site = 'bonan_towers'
+              AND ir.report_date BETWEEN ? AND ?
+            ORDER BY ir.report_date DESC, ir.created_at DESC`,
+      args: [period.start, period.end],
+    }),
+    turso.execute({
+      sql: `WITH linked_work_order_ids AS (
+              SELECT wo.id AS work_order_id
+              FROM bonan_reports br
+              INNER JOIN work_orders wo ON wo.id = br.work_order_id
+              WHERE br.site = 'bonan_towers'
+                AND br.report_date BETWEEN ? AND ?
+              UNION
+              SELECT wo.id AS work_order_id
+              FROM bonan_report_work_orders brwo
+              INNER JOIN bonan_reports br ON br.id = brwo.bonan_report_id
+              INNER JOIN work_orders wo ON wo.id = brwo.work_order_id
+              WHERE br.site = 'bonan_towers'
+                AND br.report_date BETWEEN ? AND ?
+            )
+            SELECT wo.id,
+                   wo.work_order_number,
+                   wo.date,
+                   wo.location,
+                   wo.area,
+                   wo.priority,
+                   wo.work_completed,
+                   wo.publication_status,
+                   wo.description
+            FROM linked_work_order_ids linked
+            INNER JOIN work_orders wo ON wo.id = linked.work_order_id
+            ORDER BY wo.date DESC, wo.created_at DESC`,
+      args: [period.start, period.end, period.start, period.end],
+    }),
+  ]);
+
+  const incidentReports = incidentsResult.rows.map((row) => ({
+    id: row.id as string,
+    report_number: row.report_number as string,
+    report_date: row.report_date as string,
+    section_name: row.section_name as string,
+    location: row.location as string | null,
+    status: row.status as BonanRelatedIncidentReport["status"],
+    publication_status: row.publication_status as BonanRelatedIncidentReport["publication_status"],
+    description: row.description as string,
+  }));
+
+  const workOrders = workOrdersResult.rows.map((row) => ({
+    id: row.id as string,
+    work_order_number: row.work_order_number as string,
+    date: row.date as string,
+    location: row.location as string | null,
+    area: row.area as string | null,
+    priority: row.priority as BonanRelatedWorkOrder["priority"],
+    work_completed: row.work_completed as BonanRelatedWorkOrder["work_completed"],
+    publication_status: row.publication_status as BonanRelatedWorkOrder["publication_status"],
+    description: row.description as string,
+  }));
+
+  return {
+    report_id: report.id,
+    report_type: report.report_type,
+    period_start: period.start,
+    period_end: period.end,
+    incident_reports: incidentReports,
+    work_orders: workOrders,
   };
 }
 

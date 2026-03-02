@@ -88,6 +88,12 @@ export async function POST(
     if (!workOrder) {
       return Response.json({ error: "Work order not found" }, { status: 404 });
     }
+    if (workOrder.publication_status === "published") {
+      return Response.json(
+        { error: "Published work orders are locked and cannot be edited." },
+        { status: 409 }
+      );
+    }
 
     // Workers can only add materials to work orders assigned to them
     if (user.role === "employee" && workOrder.assigned_to !== user.id) {
@@ -148,6 +154,12 @@ export async function DELETE(
 
     if (!workOrder) {
       return Response.json({ error: "Work order not found" }, { status: 404 });
+    }
+    if (workOrder.publication_status === "published") {
+      return Response.json(
+        { error: "Published work orders are locked and cannot be edited." },
+        { status: 409 }
+      );
     }
 
     // Workers can only delete materials from work orders assigned to them

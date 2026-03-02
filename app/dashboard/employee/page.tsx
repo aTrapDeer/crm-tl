@@ -33,6 +33,7 @@ export default function EmployeeDashboard() {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [workOrderCount, setWorkOrderCount] = useState(0);
+  const [incidentReportCount, setIncidentReportCount] = useState(0);
   const [dailyReportCount, setDailyReportCount] = useState(0);
   const [weeklyReportCount, setWeeklyReportCount] = useState(0);
   const [monthlyReportCount, setMonthlyReportCount] = useState(0);
@@ -85,20 +86,25 @@ export default function EmployeeDashboard() {
 
   async function fetchOperationsSummary() {
     try {
-      const [workOrdersRes, dailyReportsRes, weeklyReportsRes, monthlyReportsRes] = await Promise.all([
+      const [workOrdersRes, incidentReportsRes, dailyReportsRes, weeklyReportsRes, monthlyReportsRes] = await Promise.all([
         fetch("/api/work-orders"),
+        fetch("/api/incident-reports"),
         fetch("/api/bonan/reports?report_type=daily"),
         fetch("/api/bonan/reports?report_type=weekly"),
         fetch("/api/bonan/reports?report_type=monthly"),
       ]);
 
       const workOrdersData = await workOrdersRes.json().catch(() => ({ workOrders: [] }));
+      const incidentReportsData = await incidentReportsRes.json().catch(() => ({ incidentReports: [] }));
       const dailyReportsData = await dailyReportsRes.json().catch(() => ({ reports: [] }));
       const weeklyReportsData = await weeklyReportsRes.json().catch(() => ({ reports: [] }));
       const monthlyReportsData = await monthlyReportsRes.json().catch(() => ({ reports: [] }));
 
       if (workOrdersRes.ok) {
         setWorkOrderCount((workOrdersData.workOrders || []).length);
+      }
+      if (incidentReportsRes.ok) {
+        setIncidentReportCount((incidentReportsData.incidentReports || []).length);
       }
       if (dailyReportsRes.ok) {
         setDailyReportCount((dailyReportsData.reports || []).length);
@@ -210,7 +216,27 @@ export default function EmployeeDashboard() {
         </p>
       </div>
 
-      <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <section className="tl-card p-4 md:p-5">
+        <p className="text-xs uppercase tracking-wide text-(--text)/60">Quick Access</p>
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Link
+            href="/dashboard/work-orders"
+            className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-blue-900 hover:shadow-md transition"
+          >
+            <p className="text-sm font-semibold">Work Orders</p>
+            <p className="text-xs text-blue-900/80 mt-1">Open assigned work and updates.</p>
+          </Link>
+          <Link
+            href="/dashboard/incident-reports"
+            className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-red-900 hover:shadow-md transition"
+          >
+            <p className="text-sm font-semibold">Incident Reports</p>
+            <p className="text-xs text-red-900/80 mt-1">Review and complete incident documentation.</p>
+          </Link>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
         <Link
           href="/dashboard/work-orders"
           className="tl-card p-5 border border-blue-200 bg-blue-50/70 hover:shadow-lg transition"
@@ -222,6 +248,20 @@ export default function EmployeeDashboard() {
           </p>
           <p className="mt-3 inline-flex rounded-full bg-white/70 px-2.5 py-1 text-xs font-semibold text-blue-800">
             {workOrderCount} assigned
+          </p>
+        </Link>
+
+        <Link
+          href="/dashboard/incident-reports"
+          className="tl-card p-5 border border-red-200 bg-red-50/70 hover:shadow-lg transition"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-red-700">Operations</p>
+          <h3 className="text-lg font-semibold text-red-950 mt-2">Incident Reports</h3>
+          <p className="text-sm text-red-900/80 mt-2">
+            Track open incidents and publish finalized reports.
+          </p>
+          <p className="mt-3 inline-flex rounded-full bg-white/70 px-2.5 py-1 text-xs font-semibold text-red-800">
+            {incidentReportCount} reports
           </p>
         </Link>
 
