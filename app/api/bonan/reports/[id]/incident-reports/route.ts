@@ -114,6 +114,7 @@ export async function POST(
       actions_taken: typeof body.actions_taken === "string" ? body.actions_taken : undefined,
       work_order_or_vendor:
         typeof body.work_order_or_vendor === "string" ? body.work_order_or_vendor : undefined,
+      site: "bonan_towers",
       created_by: user.id,
     });
 

@@ -275,8 +275,78 @@ export default function BonanDashboardPage() {
                 </Link>
               </div>
             </div>
+
+            <div className="group rounded-2xl border border-slate-200 bg-slate-50 flex flex-col hover:border-slate-300 hover:shadow-md transition-all overflow-hidden">
+              <div className="p-5 flex-1 bg-white">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="h-8 w-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center ring-1 ring-rose-100/50">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6M7 4h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6a2 2 0 012-2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900">Work Orders</h3>
+                </div>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Review published Bonan work orders and sign off on the current revision.
+                </p>
+              </div>
+              <div className="p-4 border-t border-slate-100 bg-slate-50/50 group-hover:bg-rose-50/30 transition-colors">
+                <Link 
+                  href={userRole === "client" ? "/dashboard/bonan/work-orders" : "/dashboard/management?tab=work-orders&site=bonan_towers"}
+                  className="flex w-full items-center justify-center rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 border border-slate-200 shadow-sm group-hover:border-rose-200 group-hover:text-rose-700 transition-all"
+                >
+                  Open Work Orders
+                  <svg className="ml-1.5 h-4 w-4 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              </div>
+            </div>
+
+            <div className="group rounded-2xl border border-slate-200 bg-slate-50 flex flex-col hover:border-slate-300 hover:shadow-md transition-all overflow-hidden">
+              <div className="p-5 flex-1 bg-white">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="h-8 w-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center ring-1 ring-amber-100/50">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M6.938 4h10.124c1.54 0 2.502 1.667 1.732 3L13.732 18c-.77 1.333-2.694 1.333-3.464 0L5.206 7c-.77-1.333.192-3 1.732-3z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900">Incident Reports</h3>
+                </div>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Review published incident reports and request targeted corrections when needed.
+                </p>
+              </div>
+              <div className="p-4 border-t border-slate-100 bg-slate-50/50 group-hover:bg-amber-50/30 transition-colors">
+                <Link 
+                  href={userRole === "client" ? "/dashboard/bonan/incidents" : "/dashboard/management?tab=incident-reports&site=bonan_towers"}
+                  className="flex w-full items-center justify-center rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 border border-slate-200 shadow-sm group-hover:border-amber-200 group-hover:text-amber-700 transition-all"
+                >
+                  Open Incidents
+                  <svg className="ml-1.5 h-4 w-4 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              </div>
+            </div>
           </div>
         </section>
+
+        {userRole === "admin" && (
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 md:p-6 shadow-sm">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Bonan Client Operations</h2>
+                <p className="text-sm text-slate-600 mt-1">
+                  Add or remove Bonan clients, send invitations, and review customer correction requests.
+                </p>
+              </div>
+              <Link href="/dashboard/bonan/clients" className="tl-btn px-4 py-2.5 text-sm">
+                Open Client Operations
+              </Link>
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );

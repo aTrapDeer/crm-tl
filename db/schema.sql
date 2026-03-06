@@ -194,6 +194,8 @@ CREATE TABLE IF NOT EXISTS work_orders (
 
   -- Optional Project Linking
   project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
+  site TEXT CHECK (site IN ('bonan_towers')),
+  client_visible_revision INTEGER NOT NULL DEFAULT 1,
 
   -- Metadata
   publication_status TEXT NOT NULL DEFAULT 'draft' CHECK (publication_status IN ('draft', 'published')),
@@ -219,6 +221,7 @@ CREATE TABLE IF NOT EXISTS bonan_reports (
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'submitted')),
   report_date TEXT NOT NULL DEFAULT (date('now')),
   work_order_id TEXT REFERENCES work_orders(id) ON DELETE SET NULL,
+  client_visible_revision INTEGER NOT NULL DEFAULT 1,
   created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
   payload_json TEXT NOT NULL DEFAULT '{}',
   last_autosaved_at TEXT,
@@ -258,6 +261,8 @@ CREATE TABLE IF NOT EXISTS incident_reports (
   actions_taken TEXT,
   work_order_or_vendor TEXT,
   status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'closed')),
+  site TEXT CHECK (site IN ('bonan_towers')),
+  client_visible_revision INTEGER NOT NULL DEFAULT 1,
   publication_status TEXT NOT NULL DEFAULT 'draft' CHECK (publication_status IN ('draft', 'published')),
   published_at TEXT,
   created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
@@ -269,6 +274,7 @@ CREATE INDEX IF NOT EXISTS idx_incident_reports_bonan_report ON incident_reports
 CREATE INDEX IF NOT EXISTS idx_incident_reports_report_number ON incident_reports(report_number);
 CREATE INDEX IF NOT EXISTS idx_incident_reports_status ON incident_reports(status);
 CREATE INDEX IF NOT EXISTS idx_incident_reports_date ON incident_reports(report_date);
+CREATE INDEX IF NOT EXISTS idx_incident_reports_site ON incident_reports(site);
 
 -- ============ WORK ORDER MATERIALS ============
 
@@ -303,6 +309,92 @@ CREATE TABLE IF NOT EXISTS work_order_signatures (
 
 CREATE INDEX IF NOT EXISTS idx_work_order_signatures_order ON work_order_signatures(work_order_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_work_order_signatures_unique ON work_order_signatures(work_order_id, signer_type);
+CREATE INDEX IF NOT EXISTS idx_work_orders_site ON work_orders(site);
+
+CREATE TABLE IF NOT EXISTS bonan_client_memberships (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  site TEXT NOT NULL DEFAULT 'bonan_towers' CHECK (site IN ('bonan_towers')),
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  company_name TEXT,
+  display_name TEXT,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(site, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bonan_client_memberships_site ON bonan_client_memberships(site);
+CREATE INDEX IF NOT EXISTS idx_bonan_client_memberships_user ON bonan_client_memberships(user_id);
+
+CREATE TABLE IF NOT EXISTS bonan_client_invitations (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  site TEXT NOT NULL DEFAULT 'bonan_towers' CHECK (site IN ('bonan_towers')),
+  email TEXT NOT NULL,
+  token TEXT NOT NULL UNIQUE,
+  invited_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'expired')),
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  accepted_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_bonan_client_invitations_email ON bonan_client_invitations(email);
+CREATE INDEX IF NOT EXISTS idx_bonan_client_invitations_status ON bonan_client_invitations(status);
+
+CREATE TABLE IF NOT EXISTS bonan_client_approvals (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  site TEXT NOT NULL DEFAULT 'bonan_towers' CHECK (site IN ('bonan_towers')),
+  entity_type TEXT NOT NULL CHECK (entity_type IN ('bonan_report', 'work_order', 'incident_report')),
+  entity_id TEXT NOT NULL,
+  approved_revision INTEGER NOT NULL DEFAULT 1,
+  approved_by_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  signer_name TEXT NOT NULL,
+  signature_data TEXT NOT NULL,
+  approval_date TEXT NOT NULL,
+  approved_at TEXT NOT NULL DEFAULT (datetime('now')),
+  ip_address TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(entity_type, entity_id, approved_by_user_id, approved_revision)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bonan_client_approvals_entity ON bonan_client_approvals(entity_type, entity_id);
+
+CREATE TABLE IF NOT EXISTS bonan_change_requests (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  site TEXT NOT NULL DEFAULT 'bonan_towers' CHECK (site IN ('bonan_towers')),
+  entity_type TEXT NOT NULL CHECK (entity_type IN ('bonan_report', 'work_order', 'incident_report')),
+  entity_id TEXT NOT NULL,
+  requested_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  requested_area TEXT NOT NULL,
+  requested_fields_json TEXT NOT NULL,
+  message TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'grant_approved', 'changes_submitted', 'applied', 'rejected', 'expired')),
+  approved_fields_json TEXT,
+  grant_expires_at TEXT,
+  granted_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  granted_at TEXT,
+  final_reviewed_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  final_reviewed_at TEXT,
+  admin_notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_bonan_change_requests_entity ON bonan_change_requests(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_bonan_change_requests_requester ON bonan_change_requests(requested_by);
+CREATE INDEX IF NOT EXISTS idx_bonan_change_requests_status ON bonan_change_requests(status);
+
+CREATE TABLE IF NOT EXISTS bonan_change_request_edits (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  change_request_id TEXT NOT NULL REFERENCES bonan_change_requests(id) ON DELETE CASCADE,
+  field_path TEXT NOT NULL,
+  old_value TEXT,
+  proposed_value TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_bonan_change_request_edits_request ON bonan_change_request_edits(change_request_id);
 
 -- ============ DOCUMENTS ============
 

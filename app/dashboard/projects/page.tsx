@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 interface Project {
   id: string;
@@ -77,10 +78,13 @@ function formatDate(dateStr?: string | null) {
 
 function formatTimeline(project: Project) {
   if (!project.start_date && !project.end_date) return "TBD";
-  return `${formatDate(project.start_date)} → ${formatDate(project.end_date)}`;
+  return `${formatDate(project.start_date)} -> ${formatDate(project.end_date)}`;
 }
 
 export default function ProjectsHubPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
@@ -102,6 +106,31 @@ export default function ProjectsHubPage() {
 
     fetchProjects();
   }, []);
+
+  useEffect(() => {
+    const requestedStatus = searchParams.get("status");
+    const nextStatus =
+      requestedStatus &&
+      statusFilters.some((filter) => filter.key === requestedStatus)
+        ? requestedStatus
+        : "all";
+
+    setStatusFilter(nextStatus);
+  }, [searchParams]);
+
+  function updateStatusFilter(nextStatus: string) {
+    setStatusFilter(nextStatus);
+
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextStatus === "all") {
+      params.delete("status");
+    } else {
+      params.set("status", nextStatus);
+    }
+
+    const nextUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+    router.replace(nextUrl);
+  }
 
   const filteredProjects = useMemo(() => {
     const lowerQuery = query.trim().toLowerCase();
@@ -240,7 +269,7 @@ export default function ProjectsHubPage() {
             return (
               <button
                 key={filter.key}
-                onClick={() => setStatusFilter(filter.key)}
+                onClick={() => updateStatusFilter(filter.key)}
                 className={`px-4 py-2 rounded-full text-xs font-medium transition ${
                   active
                     ? "bg-(--text) text-white"

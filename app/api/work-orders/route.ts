@@ -41,6 +41,13 @@ export async function GET(request: Request) {
     if (searchParams.get("status")) {
       filters.status = searchParams.get("status") as WorkOrderFilters["status"];
     }
+    if (searchParams.get("statuses")) {
+      filters.statuses = searchParams
+        .get("statuses")!
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean) as WorkOrderFilters["statuses"];
+    }
     if (searchParams.get("publication_status")) {
       filters.publication_status = searchParams.get("publication_status") as WorkOrderFilters["publication_status"];
     }
@@ -55,6 +62,9 @@ export async function GET(request: Request) {
     }
     if (searchParams.get("project_id")) {
       filters.project_id = searchParams.get("project_id")!;
+    }
+    if (searchParams.get("site") === "bonan_towers") {
+      filters.site = "bonan_towers";
     }
     if (searchParams.get("date_from")) {
       filters.date_from = searchParams.get("date_from")!;

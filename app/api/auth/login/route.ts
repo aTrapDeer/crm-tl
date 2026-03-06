@@ -1,4 +1,5 @@
 import { login } from "@/lib/auth";
+import { processPendingBonanInvitationsForUser } from "@/lib/bonan-client";
 import { cookies } from "next/headers";
 
 export async function POST(request: Request) {
@@ -21,6 +22,8 @@ export async function POST(request: Request) {
         { status: 401 }
       );
     }
+
+    await processPendingBonanInvitationsForUser(result.user.email, result.user.id);
 
     // Set session cookie
     const cookieStore = await cookies();

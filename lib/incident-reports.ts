@@ -1,4 +1,5 @@
 import { turso } from "./turso";
+import { ensureBonanClientSchema } from "./bonan-client";
 
 export type IncidentReportStatus = "open" | "in_progress" | "closed";
 
@@ -16,6 +17,8 @@ export interface IncidentReport {
   actions_taken: string | null;
   work_order_or_vendor: string | null;
   status: IncidentReportStatus;
+  site: "bonan_towers" | null;
+  client_visible_revision: number;
   publication_status: "draft" | "published";
   published_at: string | null;
   created_by: string | null;
@@ -39,6 +42,8 @@ function mapRowToIncidentReport(row: Record<string, unknown>): IncidentReport {
     actions_taken: row.actions_taken as string | null,
     work_order_or_vendor: row.work_order_or_vendor as string | null,
     status: row.status as IncidentReportStatus,
+    site: (row.site as IncidentReport["site"]) || null,
+    client_visible_revision: Number(row.client_visible_revision || 1),
     publication_status: row.publication_status as IncidentReport["publication_status"],
     published_at: row.published_at as string | null,
     created_by: row.created_by as string | null,
@@ -72,6 +77,7 @@ export async function generateIncidentReportNumber(): Promise<string> {
 }
 
 export async function getIncidentReports(): Promise<IncidentReport[]> {
+  await ensureBonanClientSchema();
   const result = await turso.execute(`
     SELECT ir.*,
            u.first_name || ' ' || u.last_name as creator_name
@@ -85,12 +91,15 @@ export async function getIncidentReports(): Promise<IncidentReport[]> {
 
 export interface IncidentReportFilters {
   bonan_report_id?: string;
+  statuses?: IncidentReportStatus[];
   publication_status?: IncidentReport["publication_status"];
+  site?: IncidentReport["site"];
   date_from?: string;
   date_to?: string;
 }
 
 export async function searchIncidentReports(filters: IncidentReportFilters): Promise<IncidentReport[]> {
+  await ensureBonanClientSchema();
   const conditions: string[] = [];
   const args: string[] = [];
 
@@ -101,6 +110,14 @@ export async function searchIncidentReports(filters: IncidentReportFilters): Pro
   if (filters.publication_status) {
     conditions.push("ir.publication_status = ?");
     args.push(filters.publication_status);
+  }
+  if (filters.statuses && filters.statuses.length > 0) {
+    conditions.push(`ir.status IN (${filters.statuses.map(() => "?").join(", ")})`);
+    args.push(...filters.statuses);
+  }
+  if (filters.site) {
+    conditions.push("ir.site = ?");
+    args.push(filters.site);
   }
   if (filters.date_from) {
     conditions.push("ir.report_date >= ?");
@@ -127,6 +144,7 @@ export async function searchIncidentReports(filters: IncidentReportFilters): Pro
 }
 
 export async function getIncidentReportById(id: string): Promise<IncidentReport | null> {
+  await ensureBonanClientSchema();
   const result = await turso.execute({
     sql: `SELECT ir.*,
                  u.first_name || ' ' || u.last_name as creator_name
@@ -141,6 +159,7 @@ export async function getIncidentReportById(id: string): Promise<IncidentReport 
 }
 
 export async function getIncidentReportsForBonanReport(reportId: string): Promise<IncidentReport[]> {
+  await ensureBonanClientSchema();
   const result = await turso.execute({
     sql: `SELECT ir.*,
                  u.first_name || ' ' || u.last_name as creator_name
@@ -166,10 +185,12 @@ export async function createIncidentReport(data: {
   actions_taken?: string;
   work_order_or_vendor?: string;
   status?: IncidentReportStatus;
+  site?: IncidentReport["site"];
   publication_status?: IncidentReport["publication_status"];
   published_at?: string;
   created_by?: string;
 }): Promise<IncidentReport> {
+  await ensureBonanClientSchema();
   const id = crypto.randomUUID().replace(/-/g, "");
   const reportNumber = await generateIncidentReportNumber();
 
@@ -188,10 +209,12 @@ export async function createIncidentReport(data: {
             actions_taken,
             work_order_or_vendor,
             status,
+            site,
+            client_visible_revision,
             publication_status,
             published_at,
             created_by
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       data.bonan_report_id,
@@ -206,6 +229,8 @@ export async function createIncidentReport(data: {
       data.actions_taken?.trim() || null,
       data.work_order_or_vendor?.trim() || null,
       data.status || "open",
+      data.site || null,
+      1,
       data.publication_status || "draft",
       data.published_at || null,
       data.created_by || null,
@@ -219,6 +244,7 @@ export async function updateIncidentReport(
   id: string,
   data: Partial<Omit<IncidentReport, "id" | "bonan_report_id" | "report_number" | "created_by" | "created_at" | "updated_at">>
 ): Promise<IncidentReport | null> {
+  await ensureBonanClientSchema();
   const updates: string[] = [];
   const args: (string | null)[] = [];
 
@@ -262,6 +288,10 @@ export async function updateIncidentReport(
     updates.push("status = ?");
     args.push(data.status);
   }
+  if (data.site !== undefined) {
+    updates.push("site = ?");
+    args.push(data.site);
+  }
   if (data.publication_status !== undefined) {
     updates.push("publication_status = ?");
     args.push(data.publication_status);
@@ -275,6 +305,7 @@ export async function updateIncidentReport(
     return getIncidentReportById(id);
   }
 
+  updates.push("client_visible_revision = COALESCE(client_visible_revision, 1) + 1");
   updates.push("updated_at = datetime('now')");
   args.push(id);
 

@@ -51,9 +51,10 @@ const WORK_ORDER_STATUS_STYLES: Record<RelatedWorkOrder["work_completed"], strin
   cancelled: "bg-slate-100 text-slate-700",
 };
 
-function getBackLink(reportType: ReportType, reportId: string) {
+function getBackLink(reportType: ReportType, reportId: string, userRole: "admin" | "employee" | "client" | null) {
   if (reportType === "daily") return `/dashboard/bonan/daily/${reportId}`;
   if (reportType === "weekly") return `/dashboard/bonan/weekly/${reportId}`;
+  if (userRole === "client") return `/dashboard/bonan/monthly-summaries/${reportId}`;
   return `/dashboard/bonan/monthly/${reportId}`;
 }
 
@@ -66,6 +67,7 @@ export default function BonanRelatedItemsPage({ params }: { params: Promise<{ id
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [relatedItems, setRelatedItems] = useState<RelatedItemsResponse | null>(null);
+  const [userRole, setUserRole] = useState<"admin" | "employee" | "client" | null>(null);
 
   useEffect(() => {
     async function init() {
@@ -76,10 +78,7 @@ export default function BonanRelatedItemsPage({ params }: { params: Promise<{ id
           router.push("/login");
           return;
         }
-        if (sessionData.user.role === "client") {
-          router.push("/dashboard");
-          return;
-        }
+        setUserRole(sessionData.user.role as "admin" | "employee" | "client");
 
         const relatedRes = await fetch(`/api/bonan/reports/${id}/related-items`);
         const relatedData = await relatedRes.json().catch(() => ({}));
@@ -111,8 +110,10 @@ export default function BonanRelatedItemsPage({ params }: { params: Promise<{ id
 
   const backLink = useMemo(() => {
     if (!relatedItems) return "/dashboard/bonan";
-    return getBackLink(relatedItems.report_type, relatedItems.report_id);
-  }, [relatedItems]);
+    return getBackLink(relatedItems.report_type, relatedItems.report_id, userRole);
+  }, [relatedItems, userRole]);
+  const workOrderDetailBase = userRole === "client" ? "/dashboard/bonan/work-orders" : "/dashboard/management/work-orders";
+  const incidentDetailBase = userRole === "client" ? "/dashboard/bonan/incidents" : "/dashboard/management/incident-reports";
 
   if (loading) {
     return (
@@ -177,7 +178,7 @@ export default function BonanRelatedItemsPage({ params }: { params: Promise<{ id
               {relatedItems.work_orders.map((workOrder) => (
                 <Link
                   key={workOrder.id}
-                  href={`/dashboard/management/work-orders/${workOrder.id}`}
+                  href={`${workOrderDetailBase}/${workOrder.id}`}
                   className="block rounded-xl border border-(--border)/25 p-4 hover:bg-(--bg) transition"
                 >
                   <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -215,7 +216,7 @@ export default function BonanRelatedItemsPage({ params }: { params: Promise<{ id
               {relatedItems.incident_reports.map((incidentReport) => (
                 <Link
                   key={incidentReport.id}
-                  href={`/dashboard/management/incident-reports/${incidentReport.id}`}
+                  href={`${incidentDetailBase}/${incidentReport.id}`}
                   className="block rounded-xl border border-(--border)/25 p-4 hover:bg-(--bg) transition"
                 >
                   <div className="flex items-start justify-between gap-3 flex-wrap">

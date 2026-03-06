@@ -1,4 +1,5 @@
 import { turso } from "./turso";
+import { ensureBonanClientSchema } from "./bonan-client";
 import {
   createDefaultDailyReportPayload,
   normalizeDailyReportPayload,
@@ -34,6 +35,7 @@ export interface BonanReport {
   report_date: string;
   work_order_id: string | null;
   work_order_number?: string;
+  client_visible_revision: number;
   created_by: string | null;
   creator_name?: string;
   payload: DailyReportPayload | WeeklyReportPayload | MonthlyReportPayload | Record<string, unknown>;
@@ -180,6 +182,7 @@ function mapRowToBonanReport(row: Record<string, unknown>): BonanReport {
     report_date: row.report_date as string,
     work_order_id: row.work_order_id as string | null,
     work_order_number: row.work_order_number as string | undefined,
+    client_visible_revision: Number(row.client_visible_revision || 1),
     created_by: row.created_by as string | null,
     creator_name: row.creator_name as string | undefined,
     payload: parsePayload(reportType, row.payload_json as string | null, row.report_date as string | undefined),
@@ -241,6 +244,7 @@ async function createLinkedWorkOrder(
     company: "Bonan Towers",
     department: "Facilities",
     location: "Bonan Towers",
+    site: "bonan_towers",
     priority: "normal",
     service_type: "inspection",
     description: descriptionByType[reportType],
@@ -255,6 +259,7 @@ export async function getBonanReportByDate(data: {
   report_date: string;
   site?: BonanSite;
 }): Promise<BonanReport | null> {
+  await ensureBonanClientSchema();
   const result = await turso.execute({
     sql: `SELECT br.*,
                  wo.work_order_number,
@@ -275,6 +280,7 @@ export async function getBonanReportByDate(data: {
 }
 
 export async function getBonanReports(filters: BonanReportFilters = {}): Promise<BonanReport[]> {
+  await ensureBonanClientSchema();
   const conditions: string[] = [];
   const args: string[] = [];
 
@@ -305,6 +311,7 @@ export async function getBonanReports(filters: BonanReportFilters = {}): Promise
 }
 
 export async function getBonanReportById(id: string): Promise<BonanReport | null> {
+  await ensureBonanClientSchema();
   const result = await turso.execute({
     sql: `SELECT br.*,
                  wo.work_order_number,
@@ -326,6 +333,7 @@ export async function createBonanReport(data: {
   site?: BonanSite;
   report_date?: string;
 }): Promise<BonanReport> {
+  await ensureBonanClientSchema();
   const id = crypto.randomUUID().replace(/-/g, "");
   const site = data.site || "bonan_towers";
   const reportDate = normalizeReportDateForType(data.report_type, data.report_date);
@@ -352,14 +360,15 @@ export async function createBonanReport(data: {
 
   await turso.execute({
     sql: `INSERT INTO bonan_reports (
-            id, site, report_type, status, report_date, work_order_id, created_by, payload_json
-          ) VALUES (?, ?, ?, 'draft', ?, ?, ?, ?)`,
+            id, site, report_type, status, report_date, work_order_id, client_visible_revision, created_by, payload_json
+          ) VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, ?)`,
     args: [
       id,
       site,
       data.report_type,
       reportDate,
       workOrderId,
+      1,
       data.created_by,
       JSON.stringify(payload),
     ],
@@ -380,6 +389,7 @@ export async function updateBonanReport(
     status?: BonanReportStatus;
   }
 ): Promise<BonanReport | null> {
+  await ensureBonanClientSchema();
   const existing = await getBonanReportById(id);
   if (!existing) return null;
 
@@ -429,6 +439,7 @@ export async function updateBonanReport(
           SET payload_json = ?,
               status = ?,
               report_date = ?,
+              client_visible_revision = COALESCE(client_visible_revision, 1) + 1,
               last_autosaved_at = ?,
               submitted_at = ?,
               updated_at = datetime('now')
@@ -519,6 +530,7 @@ function getReportPeriod(report: BonanReport): { start: string; end: string; day
 }
 
 export async function getBonanCollectiveSummary(reportId: string): Promise<BonanCollectiveSummary | null> {
+  await ensureBonanClientSchema();
   const report = await getBonanReportById(reportId);
   if (!report) return null;
 
@@ -654,6 +666,7 @@ export async function getBonanCollectiveSummary(reportId: string): Promise<Bonan
 }
 
 export async function getBonanRelatedItems(reportId: string): Promise<BonanRelatedItems | null> {
+  await ensureBonanClientSchema();
   const report = await getBonanReportById(reportId);
   if (!report) return null;
 
@@ -741,6 +754,7 @@ export async function getBonanRelatedItems(reportId: string): Promise<BonanRelat
 }
 
 export async function getBonanAssociatedWorkOrders(reportId: string): Promise<BonanAssociatedWorkOrder[]> {
+  await ensureBonanClientSchema();
   const result = await turso.execute({
     sql: `SELECT brwo.*,
                  wo.work_order_number,
@@ -770,6 +784,7 @@ export async function createAssociatedWorkOrderForBonanReport(data: {
   priority?: "emergency" | "high" | "normal" | "low";
   service_type?: "maintenance" | "repair" | "replace" | "inspection" | "preventive" | "cleaning" | "other";
 }): Promise<BonanAssociatedWorkOrder | null> {
+  await ensureBonanClientSchema();
   const report = await getBonanReportById(data.report_id);
   if (!report) return null;
 
@@ -786,6 +801,7 @@ export async function createAssociatedWorkOrderForBonanReport(data: {
     department: "Facilities",
     location: data.location || "Bonan Towers",
     area: data.area || undefined,
+    site: "bonan_towers",
     priority: data.priority || "normal",
     service_type: data.service_type || "maintenance",
     description: workOrderDescription,
@@ -820,6 +836,7 @@ export async function createAssociatedWorkOrderForBonanReport(data: {
 }
 
 export async function deleteBonanReport(id: string): Promise<boolean> {
+  await ensureBonanClientSchema();
   const existing = await getBonanReportById(id);
   if (!existing) return false;
 

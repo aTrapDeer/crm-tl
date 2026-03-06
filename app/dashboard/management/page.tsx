@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import WorkOrderListView from "@/app/components/WorkOrderListView";
 import WorkOrderDetailsModal from "@/app/components/WorkOrderDetailsModal";
 import DocumentManager from "@/app/components/DocumentManager";
+
+type ManagementTab = "work-orders" | "incident-reports" | "documents";
+type SiteFilter = "all" | "bonan_towers";
+type WorkOrderStatus = "pending" | "in_progress" | "completed" | "cancelled";
+type IncidentStatus = "open" | "in_progress" | "closed";
 
 interface WorkOrder {
   id: string;
@@ -31,25 +36,18 @@ interface WorkOrder {
   time_in: string | null;
   time_out: string | null;
   total_labor_hours: number | null;
-  work_completed: "pending" | "in_progress" | "completed" | "cancelled";
+  work_completed: WorkOrderStatus;
   completed_date: string | null;
   completed_time: string | null;
   work_summary: string | null;
   project_id: string | null;
   project_name?: string;
+  site: "bonan_towers" | null;
+  publication_status: "draft" | "published";
   created_by: string | null;
   creator_name?: string;
   created_at: string;
   updated_at: string;
-}
-
-interface Stats {
-  total: number;
-  pending: number;
-  in_progress: number;
-  completed: number;
-  cancelled: number;
-  emergency: number;
 }
 
 interface IncidentReport {
@@ -58,18 +56,48 @@ interface IncidentReport {
   report_date: string;
   section_name: string;
   location: string | null;
-  status: "open" | "in_progress" | "closed";
+  status: IncidentStatus;
   description: string;
+  site: "bonan_towers" | null;
+  publication_status: "draft" | "published";
   created_at: string;
+}
+
+type WorkOrderModalUpdate = Omit<WorkOrder, "site" | "publication_status">;
+
+const WORK_ORDER_STATUS_VALUES: WorkOrderStatus[] = [
+  "pending",
+  "in_progress",
+  "completed",
+  "cancelled",
+];
+
+const INCIDENT_STATUS_VALUES: IncidentStatus[] = [
+  "open",
+  "in_progress",
+  "closed",
+];
+
+function parseStatuses<T extends string>(value: string | null, allowed: readonly T[]) {
+  if (!value) return [];
+
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry): entry is T => allowed.includes(entry as T));
+}
+
+function formatIncidentStatusLabel(status: IncidentStatus) {
+  return status === "in_progress" ? "In Progress" : status[0].toUpperCase() + status.slice(1);
 }
 
 export default function ManagementPage() {
   const router = useRouter();
-  const [user, setUser] = useState<{ role: "admin" | "employee" } | null>(null);
-  const [activeTab, setActiveTab] = useState<"work-orders" | "incident-reports" | "documents">("work-orders");
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [user, setUser] = useState<{ role: "admin" } | null>(null);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [incidentReports, setIncidentReports] = useState<IncidentReport[]>([]);
-  const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedWorkOrder, setSelectedWorkOrder] = useState<WorkOrder | null>(null);
   const [pendingDeleteWorkOrder, setPendingDeleteWorkOrder] = useState<WorkOrder | null>(null);
@@ -77,7 +105,63 @@ export default function ManagementPage() {
   const [deleteWorkOrderError, setDeleteWorkOrderError] = useState("");
   const [deletingWorkOrder, setDeletingWorkOrder] = useState(false);
 
-  // Check auth
+  const activeTab: ManagementTab = useMemo(() => {
+    const tab = searchParams.get("tab");
+    if (
+      tab === "work-orders" ||
+      tab === "incident-reports" ||
+      tab === "documents"
+    ) {
+      return tab;
+    }
+    return "work-orders";
+  }, [searchParams]);
+
+  const siteFilter: SiteFilter = searchParams.get("site") === "bonan_towers" ? "bonan_towers" : "all";
+  const workOrderStatuses = useMemo(
+    () => parseStatuses(searchParams.get("statuses") || searchParams.get("status"), WORK_ORDER_STATUS_VALUES),
+    [searchParams]
+  );
+  const incidentStatuses = useMemo(
+    () => parseStatuses(searchParams.get("incidentStatus") || searchParams.get("statuses"), INCIDENT_STATUS_VALUES),
+    [searchParams]
+  );
+
+  const updateQuery = useCallback(
+    (updates: Record<string, string | null>) => {
+      const params = new URLSearchParams(searchParams.toString());
+
+      for (const [key, value] of Object.entries(updates)) {
+        if (!value) {
+          params.delete(key);
+        } else {
+          params.set(key, value);
+        }
+      }
+
+      const nextUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+      router.replace(nextUrl);
+    },
+    [pathname, router, searchParams]
+  );
+
+  const buildHref = useCallback(
+    (updates: Record<string, string | null>) => {
+      const params = new URLSearchParams(searchParams.toString());
+
+      for (const [key, value] of Object.entries(updates)) {
+        if (!value) {
+          params.delete(key);
+        } else {
+          params.set(key, value);
+        }
+      }
+
+      return params.toString() ? `${pathname}?${params.toString()}` : pathname;
+    },
+    [pathname, searchParams]
+  );
+
   useEffect(() => {
     async function checkAuth() {
       try {
@@ -89,30 +173,20 @@ export default function ManagementPage() {
           return;
         }
 
-        // Only admin can access management
         if (data.user.role !== "admin") {
           router.push("/dashboard");
           return;
         }
 
-        setUser({ role: data.user.role });
+        setUser({ role: "admin" });
       } catch (error) {
         console.error("Auth check failed:", error);
         router.push("/login");
       }
     }
-    checkAuth();
-  }, [router]);
 
-  const fetchStats = useCallback(async () => {
-    try {
-      const res = await fetch("/api/work-orders/stats");
-      const data = await res.json();
-      setStats(data.stats || null);
-    } catch (error) {
-      console.error("Failed to fetch stats:", error);
-    }
-  }, []);
+    void checkAuth();
+  }, [router]);
 
   useEffect(() => {
     if (!user) return;
@@ -120,51 +194,112 @@ export default function ManagementPage() {
     let cancelled = false;
 
     async function loadData() {
+      setLoading(true);
       try {
-        const [workOrdersRes, statsRes, incidentReportsRes] = await Promise.all([
+        const [workOrdersRes, incidentReportsRes] = await Promise.all([
           fetch("/api/work-orders"),
-          fetch("/api/work-orders/stats"),
           fetch("/api/incident-reports"),
         ]);
-        const [workOrdersData, statsData, incidentReportsData] = await Promise.all([
+        const [workOrdersData, incidentReportsData] = await Promise.all([
           workOrdersRes.json(),
-          statsRes.json(),
           incidentReportsRes.json(),
         ]);
 
         if (!cancelled) {
           setWorkOrders(workOrdersData.workOrders || []);
-          setStats(statsData.stats || null);
           setIncidentReports(incidentReportsData.incidentReports || []);
-          setLoading(false);
         }
       } catch (error) {
-        console.error("Failed to load data:", error);
+        console.error("Failed to load management data:", error);
+      } finally {
         if (!cancelled) {
           setLoading(false);
         }
       }
     }
 
-    loadData();
+    void loadData();
 
     return () => {
       cancelled = true;
     };
   }, [user]);
 
-  function handleWorkOrderUpdate(updated: WorkOrder) {
-    setWorkOrders((prev) =>
-      prev.map((wo) => (wo.id === updated.id ? updated : wo))
+  const workOrdersBySite = useMemo(
+    () =>
+      siteFilter === "bonan_towers"
+        ? workOrders.filter((workOrder) => workOrder.site === "bonan_towers")
+        : workOrders,
+    [siteFilter, workOrders]
+  );
+
+  const incidentReportsBySite = useMemo(
+    () =>
+      siteFilter === "bonan_towers"
+        ? incidentReports.filter((incident) => incident.site === "bonan_towers")
+        : incidentReports,
+    [incidentReports, siteFilter]
+  );
+
+  const filteredWorkOrders = useMemo(
+    () =>
+      workOrderStatuses.length === 0
+        ? workOrdersBySite
+        : workOrdersBySite.filter((workOrder) => workOrderStatuses.includes(workOrder.work_completed)),
+    [workOrderStatuses, workOrdersBySite]
+  );
+
+  const filteredIncidentReports = useMemo(
+    () =>
+      incidentStatuses.length === 0
+        ? incidentReportsBySite
+        : incidentReportsBySite.filter((incident) => incidentStatuses.includes(incident.status)),
+    [incidentReportsBySite, incidentStatuses]
+  );
+
+  const workOrderStats = useMemo(
+    () => ({
+      total: workOrdersBySite.length,
+      pending: workOrdersBySite.filter((workOrder) => workOrder.work_completed === "pending").length,
+      in_progress: workOrdersBySite.filter((workOrder) => workOrder.work_completed === "in_progress").length,
+      completed: workOrdersBySite.filter((workOrder) => workOrder.work_completed === "completed").length,
+      cancelled: workOrdersBySite.filter((workOrder) => workOrder.work_completed === "cancelled").length,
+      emergency: workOrdersBySite.filter(
+        (workOrder) =>
+          workOrder.priority === "emergency" &&
+          workOrder.work_completed !== "completed" &&
+          workOrder.work_completed !== "cancelled"
+      ).length,
+    }),
+    [workOrdersBySite]
+  );
+
+  const incidentStats = useMemo(
+    () => ({
+      total: incidentReportsBySite.length,
+      open: incidentReportsBySite.filter((incident) => incident.status === "open").length,
+      in_progress: incidentReportsBySite.filter((incident) => incident.status === "in_progress").length,
+      closed: incidentReportsBySite.filter((incident) => incident.status === "closed").length,
+    }),
+    [incidentReportsBySite]
+  );
+
+  function handleWorkOrderUpdate(updated: WorkOrderModalUpdate) {
+    setWorkOrders((current) =>
+      current.map((workOrder) =>
+        workOrder.id === updated.id
+          ? { ...workOrder, ...updated }
+          : workOrder
+      )
     );
-    setSelectedWorkOrder(updated);
-    fetchStats();
+    setSelectedWorkOrder((current) =>
+      current && current.id === updated.id ? { ...current, ...updated } : current
+    );
   }
 
   function handleWorkOrderDelete(id: string) {
-    setWorkOrders((prev) => prev.filter((wo) => wo.id !== id));
+    setWorkOrders((current) => current.filter((workOrder) => workOrder.id !== id));
     setSelectedWorkOrder(null);
-    fetchStats();
   }
 
   function openDeleteWorkOrderWarning(workOrder: WorkOrder) {
@@ -213,7 +348,6 @@ export default function ManagementPage() {
   return (
     <div className="min-h-screen bg-(--bg)">
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-2xl font-bold text-(--text)">Management Portal</h1>
@@ -231,40 +365,92 @@ export default function ManagementPage() {
           )}
         </div>
 
-        {/* Stats Cards */}
-        {stats && activeTab === "work-orders" && (
+        <div className="flex flex-col gap-3 rounded-2xl border border-(--border)/15 bg-white p-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-(--text)/55">View Filter</p>
+            <p className="text-sm text-(--text)/65">
+              URL filters control the current management view and can be linked from dashboards.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => updateQuery({ site: null })}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                siteFilter === "all"
+                  ? "bg-(--text) text-white"
+                  : "border border-(--border)/30 text-(--text) hover:bg-(--bg)"
+              }`}
+            >
+              All Sites
+            </button>
+            <button
+              type="button"
+              onClick={() => updateQuery({ site: "bonan_towers" })}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                siteFilter === "bonan_towers"
+                  ? "bg-(--text) text-white"
+                  : "border border-(--border)/30 text-(--text) hover:bg-(--bg)"
+              }`}
+            >
+              Bonan Towers
+            </button>
+          </div>
+        </div>
+
+        {activeTab === "work-orders" && (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            <div className="tl-card p-4">
+            <Link href={buildHref({ tab: "work-orders", statuses: null })} className="tl-card p-4 transition hover:-translate-y-0.5 hover:shadow-md">
               <p className="text-xs text-(--text)/60 uppercase tracking-wide">Total</p>
-              <p className="text-2xl font-bold text-(--text)">{stats.total}</p>
-            </div>
-            <div className="tl-card p-4">
+              <p className="text-2xl font-bold text-(--text)">{workOrderStats.total}</p>
+            </Link>
+            <Link href={buildHref({ tab: "work-orders", statuses: "pending" })} className="tl-card p-4 transition hover:-translate-y-0.5 hover:shadow-md">
               <p className="text-xs text-(--text)/60 uppercase tracking-wide">Pending</p>
-              <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
-            </div>
-            <div className="tl-card p-4">
+              <p className="text-2xl font-bold text-yellow-600">{workOrderStats.pending}</p>
+            </Link>
+            <Link href={buildHref({ tab: "work-orders", statuses: "in_progress" })} className="tl-card p-4 transition hover:-translate-y-0.5 hover:shadow-md">
               <p className="text-xs text-(--text)/60 uppercase tracking-wide">In Progress</p>
-              <p className="text-2xl font-bold text-blue-600">{stats.in_progress}</p>
-            </div>
-            <div className="tl-card p-4">
+              <p className="text-2xl font-bold text-blue-600">{workOrderStats.in_progress}</p>
+            </Link>
+            <Link href={buildHref({ tab: "work-orders", statuses: "completed" })} className="tl-card p-4 transition hover:-translate-y-0.5 hover:shadow-md">
               <p className="text-xs text-(--text)/60 uppercase tracking-wide">Completed</p>
-              <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
-            </div>
-            <div className="tl-card p-4">
+              <p className="text-2xl font-bold text-green-600">{workOrderStats.completed}</p>
+            </Link>
+            <Link href={buildHref({ tab: "work-orders", statuses: "cancelled" })} className="tl-card p-4 transition hover:-translate-y-0.5 hover:shadow-md">
               <p className="text-xs text-(--text)/60 uppercase tracking-wide">Cancelled</p>
-              <p className="text-2xl font-bold text-gray-600">{stats.cancelled}</p>
-            </div>
+              <p className="text-2xl font-bold text-gray-600">{workOrderStats.cancelled}</p>
+            </Link>
             <div className="tl-card p-4 border-2 border-red-200">
               <p className="text-xs text-red-600 uppercase tracking-wide">Emergency</p>
-              <p className="text-2xl font-bold text-red-600">{stats.emergency}</p>
+              <p className="text-2xl font-bold text-red-600">{workOrderStats.emergency}</p>
             </div>
           </div>
         )}
 
-        {/* Tabs */}
+        {activeTab === "incident-reports" && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Link href={buildHref({ tab: "incident-reports", incidentStatus: null })} className="tl-card p-4 transition hover:-translate-y-0.5 hover:shadow-md">
+              <p className="text-xs text-(--text)/60 uppercase tracking-wide">Total</p>
+              <p className="text-2xl font-bold text-(--text)">{incidentStats.total}</p>
+            </Link>
+            <Link href={buildHref({ tab: "incident-reports", incidentStatus: "open" })} className="tl-card p-4 transition hover:-translate-y-0.5 hover:shadow-md">
+              <p className="text-xs text-(--text)/60 uppercase tracking-wide">Open</p>
+              <p className="text-2xl font-bold text-amber-600">{incidentStats.open}</p>
+            </Link>
+            <Link href={buildHref({ tab: "incident-reports", incidentStatus: "in_progress" })} className="tl-card p-4 transition hover:-translate-y-0.5 hover:shadow-md">
+              <p className="text-xs text-(--text)/60 uppercase tracking-wide">In Progress</p>
+              <p className="text-2xl font-bold text-blue-600">{incidentStats.in_progress}</p>
+            </Link>
+            <Link href={buildHref({ tab: "incident-reports", incidentStatus: "closed" })} className="tl-card p-4 transition hover:-translate-y-0.5 hover:shadow-md">
+              <p className="text-xs text-(--text)/60 uppercase tracking-wide">Closed</p>
+              <p className="text-2xl font-bold text-green-600">{incidentStats.closed}</p>
+            </Link>
+          </div>
+        )}
+
         <div className="flex gap-2 border-b border-(--border)">
           <button
-            onClick={() => setActiveTab("work-orders")}
+            onClick={() => updateQuery({ tab: "work-orders" })}
             className={`px-4 py-3 text-sm font-medium border-b-2 transition ${
               activeTab === "work-orders"
                 ? "border-(--text) text-(--text)"
@@ -274,7 +460,7 @@ export default function ManagementPage() {
             Work Orders
           </button>
           <button
-            onClick={() => setActiveTab("incident-reports")}
+            onClick={() => updateQuery({ tab: "incident-reports" })}
             className={`px-4 py-3 text-sm font-medium border-b-2 transition ${
               activeTab === "incident-reports"
                 ? "border-(--text) text-(--text)"
@@ -284,7 +470,7 @@ export default function ManagementPage() {
             Incident Reports
           </button>
           <button
-            onClick={() => setActiveTab("documents")}
+            onClick={() => updateQuery({ tab: "documents" })}
             className={`px-4 py-3 text-sm font-medium border-b-2 transition ${
               activeTab === "documents"
                 ? "border-(--text) text-(--text)"
@@ -295,30 +481,28 @@ export default function ManagementPage() {
           </button>
         </div>
 
-        {/* Tab Content */}
         {activeTab === "work-orders" ? (
           <WorkOrderListView
-            workOrders={workOrders}
-            onSelectWorkOrder={(wo) => {
-              // Find the full work order from our state
-              const fullWO = workOrders.find((w) => w.id === wo.id);
-              if (fullWO) setSelectedWorkOrder(fullWO);
+            workOrders={filteredWorkOrders}
+            onSelectWorkOrder={(workOrder) => {
+              const fullWorkOrder = workOrders.find((entry) => entry.id === workOrder.id);
+              if (fullWorkOrder) setSelectedWorkOrder(fullWorkOrder);
             }}
-            onEditWorkOrder={(wo) => {
-              router.push(`/dashboard/management/work-orders/${wo.id}/edit`);
+            onEditWorkOrder={(workOrder) => {
+              router.push(`/dashboard/management/work-orders/${workOrder.id}/edit`);
             }}
-            onDeleteWorkOrder={(wo) => openDeleteWorkOrderWarning(wo as WorkOrder)}
+            onDeleteWorkOrder={(workOrder) => openDeleteWorkOrderWarning(workOrder as WorkOrder)}
             loading={loading}
           />
         ) : activeTab === "incident-reports" ? (
           <div className="tl-card overflow-hidden">
             {loading ? (
               <div className="p-6 text-sm text-(--text)/60">Loading incident reports...</div>
-            ) : incidentReports.length === 0 ? (
-              <div className="p-6 text-sm text-(--text)/60">No incident reports found.</div>
+            ) : filteredIncidentReports.length === 0 ? (
+              <div className="p-6 text-sm text-(--text)/60">No incident reports found for the current filters.</div>
             ) : (
               <div className="divide-y divide-(--border)/10">
-                {incidentReports.map((incident) => (
+                {filteredIncidentReports.map((incident) => (
                   <button
                     key={incident.id}
                     type="button"
@@ -336,7 +520,7 @@ export default function ManagementPage() {
                       </div>
                       <div className="shrink-0 text-right">
                         <span
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize ${
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                             incident.status === "closed"
                               ? "bg-green-100 text-green-700"
                               : incident.status === "in_progress"
@@ -344,7 +528,7 @@ export default function ManagementPage() {
                                 : "bg-amber-100 text-amber-700"
                           }`}
                         >
-                          {incident.status.replace("_", " ")}
+                          {formatIncidentStatusLabel(incident.status)}
                         </span>
                         <p className="text-[10px] text-(--text)/50 mt-1">{incident.report_date}</p>
                       </div>
@@ -408,7 +592,6 @@ export default function ManagementPage() {
         </div>
       )}
 
-      {/* Work Order Details Modal */}
       {selectedWorkOrder && (
         <WorkOrderDetailsModal
           workOrder={selectedWorkOrder}
@@ -421,4 +604,3 @@ export default function ManagementPage() {
     </div>
   );
 }
-

@@ -68,6 +68,26 @@ function classNames(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
 }
 
+function hasText(value: string | null | undefined): boolean {
+  return Boolean(value && value.trim().length > 0);
+}
+
+function countRowsWithValues<T extends object>(
+  rows: T[],
+  keys: Array<keyof T>
+): number {
+  return rows.filter((row) => keys.some((key) => hasText(row[key] as string | null | undefined))).length;
+}
+
+function getDeficiencyLevelBucket(level: string): "1" | "2" | "3" | "4" | null {
+  const normalized = level.trim().toLowerCase();
+  if (normalized === "1" || normalized === "l1" || normalized === "level 1") return "1";
+  if (normalized === "2" || normalized === "l2" || normalized === "level 2") return "2";
+  if (normalized === "3" || normalized === "l3" || normalized === "level 3") return "3";
+  if (normalized === "4" || normalized === "l4" || normalized === "level 4") return "4";
+  return null;
+}
+
 function statusLabel(status: BonanReportStatus): string {
   return status === "submitted" ? "Submitted" : "Draft";
 }
@@ -304,6 +324,85 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
     if (!summary || summary.daily_reports.due === 0) return "0%";
     return `${Math.round((summary.daily_reports.submitted / summary.daily_reports.due) * 100)}%`;
   }, [summary]);
+
+  const resolvedSummaryMetrics = useMemo(() => {
+    if (!payload) {
+      return {
+        totalWorkOrdersOpened: "0",
+        totalWorkOrdersClosed: "0",
+        workOrdersRemainingOpen: "0",
+        level1Count: "0",
+        level2Count: "0",
+        level3Count: "0",
+        level4Count: "0",
+        notableEvents: "0",
+      };
+    }
+
+    const levelCounts = payload.deficiencyRegister.rows.reduce(
+      (counts, row) => {
+        const bucket = getDeficiencyLevelBucket(row.level);
+        if (bucket) counts[bucket] += 1;
+        return counts;
+      },
+      { "1": 0, "2": 0, "3": 0, "4": 0 }
+    );
+
+    const openedFallback = summary?.work_orders.total ?? countRowsWithValues(payload.workOrdersOpened, [
+      "workOrderNumber",
+      "description",
+      "area",
+      "owner",
+      "status",
+    ]);
+    const closedFallback = summary?.work_orders.completed ?? countRowsWithValues(payload.workOrdersClosed, [
+      "workOrderNumber",
+      "description",
+      "area",
+      "owner",
+      "status",
+    ]);
+    const remainingOpenFallback =
+      summary?.work_orders.pending !== undefined && summary?.work_orders.in_progress !== undefined
+        ? summary.work_orders.pending + summary.work_orders.in_progress
+        : countRowsWithValues(payload.agingOpenWorkOrders, [
+            "workOrderNumber",
+            "description",
+            "area",
+            "owner",
+            "status",
+          ]);
+    const notableEventsFallback = summary?.incidents.total ?? countRowsWithValues(payload.incidents, [
+      "incidentNumber",
+      "incidentType",
+      "location",
+      "owner",
+      "status",
+    ]);
+
+    return {
+      totalWorkOrdersOpened: payload.summaryMetrics.totalWorkOrdersOpened || String(openedFallback),
+      totalWorkOrdersClosed: payload.summaryMetrics.totalWorkOrdersClosed || String(closedFallback),
+      workOrdersRemainingOpen: payload.summaryMetrics.workOrdersRemainingOpen || String(remainingOpenFallback),
+      level1Count:
+        payload.summaryMetrics.level1Count ||
+        payload.deficiencyRegister.level1 ||
+        String(levelCounts["1"]),
+      level2Count:
+        payload.summaryMetrics.level2Count ||
+        payload.deficiencyRegister.level2 ||
+        String(levelCounts["2"]),
+      level3Count:
+        payload.summaryMetrics.level3Count ||
+        payload.deficiencyRegister.level3 ||
+        String(levelCounts["3"]),
+      level4Count:
+        payload.summaryMetrics.level4Count ||
+        payload.deficiencyRegister.level4 ||
+        String(levelCounts["4"]),
+      notableEvents: payload.summaryMetrics.notableEvents || String(notableEventsFallback),
+    };
+  }, [payload, summary]);
 
   if (loading || !payload || !report) {
     return (
@@ -718,7 +817,7 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
                   <tr key={field}>
                     <td className="px-2.5 py-1.5">{label}</td>
                     <td className="px-2.5 py-1.5">
-                      <input value={payload.summaryMetrics[field]} onChange={(event) => updatePayload((current) => ({ ...current, summaryMetrics: { ...current.summaryMetrics, [field]: event.target.value } }))} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" />
+                      <input value={resolvedSummaryMetrics[field]} onChange={(event) => updatePayload((current) => ({ ...current, summaryMetrics: { ...current.summaryMetrics, [field]: event.target.value } }))} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" />
                     </td>
                   </tr>
                 ))}

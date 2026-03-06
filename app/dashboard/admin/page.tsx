@@ -710,52 +710,70 @@ export default function AdminDashboard() {
           <p className="text-[10px] md:text-xs uppercase tracking-[0.15em] md:tracking-[0.2em] text-(--text)">
             Total Projects
           </p>
-          <p className="text-2xl md:text-3xl font-semibold text-(--text) mt-1 md:mt-2">
+          <Link
+            href="/dashboard/projects"
+            className="mt-1 md:mt-2 inline-block text-2xl md:text-3xl font-semibold text-blue-700 hover:underline"
+          >
             {projects.length}
-          </p>
+          </Link>
         </div>
         <div className="tl-card p-3 md:p-5">
           <p className="text-[10px] md:text-xs uppercase tracking-[0.15em] md:tracking-[0.2em] text-(--text)">
             Active Projects
           </p>
-          <p className="text-2xl md:text-3xl font-semibold text-(--text) mt-1 md:mt-2">
+          <Link
+            href="/dashboard/projects?status=in_progress"
+            className="mt-1 md:mt-2 inline-block text-2xl md:text-3xl font-semibold text-blue-700 hover:underline"
+          >
             {projects.filter((p) => p.status === "in_progress").length}
-          </p>
+          </Link>
         </div>
         <div className="tl-card p-3 md:p-5">
           <p className="text-[10px] md:text-xs uppercase tracking-[0.15em] md:tracking-[0.2em] text-(--text)">
             Total Budget
           </p>
-          <p className="text-lg md:text-2xl font-semibold text-(--text) mt-1 md:mt-2">
+          <Link
+            href="/dashboard/projects"
+            className="mt-1 md:mt-2 inline-block text-lg md:text-2xl font-semibold text-blue-700 hover:underline"
+          >
             {formatCurrency(totalBudget)}
-          </p>
+          </Link>
         </div>
         <div className="tl-card p-3 md:p-5">
           <p className="text-[10px] md:text-xs uppercase tracking-[0.15em] md:tracking-[0.2em] text-(--text)">
             Funded Projects
           </p>
-          <p className="text-2xl md:text-3xl font-semibold text-(--text) mt-1 md:mt-2">
+          <Link
+            href="/dashboard/projects"
+            className="mt-1 md:mt-2 inline-flex items-baseline gap-0.5 text-2xl md:text-3xl font-semibold text-blue-700 hover:underline"
+          >
             {fundedProjects}
-            <span className="text-sm md:text-lg text-(--text)">
+            <span className="text-sm md:text-lg text-blue-700">
               /{projects.length}
             </span>
-          </p>
+          </Link>
         </div>
         <div className="tl-card p-3 md:p-5">
           <p className="text-[10px] md:text-xs uppercase tracking-[0.15em] md:tracking-[0.2em] text-(--text)">
             Bonan Open WOs
           </p>
-          <p className="text-2xl md:text-3xl font-semibold text-(--text) mt-1 md:mt-2">
+          <Link
+            href="/dashboard/management?tab=work-orders&site=bonan_towers&statuses=pending%2Cin_progress"
+            className="mt-1 md:mt-2 inline-block text-2xl md:text-3xl font-semibold text-blue-700 hover:underline"
+          >
             {bonanOpenWorkOrders}
-          </p>
+          </Link>
         </div>
         <div className="tl-card p-3 md:p-5">
           <p className="text-[10px] md:text-xs uppercase tracking-[0.15em] md:tracking-[0.2em] text-(--text)">
             Bonan Active Incidents
           </p>
-          <p className="text-2xl md:text-3xl font-semibold text-(--text) mt-1 md:mt-2">
+          <Link
+            href="/dashboard/management?tab=incident-reports&site=bonan_towers&incidentStatus=open%2Cin_progress"
+            className="mt-1 md:mt-2 inline-block text-2xl md:text-3xl font-semibold text-blue-700 hover:underline"
+          >
             {bonanActiveIncidents}
-          </p>
+          </Link>
         </div>
       </div>
 

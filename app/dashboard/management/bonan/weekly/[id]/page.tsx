@@ -17,6 +17,7 @@ import {
   formatUsCentralTime,
   getMonthKey,
 } from "@/lib/us-central-time";
+import BonanClientReportReview from "@/app/components/BonanClientReportReview";
 
 interface BonanWeeklyReport {
   id: string;
@@ -340,6 +341,48 @@ export default function BonanWeeklyReportEditorPage({ params }: { params: Promis
     );
   }
 
+  if (userRole === "client") {
+    return (
+      <BonanClientReportReview
+        reportId={report.id}
+        title={`Weekly Check ${payload.metadata.weekStart} to ${payload.metadata.weekEnd}`}
+        subtitle={`${report.work_order_number ? `WO #${report.work_order_number} | ` : ""}Read-only Bonan client review`}
+        backHref="/dashboard/bonan/weekly"
+        payload={payload as unknown as Record<string, unknown>}
+        actionArea={payload.metadata.weekStart}
+        currentFieldValues={{
+          "metadata.propertyManagerReview": payload.metadata.propertyManagerReview || "",
+          "metadata.constructionMgmtReview": payload.metadata.constructionMgmtReview || "",
+          "collectiveSummary.notes": payload.collectiveSummary.notes || "",
+          managementNotes: payload.managementNotes || "",
+        }}
+        fieldOptions={[
+          { value: "metadata.propertyManagerReview", label: "Property Manager Review" },
+          { value: "metadata.constructionMgmtReview", label: "Construction Review" },
+          { value: "collectiveSummary.notes", label: "Collective Summary Notes" },
+          { value: "managementNotes", label: "Management Notes" },
+        ]}
+        summaryCards={[
+          {
+            label: "Incidents",
+            value: summary?.incidents.total ?? 0,
+            href: `/dashboard/bonan/reports/${report.id}/related-items?focus=incidents`,
+          },
+          {
+            label: "Work Orders",
+            value: summary?.work_orders.total ?? 0,
+            href: `/dashboard/bonan/reports/${report.id}/related-items?focus=work-orders`,
+          },
+          {
+            label: "Daily Submitted",
+            value: `${summary?.daily_reports.submitted ?? 0}/${summary?.daily_reports.due ?? 0}`,
+          },
+          { label: "Completion", value: dailyCompletionPercent },
+        ]}
+      />
+    );
+  }
+
   return (
     <div className="bonan-weekly-editor min-h-screen bg-(--bg) overflow-x-hidden">
       <div className="mx-auto w-full max-w-[1320px] px-3 md:px-4 py-4 md:py-5 space-y-3 md:space-y-4">
@@ -376,12 +419,6 @@ export default function BonanWeeklyReportEditorPage({ params }: { params: Promis
               <p className="text-[11px] text-(--text)/55 mt-0.5">{saveMessage || " "}</p>
             </div>
           </div>
-
-          {userRole === "client" && (
-            <p className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700">
-              Client review mode: this report is read-only.
-            </p>
-          )}
 
           {error && (
             <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
@@ -471,8 +508,7 @@ export default function BonanWeeklyReportEditorPage({ params }: { params: Promis
                   href={`${parentMonthlyPathBase}/${parentMonthly.id}`}
                   className="text-xs font-semibold text-blue-700 hover:underline"
                 >
-                  {userRole === "client" ? "Open Parent Monthly Summary" : "Open Parent Monthly"}
-                  {" "}
+                  Open Parent Monthly{" "}
                   ({getMonthKey(parentMonthly.report_date)})
                 </Link>
               ) : (

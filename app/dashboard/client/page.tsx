@@ -32,6 +32,7 @@ interface ProjectUpdate {
 export default function ClientDashboard() {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [bonanMemberships, setBonanMemberships] = useState<Array<{ id: string }>>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [updates, setUpdates] = useState<ProjectUpdate[]>([]);
@@ -44,9 +45,16 @@ export default function ClientDashboard() {
 
   async function fetchProjects() {
     try {
-      const res = await fetch("/api/projects");
-      const data = await res.json();
+      const [projectsRes, bonanRes] = await Promise.all([
+        fetch("/api/projects"),
+        fetch("/api/bonan/clients"),
+      ]);
+      const data = await projectsRes.json();
+      const bonanData = await bonanRes.json().catch(() => ({}));
       setProjects(data.projects || []);
+      if (bonanRes.ok) {
+        setBonanMemberships(bonanData.memberships || []);
+      }
     } catch (error) {
       console.error("Failed to fetch projects:", error);
     } finally {
@@ -129,6 +137,20 @@ export default function ClientDashboard() {
           View your projects, track progress, and access shared documents
         </p>
       </div>
+
+      {bonanMemberships.length > 0 && (
+        <button
+          type="button"
+          onClick={() => router.push("/dashboard/bonan")}
+          className="w-full rounded-3xl border border-blue-200 bg-[linear-gradient(135deg,#01224f_0%,#0d3e8d_55%,#1f4faa_100%)] px-5 py-5 text-left text-white shadow-[0_20px_40px_rgba(1,34,79,0.25)]"
+        >
+          <p className="text-xs uppercase tracking-[0.28em] text-white/70">Bonan Towers</p>
+          <h3 className="mt-2 text-xl font-semibold">Open your Bonan client review hub</h3>
+          <p className="mt-2 text-sm text-white/80">
+            Review published work orders, incidents, walkthroughs, and approvals in one simple place.
+          </p>
+        </button>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-(--border)">

@@ -3,6 +3,7 @@ import { getSession, getUserById } from "@/lib/auth";
 import { createBonanReport, getBonanReportByDate, getBonanReports } from "@/lib/bonan-reports";
 import type { BonanReportStatus, BonanReportType } from "@/lib/bonan-types";
 import { getMonthStartDate, getUsCentralDate, getWeekStartSunday } from "@/lib/us-central-time";
+import { userHasBonanClientMembership } from "@/lib/bonan-client";
 
 function isValidReportType(value: string): value is BonanReportType {
   return value === "daily" || value === "weekly" || value === "monthly";
@@ -44,6 +45,9 @@ export async function GET(request: Request) {
     if (!user) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
+    if (user.role === "client" && !(await userHasBonanClientMembership(user.id))) {
+      return Response.json({ error: "Bonan access denied" }, { status: 403 });
+    }
 
     const { searchParams } = new URL(request.url);
     const reportTypeParam = searchParams.get("report_type");
@@ -67,7 +71,7 @@ export async function GET(request: Request) {
 
     const reports = await getBonanReports({
       report_type: reportType,
-      status: status,
+      status: user.role === "client" ? "submitted" : status,
     });
 
     return Response.json({ reports });

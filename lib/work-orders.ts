@@ -1,4 +1,5 @@
 import { turso } from "./turso";
+import { ensureBonanClientSchema } from "./bonan-client";
 
 export interface WorkOrder {
   id: string;
@@ -30,6 +31,8 @@ export interface WorkOrder {
   work_summary: string | null;
   project_id: string | null;
   project_name?: string;
+  site: "bonan_towers" | null;
+  client_visible_revision: number;
   publication_status: "draft" | "published";
   published_at: string | null;
   created_by: string | null;
@@ -94,6 +97,8 @@ function mapRowToWorkOrder(row: Record<string, unknown>): WorkOrder {
     work_summary: row.work_summary as string | null,
     project_id: row.project_id as string | null,
     project_name: row.project_name as string | undefined,
+    site: (row.site as WorkOrder["site"]) || null,
+    client_visible_revision: Number(row.client_visible_revision || 1),
     publication_status: row.publication_status as WorkOrder["publication_status"],
     published_at: row.published_at as string | null,
     created_by: row.created_by as string | null,
@@ -157,6 +162,7 @@ export async function generateWorkOrderNumber(): Promise<string> {
 // ============ WORK ORDER CRUD ============
 
 export async function getAllWorkOrders(): Promise<WorkOrder[]> {
+  await ensureBonanClientSchema();
   const result = await turso.execute(`
     SELECT wo.*,
            u.first_name || ' ' || u.last_name as assigned_user_name,
@@ -172,6 +178,7 @@ export async function getAllWorkOrders(): Promise<WorkOrder[]> {
 }
 
 export async function getWorkOrdersByAssignee(userId: string): Promise<WorkOrder[]> {
+  await ensureBonanClientSchema();
   const result = await turso.execute({
     sql: `SELECT wo.*,
                  u.first_name || ' ' || u.last_name as assigned_user_name,
@@ -189,6 +196,7 @@ export async function getWorkOrdersByAssignee(userId: string): Promise<WorkOrder
 }
 
 export async function getWorkOrderById(id: string): Promise<WorkOrder | null> {
+  await ensureBonanClientSchema();
   const result = await turso.execute({
     sql: `SELECT wo.*,
                  u.first_name || ' ' || u.last_name as assigned_user_name,
@@ -225,10 +233,12 @@ export async function createWorkOrder(data: {
   scheduled_date?: string;
   scheduled_time?: string;
   project_id?: string;
+  site?: WorkOrder["site"];
   publication_status?: WorkOrder["publication_status"];
   published_at?: string;
   created_by?: string;
 }): Promise<WorkOrder> {
+  await ensureBonanClientSchema();
   const id = crypto.randomUUID().replace(/-/g, "");
 
   await turso.execute({
@@ -236,8 +246,8 @@ export async function createWorkOrder(data: {
             id, work_order_number, date, time_received, phone, email, company, department,
             location, unit, area, access_needed, preferred_entry_time,
             priority, service_type, description, assigned_to, scheduled_date, scheduled_time,
-            project_id, publication_status, published_at, created_by
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            project_id, site, client_visible_revision, publication_status, published_at, created_by
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       data.work_order_number,
@@ -259,6 +269,8 @@ export async function createWorkOrder(data: {
       data.scheduled_date || null,
       data.scheduled_time || null,
       data.project_id || null,
+      data.site || null,
+      1,
       data.publication_status || "draft",
       data.published_at || null,
       data.created_by || null,
@@ -272,6 +284,7 @@ export async function updateWorkOrder(
   id: string,
   data: Partial<Omit<WorkOrder, "id" | "work_order_number" | "created_at" | "created_by">>
 ): Promise<WorkOrder | null> {
+  await ensureBonanClientSchema();
   const updates: string[] = [];
   const args: (string | number | null)[] = [];
 
@@ -301,6 +314,7 @@ export async function updateWorkOrder(
     { key: "completed_time", column: "completed_time" },
     { key: "work_summary", column: "work_summary" },
     { key: "project_id", column: "project_id" },
+    { key: "site", column: "site" },
     { key: "publication_status", column: "publication_status" },
     { key: "published_at", column: "published_at" },
   ];
@@ -314,6 +328,7 @@ export async function updateWorkOrder(
 
   if (updates.length === 0) return getWorkOrderById(id);
 
+  updates.push("client_visible_revision = COALESCE(client_visible_revision, 1) + 1");
   updates.push("updated_at = datetime('now')");
   args.push(id);
 
@@ -342,6 +357,7 @@ export async function getWorkOrderStats(): Promise<{
   cancelled: number;
   emergency: number;
 }> {
+  await ensureBonanClientSchema();
   const result = await turso.execute(`
     SELECT
       COUNT(*) as total,
@@ -367,6 +383,7 @@ export async function getWorkOrderStats(): Promise<{
 // ============ MATERIALS CRUD ============
 
 export async function getWorkOrderMaterials(workOrderId: string): Promise<WorkOrderMaterial[]> {
+  await ensureBonanClientSchema();
   const result = await turso.execute({
     sql: `SELECT * FROM work_order_materials WHERE work_order_id = ? ORDER BY created_at ASC`,
     args: [workOrderId],
@@ -382,6 +399,7 @@ export async function addWorkOrderMaterial(data: {
   unit_cost?: number;
   notes?: string;
 }): Promise<WorkOrderMaterial> {
+  await ensureBonanClientSchema();
   const id = crypto.randomUUID().replace(/-/g, "");
   const quantity = data.quantity || 1;
   const unitCost = data.unit_cost || null;
@@ -413,6 +431,7 @@ export async function updateWorkOrderMaterial(
   materialId: string,
   data: Partial<Pick<WorkOrderMaterial, "material_name" | "quantity" | "unit" | "unit_cost" | "notes">>
 ): Promise<WorkOrderMaterial | null> {
+  await ensureBonanClientSchema();
   const updates: string[] = [];
   const args: (string | number | null)[] = [];
 
@@ -475,6 +494,7 @@ export async function updateWorkOrderMaterial(
 }
 
 export async function deleteWorkOrderMaterial(materialId: string): Promise<void> {
+  await ensureBonanClientSchema();
   await turso.execute({
     sql: `DELETE FROM work_order_materials WHERE id = ?`,
     args: [materialId],
@@ -482,6 +502,7 @@ export async function deleteWorkOrderMaterial(materialId: string): Promise<void>
 }
 
 export async function getMaterialsTotalCost(workOrderId: string): Promise<number> {
+  await ensureBonanClientSchema();
   const result = await turso.execute({
     sql: `SELECT SUM(total_cost) as total FROM work_order_materials WHERE work_order_id = ?`,
     args: [workOrderId],
@@ -492,6 +513,7 @@ export async function getMaterialsTotalCost(workOrderId: string): Promise<number
 // ============ SIGNATURES CRUD ============
 
 export async function getWorkOrderSignatures(workOrderId: string): Promise<WorkOrderSignature[]> {
+  await ensureBonanClientSchema();
   const result = await turso.execute({
     sql: `SELECT * FROM work_order_signatures WHERE work_order_id = ? ORDER BY created_at ASC`,
     args: [workOrderId],
@@ -507,6 +529,7 @@ export async function addWorkOrderSignature(data: {
   signature_data: string;
   ip_address?: string;
 }): Promise<WorkOrderSignature> {
+  await ensureBonanClientSchema();
   const id = crypto.randomUUID().replace(/-/g, "");
 
   // Delete existing signature of same type (only one per type allowed)
@@ -537,6 +560,7 @@ export async function addWorkOrderSignature(data: {
 }
 
 export async function deleteWorkOrderSignature(signatureId: string): Promise<void> {
+  await ensureBonanClientSchema();
   await turso.execute({
     sql: `DELETE FROM work_order_signatures WHERE id = ?`,
     args: [signatureId],
@@ -547,23 +571,30 @@ export async function deleteWorkOrderSignature(signatureId: string): Promise<voi
 
 export interface WorkOrderFilters {
   status?: WorkOrder["work_completed"];
+  statuses?: WorkOrder["work_completed"][];
   publication_status?: WorkOrder["publication_status"];
   priority?: WorkOrder["priority"];
   service_type?: WorkOrder["service_type"];
   assigned_to?: string;
   project_id?: string;
+  site?: WorkOrder["site"];
   date_from?: string;
   date_to?: string;
   search?: string;
 }
 
 export async function searchWorkOrders(filters: WorkOrderFilters): Promise<WorkOrder[]> {
+  await ensureBonanClientSchema();
   const conditions: string[] = [];
   const args: (string | number)[] = [];
 
   if (filters.status) {
     conditions.push("wo.work_completed = ?");
     args.push(filters.status);
+  }
+  if (filters.statuses && filters.statuses.length > 0) {
+    conditions.push(`wo.work_completed IN (${filters.statuses.map(() => "?").join(", ")})`);
+    args.push(...filters.statuses);
   }
   if (filters.publication_status) {
     conditions.push("wo.publication_status = ?");
@@ -584,6 +615,10 @@ export async function searchWorkOrders(filters: WorkOrderFilters): Promise<WorkO
   if (filters.project_id) {
     conditions.push("wo.project_id = ?");
     args.push(filters.project_id);
+  }
+  if (filters.site) {
+    conditions.push("wo.site = ?");
+    args.push(filters.site);
   }
   if (filters.date_from) {
     conditions.push("wo.date >= ?");

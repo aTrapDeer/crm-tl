@@ -4,6 +4,7 @@ import {
   acceptEmployeeInvitation,
   getEmployeeInvitationByToken,
 } from "@/lib/employees";
+import { processPendingBonanInvitationsForUser } from "@/lib/bonan-client";
 import { cookies } from "next/headers";
 
 export async function POST(request: Request) {
@@ -91,6 +92,10 @@ export async function POST(request: Request) {
     if (invitationsProcessed > 0) {
       console.log(`Processed ${invitationsProcessed} pending invitation(s) for ${email}`);
     }
+    const bonanInvitationsProcessed = await processPendingBonanInvitationsForUser(email, user.id);
+    if (bonanInvitationsProcessed > 0) {
+      console.log(`Processed ${bonanInvitationsProcessed} Bonan invitation(s) for ${email}`);
+    }
 
     // Set session cookie
     const cookieStore = await cookies();
@@ -102,7 +107,12 @@ export async function POST(request: Request) {
       path: "/",
     });
 
-    return Response.json({ user, success: true, invitationsProcessed });
+    return Response.json({
+      user,
+      success: true,
+      invitationsProcessed,
+      bonanInvitationsProcessed,
+    });
   } catch (error) {
     console.error("Registration error:", error);
     return Response.json(

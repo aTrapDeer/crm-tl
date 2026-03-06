@@ -28,18 +28,29 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const bonanReportId = searchParams.get("bonan_report_id");
     const publicationStatus = searchParams.get("publication_status");
+    const statusesParam = searchParams.get("statuses");
+    const site = searchParams.get("site");
     const dateFrom = searchParams.get("date_from");
     const dateTo = searchParams.get("date_to");
 
-    const hasFilters = Boolean(bonanReportId || publicationStatus || dateFrom || dateTo);
+    const hasFilters = Boolean(bonanReportId || publicationStatus || statusesParam || site || dateFrom || dateTo);
 
     const incidentReports = hasFilters
       ? await searchIncidentReports({
           bonan_report_id: bonanReportId || undefined,
+          statuses: statusesParam
+            ? statusesParam
+                .split(",")
+                .map((value) => value.trim())
+                .filter((value): value is "open" | "in_progress" | "closed" =>
+                  value === "open" || value === "in_progress" || value === "closed"
+                )
+            : undefined,
           publication_status:
             publicationStatus === "draft" || publicationStatus === "published"
               ? publicationStatus
               : undefined,
+          site: site === "bonan_towers" ? "bonan_towers" : undefined,
           date_from: dateFrom || undefined,
           date_to: dateTo || undefined,
         })

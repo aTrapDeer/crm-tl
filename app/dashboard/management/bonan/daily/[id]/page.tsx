@@ -19,6 +19,7 @@ import {
   formatUsCentralTime,
   getUsCentralDate,
 } from "@/lib/us-central-time";
+import BonanClientReportReview from "@/app/components/BonanClientReportReview";
 
 interface BonanDailyReport {
   id: string;
@@ -1060,6 +1061,33 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
           </Link>
         </div>
       </div>
+    );
+  }
+
+  if (userRole === "client") {
+    return (
+      <BonanClientReportReview
+        reportId={report.id}
+        title={`Daily Walk-Through ${report.report_date}`}
+        subtitle={`${report.work_order_number ? `WO #${report.work_order_number} | ` : ""}Read-only Bonan client review`}
+        backHref="/dashboard/bonan/daily"
+        payload={payload as unknown as Record<string, unknown>}
+        actionArea={payload.metadata.towers || "Daily Walkthrough"}
+        currentFieldValues={{
+          "metadata.supervisorReview": payload.metadata.supervisorReview || "",
+          "metadata.signature": payload.metadata.signature || "",
+          incidentDocumentationReference: payload.incidentDocumentationReference || "",
+          "fireAlarmMeta.supervisorReview": payload.fireAlarmMeta.supervisorReview || "",
+          "fireAlarmMeta.signature": payload.fireAlarmMeta.signature || "",
+        }}
+        fieldOptions={[
+          { value: "metadata.supervisorReview", label: "Supervisor Review" },
+          { value: "metadata.signature", label: "Daily Signature" },
+          { value: "incidentDocumentationReference", label: "Incident Reference" },
+          { value: "fireAlarmMeta.supervisorReview", label: "Fire Alarm Review" },
+          { value: "fireAlarmMeta.signature", label: "Fire Alarm Signature" },
+        ]}
+      />
     );
   }
 

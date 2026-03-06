@@ -9,6 +9,7 @@ import {
   type MonthlyReportPayload,
 } from "@/lib/bonan-period-payloads";
 import { formatUsCentralDateTime } from "@/lib/us-central-time";
+import BonanClientActionPanel from "@/app/components/BonanClientActionPanel";
 
 interface BonanMonthlyReport {
   id: string;
@@ -61,6 +62,26 @@ type UserRole = "admin" | "employee" | "client";
 
 function classNames(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
+}
+
+function hasText(value: string | null | undefined): boolean {
+  return Boolean(value && value.trim().length > 0);
+}
+
+function countRowsWithValues<T extends object>(
+  rows: T[],
+  keys: Array<keyof T>
+): number {
+  return rows.filter((row) => keys.some((key) => hasText(row[key] as string | null | undefined))).length;
+}
+
+function getDeficiencyLevelBucket(level: string): "1" | "2" | "3" | "4" | null {
+  const normalized = level.trim().toLowerCase();
+  if (normalized === "1" || normalized === "l1" || normalized === "level 1") return "1";
+  if (normalized === "2" || normalized === "l2" || normalized === "level 2") return "2";
+  if (normalized === "3" || normalized === "l3" || normalized === "level 3") return "3";
+  if (normalized === "4" || normalized === "l4" || normalized === "level 4") return "4";
+  return null;
 }
 
 function statusClass(status: BonanReportStatus): string {
@@ -154,6 +175,85 @@ export default function BonanMonthlySummaryDetailPage({ params }: { params: Prom
     if (!summary || summary.daily_reports.due === 0) return "0%";
     return `${Math.round((summary.daily_reports.submitted / summary.daily_reports.due) * 100)}%`;
   }, [summary]);
+
+  const resolvedSummaryMetrics = useMemo(() => {
+    if (!payload) {
+      return {
+        totalWorkOrdersOpened: "0",
+        totalWorkOrdersClosed: "0",
+        workOrdersRemainingOpen: "0",
+        level1Count: "0",
+        level2Count: "0",
+        level3Count: "0",
+        level4Count: "0",
+        notableEvents: "0",
+      };
+    }
+
+    const levelCounts = payload.deficiencyRegister.rows.reduce(
+      (counts, row) => {
+        const bucket = getDeficiencyLevelBucket(row.level);
+        if (bucket) counts[bucket] += 1;
+        return counts;
+      },
+      { "1": 0, "2": 0, "3": 0, "4": 0 }
+    );
+
+    const openedFallback = summary?.work_orders.total ?? countRowsWithValues(payload.workOrdersOpened, [
+      "workOrderNumber",
+      "description",
+      "area",
+      "owner",
+      "status",
+    ]);
+    const closedFallback = summary?.work_orders.completed ?? countRowsWithValues(payload.workOrdersClosed, [
+      "workOrderNumber",
+      "description",
+      "area",
+      "owner",
+      "status",
+    ]);
+    const remainingOpenFallback =
+      summary?.work_orders.pending !== undefined && summary?.work_orders.in_progress !== undefined
+        ? summary.work_orders.pending + summary.work_orders.in_progress
+        : countRowsWithValues(payload.agingOpenWorkOrders, [
+            "workOrderNumber",
+            "description",
+            "area",
+            "owner",
+            "status",
+          ]);
+    const notableEventsFallback = summary?.incidents.total ?? countRowsWithValues(payload.incidents, [
+      "incidentNumber",
+      "incidentType",
+      "location",
+      "owner",
+      "status",
+    ]);
+
+    return {
+      totalWorkOrdersOpened: payload.summaryMetrics.totalWorkOrdersOpened || String(openedFallback),
+      totalWorkOrdersClosed: payload.summaryMetrics.totalWorkOrdersClosed || String(closedFallback),
+      workOrdersRemainingOpen: payload.summaryMetrics.workOrdersRemainingOpen || String(remainingOpenFallback),
+      level1Count:
+        payload.summaryMetrics.level1Count ||
+        payload.deficiencyRegister.level1 ||
+        String(levelCounts["1"]),
+      level2Count:
+        payload.summaryMetrics.level2Count ||
+        payload.deficiencyRegister.level2 ||
+        String(levelCounts["2"]),
+      level3Count:
+        payload.summaryMetrics.level3Count ||
+        payload.deficiencyRegister.level3 ||
+        String(levelCounts["3"]),
+      level4Count:
+        payload.summaryMetrics.level4Count ||
+        payload.deficiencyRegister.level4 ||
+        String(levelCounts["4"]),
+      notableEvents: payload.summaryMetrics.notableEvents || String(notableEventsFallback),
+    };
+  }, [payload, summary]);
 
   if (loading) {
     return (
@@ -254,6 +354,26 @@ export default function BonanMonthlySummaryDetailPage({ params }: { params: Prom
           </div>
         </section>
 
+        {userRole === "client" && (
+          <BonanClientActionPanel
+            entityType="bonan_report"
+            entityId={report.id}
+            defaultArea={payload.metadata.monthKey}
+            currentFieldValues={{
+              "metadata.propertyManagerReview": payload.metadata.propertyManagerReview || "",
+              "metadata.constructionMgmtReview": payload.metadata.constructionMgmtReview || "",
+              "collectiveSummary.notes": payload.collectiveSummary.notes || "",
+              "closeoutCertification.preparedBy": payload.closeoutCertification.preparedBy || "",
+            }}
+            fieldOptions={[
+              { value: "metadata.propertyManagerReview", label: "Property Manager Review" },
+              { value: "metadata.constructionMgmtReview", label: "Construction Review" },
+              { value: "collectiveSummary.notes", label: "Collective Summary Notes" },
+              { value: "closeoutCertification.preparedBy", label: "Closeout Prepared By" },
+            ]}
+          />
+        )}
+
         <section className="rounded-2xl border border-(--border)/20 bg-white/90 overflow-hidden">
           <div className="px-3 py-2.5 border-b border-(--border)/15">
             <h2 className="text-sm font-semibold text-(--text)">Weekly Chain (Month Context)</h2>
@@ -349,13 +469,13 @@ export default function BonanMonthlySummaryDetailPage({ params }: { params: Prom
           <div className="rounded-2xl border border-(--border)/20 bg-white/90 p-3">
             <h2 className="text-sm font-semibold text-(--text)">Collective Summary</h2>
             <div className="mt-2 space-y-1 text-xs">
-              <p><strong>Open WO Month End:</strong> {payload.collectiveSummary.openWorkOrdersMonthEnd || "-"}</p>
-              <p><strong>L1 Open:</strong> {payload.collectiveSummary.level1OpenMonthEnd || "-"}</p>
-              <p><strong>L2 Open:</strong> {payload.collectiveSummary.level2OpenMonthEnd || "-"}</p>
-              <p><strong>Incident Reports Filed:</strong> {payload.collectiveSummary.incidentReportsFiled || "-"}</p>
+              <p><strong>Open WO Month End:</strong> {payload.collectiveSummary.openWorkOrdersMonthEnd || resolvedSummaryMetrics.workOrdersRemainingOpen}</p>
+              <p><strong>L1 Open:</strong> {payload.collectiveSummary.level1OpenMonthEnd || resolvedSummaryMetrics.level1Count}</p>
+              <p><strong>L2 Open:</strong> {payload.collectiveSummary.level2OpenMonthEnd || resolvedSummaryMetrics.level2Count}</p>
+              <p><strong>Incident Reports Filed:</strong> {payload.collectiveSummary.incidentReportsFiled || String(summary?.incidents.total ?? 0)}</p>
               <p><strong>Daily Completion:</strong> {payload.collectiveSummary.dailyWalkthroughCompletion || dailyCompletion}</p>
-              <p><strong>Monthly Checkup Completion:</strong> {payload.collectiveSummary.monthlyCheckupCompletion || "-"}</p>
-              <p className="pt-1"><strong>Notes:</strong> {payload.collectiveSummary.notes || "-"}</p>
+              <p><strong>Monthly Checkup Completion:</strong> {payload.collectiveSummary.monthlyCheckupCompletion || "0"}</p>
+              <p className="pt-1"><strong>Notes:</strong> {payload.collectiveSummary.notes || "0"}</p>
             </div>
           </div>
 
@@ -367,7 +487,14 @@ export default function BonanMonthlySummaryDetailPage({ params }: { params: Prom
               <p><strong>Certified Signature:</strong> {payload.closeoutCertification.certifiedBySignature || "-"}</p>
               <p><strong>Reviewed Signature:</strong> {payload.closeoutCertification.reviewedAcceptedSignature || "-"}</p>
               <p><strong>Checklist Complete:</strong> {Object.values(payload.closeoutChecklist).filter(Boolean).length}/6</p>
-              <p><strong>Notable Events:</strong> {payload.summaryMetrics.notableEvents || "-"}</p>
+              <p><strong>Total WO Opened:</strong> {resolvedSummaryMetrics.totalWorkOrdersOpened}</p>
+              <p><strong>Total WO Closed:</strong> {resolvedSummaryMetrics.totalWorkOrdersClosed}</p>
+              <p><strong>WO Remaining Open:</strong> {resolvedSummaryMetrics.workOrdersRemainingOpen}</p>
+              <p><strong>Level 1 Count:</strong> {resolvedSummaryMetrics.level1Count}</p>
+              <p><strong>Level 2 Count:</strong> {resolvedSummaryMetrics.level2Count}</p>
+              <p><strong>Level 3 Count:</strong> {resolvedSummaryMetrics.level3Count}</p>
+              <p><strong>Level 4 Count:</strong> {resolvedSummaryMetrics.level4Count}</p>
+              <p><strong>Notable Events:</strong> {resolvedSummaryMetrics.notableEvents}</p>
             </div>
           </div>
         </section>
