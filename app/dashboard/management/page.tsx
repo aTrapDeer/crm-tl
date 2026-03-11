@@ -6,11 +6,9 @@ import Link from "next/link";
 import WorkOrderListView from "@/app/components/WorkOrderListView";
 import WorkOrderDetailsModal from "@/app/components/WorkOrderDetailsModal";
 import DocumentManager from "@/app/components/DocumentManager";
-import BonanQuickCreateModal from "@/app/components/BonanQuickCreateModal";
 
 type ManagementTab = "work-orders" | "incident-reports" | "documents";
 type SiteFilter = "all" | "bonan_towers";
-type BonanQuickCreateMode = "work-order" | "incident-report";
 type WorkOrderStatus = "pending" | "in_progress" | "completed" | "cancelled";
 type IncidentStatus = "open" | "in_progress" | "closed";
 
@@ -106,7 +104,6 @@ export default function ManagementPage() {
   const [deleteWorkOrderConfirmInput, setDeleteWorkOrderConfirmInput] = useState("");
   const [deleteWorkOrderError, setDeleteWorkOrderError] = useState("");
   const [deletingWorkOrder, setDeletingWorkOrder] = useState(false);
-  const [quickCreateMode, setQuickCreateMode] = useState<BonanQuickCreateMode | null>(null);
 
   const activeTab: ManagementTab = useMemo(() => {
     const tab = searchParams.get("tab");
@@ -130,6 +127,27 @@ export default function ManagementPage() {
     [searchParams]
   );
   const showBonanQuickCreate = siteFilter === "bonan_towers" && activeTab !== "documents";
+  const currentViewHref = useMemo(
+    () => (searchParams.toString() ? `${pathname}?${searchParams.toString()}` : pathname),
+    [pathname, searchParams]
+  );
+  const bonanWorkOrderCreateHref = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("site", "bonan_towers");
+    params.set("returnTo", currentViewHref);
+    return `/dashboard/management/work-orders/new?${params.toString()}`;
+  }, [currentViewHref]);
+  const bonanIncidentCreateHref = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("site", "bonan_towers");
+    params.set("returnTo", currentViewHref);
+    return `/dashboard/management/incident-reports/new?${params.toString()}`;
+  }, [currentViewHref]);
+  const fullWorkOrderCreateHref = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("returnTo", currentViewHref);
+    return `/dashboard/management/work-orders/new?${params.toString()}`;
+  }, [currentViewHref]);
 
   const updateQuery = useCallback(
     (updates: Record<string, string | null>) => {
@@ -341,15 +359,6 @@ export default function ManagementPage() {
     }
   }
 
-  function handleBonanQuickCreateSuccess(id: string, mode: BonanQuickCreateMode) {
-    setQuickCreateMode(null);
-    router.push(
-      mode === "work-order"
-        ? `/dashboard/management/work-orders/${id}`
-        : `/dashboard/management/incident-reports/${id}`
-    );
-  }
-
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -369,16 +378,15 @@ export default function ManagementPage() {
           {activeTab === "work-orders" ? (
             <div className="flex items-center gap-2">
               {siteFilter === "bonan_towers" && (
-                <button
-                  type="button"
-                  onClick={() => setQuickCreateMode("work-order")}
+                <Link
+                  href={bonanWorkOrderCreateHref}
                   className="rounded-full bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
                 >
                   + New Bonan Work Order
-                </button>
+                </Link>
               )}
               <Link
-                href="/dashboard/management/work-orders/new"
+                href={fullWorkOrderCreateHref}
                 className={`${siteFilter === "bonan_towers" ? "rounded-full border border-(--border)/30 bg-white text-(--text) hover:bg-(--bg)" : "tl-btn"} px-4 py-2.5 text-sm`}
               >
                 {siteFilter === "bonan_towers" ? "Full Work Order Form" : "+ New Work Order"}
@@ -386,13 +394,12 @@ export default function ManagementPage() {
             </div>
           ) : activeTab === "incident-reports" && siteFilter === "bonan_towers" ? (
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setQuickCreateMode("incident-report")}
+              <Link
+                href={bonanIncidentCreateHref}
                 className="rounded-full bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
               >
                 + New Bonan Incident
-              </button>
+              </Link>
             </div>
           ) : null}
         </div>
@@ -432,11 +439,11 @@ export default function ManagementPage() {
 
         {showBonanQuickCreate && (
           <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3">
-            <p className="text-sm font-semibold text-blue-900">Bonan isolated event quick create</p>
+            <p className="text-sm font-semibold text-blue-900">Bonan isolated event creation</p>
             <p className="mt-1 text-xs text-blue-800/85">
-              Use the Bonan quick-create action on this tab for incidents or work orders that were
-              not captured during a walkthrough. The record stays tagged to Bonan Towers and is
-              linked into the appropriate Bonan reporting period for monthly reporting and related
+              Use the Bonan create page on this tab for incidents or work orders that were not
+              captured during a walkthrough. The record stays tagged to Bonan Towers and is linked
+              into the appropriate Bonan reporting period for monthly reporting and related
               rollups.
             </p>
           </div>
@@ -643,15 +650,6 @@ export default function ManagementPage() {
           userRole={user.role}
           onWorkOrderUpdate={handleWorkOrderUpdate}
           onWorkOrderDelete={handleWorkOrderDelete}
-        />
-      )}
-
-      {quickCreateMode && (
-        <BonanQuickCreateModal
-          open
-          mode={quickCreateMode}
-          onClose={() => setQuickCreateMode(null)}
-          onCreated={(result) => handleBonanQuickCreateSuccess(result.id, quickCreateMode)}
         />
       )}
     </div>
