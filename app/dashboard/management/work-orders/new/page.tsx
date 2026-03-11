@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import BonanQuickCreatePageForm from "@/app/components/BonanQuickCreatePageForm";
 
 interface User {
   id: string;
@@ -33,7 +34,15 @@ const SERVICE_TYPES = [
 export default function NewWorkOrderPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const isBonanOrder = searchParams.get("orderType") === "bonan";
+  const isBonanOrder =
+    searchParams.get("orderType") === "bonan" || searchParams.get("site") === "bonan_towers";
+  const requestedReturnTo = searchParams.get("returnTo");
+  const returnHref =
+    requestedReturnTo && requestedReturnTo.startsWith("/dashboard/management")
+      ? requestedReturnTo
+      : isBonanOrder
+        ? "/dashboard/management?tab=work-orders&site=bonan_towers"
+        : "/dashboard/management?tab=work-orders";
   const [users, setUsers] = useState<User[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,6 +90,12 @@ export default function NewWorkOrderPage() {
           return;
         }
 
+        if (isBonanOrder) {
+          setUsers([]);
+          setProjects([]);
+          return;
+        }
+
         // Fetch users and projects
         const [usersRes, projectsRes] = await Promise.all([
           fetch("/api/users"),
@@ -98,7 +113,7 @@ export default function NewWorkOrderPage() {
       }
     }
     init();
-  }, [router]);
+  }, [isBonanOrder, router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -146,13 +161,17 @@ export default function NewWorkOrderPage() {
     );
   }
 
+  if (isBonanOrder) {
+    return <BonanQuickCreatePageForm mode="work-order" />;
+  }
+
   return (
     <div className="min-h-screen bg-(--bg)">
       <div className="max-w-3xl mx-auto px-4 py-6">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
           <Link
-            href="/dashboard/management"
+            href={returnHref}
             className="p-2 hover:bg-(--bg) rounded-lg transition"
           >
             <svg className="w-5 h-5 text-(--text)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -161,10 +180,10 @@ export default function NewWorkOrderPage() {
           </Link>
           <div>
             <h1 className="text-2xl font-bold text-(--text)">
-              {isBonanOrder ? "New Bonan Order" : "New Work Order"}
+              New Work Order
             </h1>
             <p className="text-sm text-(--text)/60">
-              Fill in the details below to create a {isBonanOrder ? "Bonan Order" : "work order"}
+              Fill in the details below to create a work order
             </p>
           </div>
         </div>
@@ -391,9 +410,9 @@ export default function NewWorkOrderPage() {
           </div>
 
           {/* Submit Buttons */}
-          <div className="flex gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
             <Link
-              href="/dashboard/management"
+              href={returnHref}
               className="flex-1 text-center rounded-full border border-(--border)/30 px-6 py-3 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
             >
               Cancel
@@ -403,7 +422,7 @@ export default function NewWorkOrderPage() {
               disabled={creating}
               className="flex-1 tl-btn px-6 py-3 text-sm disabled:opacity-50"
             >
-              {creating ? "Creating..." : isBonanOrder ? "Create Bonan Order" : "Create Work Order"}
+              {creating ? "Creating..." : "Create Work Order"}
             </button>
           </div>
         </form>
