@@ -5,6 +5,7 @@ import {
   deleteWorkOrder,
 } from "@/lib/work-orders";
 import { sendWorkOrderChangeNotification } from "@/lib/email";
+import { getUsCentralDate, getUsCentralTimeHHMM } from "@/lib/us-central-time";
 import { cookies } from "next/headers";
 
 export async function GET(
@@ -113,10 +114,49 @@ export async function PATCH(
     }
 
     const previousStatus = workOrder.work_completed;
+    const nextStatus =
+      body.work_completed === "pending" ||
+      body.work_completed === "in_progress" ||
+      body.work_completed === "completed" ||
+      body.work_completed === "cancelled"
+        ? body.work_completed
+        : undefined;
+    const statusNoteProvided = Object.prototype.hasOwnProperty.call(body, "status_note");
+    const statusNote =
+      user.role === "admin" && statusNoteProvided
+        ? typeof body.status_note === "string"
+          ? body.status_note.trim() || null
+          : body.status_note === null
+            ? null
+            : workOrder.status_note
+        : undefined;
+    const statusChanged = nextStatus !== undefined && nextStatus !== previousStatus;
+    const shouldUpdateStatusAudit = statusChanged || (user.role === "admin" && statusNoteProvided);
     const publishedAt =
       requestedPublicationStatus === "published"
         ? workOrder.published_at || new Date().toISOString()
         : undefined;
+    let completedDate =
+      typeof body.completed_date === "string"
+        ? body.completed_date
+        : body.completed_date === null
+          ? null
+          : undefined;
+    let completedTime =
+      typeof body.completed_time === "string"
+        ? body.completed_time
+        : body.completed_time === null
+          ? null
+          : undefined;
+
+    if (statusChanged && nextStatus === "completed") {
+      if (completedDate === undefined) completedDate = getUsCentralDate();
+      if (completedTime === undefined) completedTime = getUsCentralTimeHHMM();
+    }
+    if (statusChanged && nextStatus !== "completed") {
+      if (completedDate === undefined) completedDate = null;
+      if (completedTime === undefined) completedTime = null;
+    }
 
     const updatedWorkOrder = await updateWorkOrder(id, {
       date: body.date,
@@ -139,10 +179,13 @@ export async function PATCH(
       time_in: body.time_in,
       time_out: body.time_out,
       total_labor_hours: body.total_labor_hours,
-      work_completed: body.work_completed,
-      completed_date: body.completed_date,
-      completed_time: body.completed_time,
+      work_completed: nextStatus,
+      completed_date: completedDate,
+      completed_time: completedTime,
       work_summary: body.work_summary,
+      status_note: statusNote,
+      status_updated_at: shouldUpdateStatusAudit ? new Date().toISOString() : undefined,
+      status_updated_by: shouldUpdateStatusAudit ? user.id : undefined,
       project_id: body.project_id,
       publication_status: requestedPublicationStatus,
       published_at: publishedAt,
@@ -150,9 +193,7 @@ export async function PATCH(
 
     // Send email notification based on what changed
     if (updatedWorkOrder) {
-      const newStatus = body.work_completed;
-
-      if (newStatus === "completed" && previousStatus !== "completed") {
+      if (nextStatus === "completed" && previousStatus !== "completed") {
         // Work order was marked as completed
         sendWorkOrderChangeNotification({
           workOrderId: id,
@@ -163,13 +204,13 @@ export async function PATCH(
           company: updatedWorkOrder.company || undefined,
           location: updatedWorkOrder.location || undefined,
         }).catch(console.error);
-      } else if (newStatus && newStatus !== previousStatus) {
+      } else if (nextStatus && nextStatus !== previousStatus) {
         // Status changed to something other than completed
         sendWorkOrderChangeNotification({
           workOrderId: id,
           workOrderNumber: updatedWorkOrder.work_order_number,
           action: "status_changed",
-          newStatus: newStatus,
+          newStatus: nextStatus,
           description: updatedWorkOrder.description,
           performedBy: `${user.first_name} ${user.last_name}`,
           company: updatedWorkOrder.company || undefined,

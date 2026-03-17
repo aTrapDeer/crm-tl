@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import SignatureCapture from "@/app/components/SignatureCapture";
+import { formatUsCentralDateTime } from "@/lib/us-central-time";
 
 interface WorkOrder {
   id: string;
@@ -34,6 +35,10 @@ interface WorkOrder {
   completed_date: string | null;
   completed_time: string | null;
   work_summary: string | null;
+  status_note: string | null;
+  status_updated_at: string | null;
+  status_updated_by: string | null;
+  status_updated_by_name?: string;
   project_id: string | null;
   project_name?: string;
   publication_status: "draft" | "published";
@@ -128,6 +133,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   const [publishingWorkOrder, setPublishingWorkOrder] = useState(false);
   const [publishMessage, setPublishMessage] = useState("");
   const [actionError, setActionError] = useState("");
+  const [statusChangeNote, setStatusChangeNote] = useState("");
 
   // Form states
   const [newMaterial, setNewMaterial] = useState({
@@ -164,6 +170,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
     completed_date: "",
     completed_time: "",
     work_summary: "",
+    status_note: "",
     project_id: "",
     date: "",
     time_received: "",
@@ -218,10 +225,12 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
       completed_date: workOrder.completed_date || "",
       completed_time: workOrder.completed_time || "",
       work_summary: workOrder.work_summary || "",
+      status_note: workOrder.status_note || "",
       project_id: workOrder.project_id || "",
       date: workOrder.date || "",
       time_received: workOrder.time_received || "",
     });
+    setStatusChangeNote(workOrder.status_note || "");
   }, [workOrder]);
 
   useEffect(() => {
@@ -291,13 +300,12 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
     setUpdating(true);
 
     try {
-      const updateData: Record<string, string | null> = { work_completed: newStatus };
+      const updateData: Record<string, string | null> = {
+        work_completed: newStatus,
+        ...(userRole === "admin" ? { status_note: statusChangeNote || null } : {}),
+      };
 
-      if (newStatus === "completed") {
-        const now = new Date();
-        updateData.completed_date = now.toISOString().slice(0, 10);
-        updateData.completed_time = now.toTimeString().slice(0, 5);
-      } else {
+      if (newStatus !== "completed") {
         updateData.completed_date = null;
         updateData.completed_time = null;
       }
@@ -311,6 +319,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
       if (res.ok) {
         const data = await res.json();
         setWorkOrder(data.workOrder);
+        setStatusChangeNote(data.workOrder?.status_note || "");
         setShowStatusChange(false);
       }
     } catch (error) {
@@ -403,11 +412,8 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
         date: editForm.date || null,
         time_received: editForm.time_received || null,
       };
-
-      if (editForm.work_completed === "completed" && !editForm.completed_date) {
-        const now = new Date();
-        payload.completed_date = now.toISOString().slice(0, 10);
-        payload.completed_time = now.toTimeString().slice(0, 5);
+      if (userRole === "admin") {
+        payload.status_note = editForm.status_note || null;
       }
 
       const res = await fetch(`/api/work-orders/${id}`, {
@@ -620,6 +626,20 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
             {publishMessage}
           </div>
         )}
+        <div className="rounded-xl border border-(--border)/20 bg-white px-4 py-3 text-sm text-(--text)/75">
+          <p className="font-semibold text-(--text)">Close-Out Audit</p>
+          <p className="mt-1">
+            Last status update:{" "}
+            {workOrder.status_updated_at
+              ? `${formatUsCentralDateTime(workOrder.status_updated_at)} CT${workOrder.status_updated_by_name ? ` by ${workOrder.status_updated_by_name}` : ""}`
+              : "No status updates recorded yet."}
+          </p>
+          {workOrder.status_note && (
+            <p className="mt-2 whitespace-pre-wrap rounded-lg bg-(--bg) px-3 py-2 text-(--text)">
+              {workOrder.status_note}
+            </p>
+          )}
+        </div>
         {isPublished && (
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
             This work order is published and locked from edits.
@@ -865,6 +885,18 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
                 </button>
               ))}
             </div>
+            {userRole === "admin" && (
+              <div className="mt-4 space-y-2">
+                <label className="block text-sm font-medium text-(--text)">Admin Close-Out Note</label>
+                <textarea
+                  value={statusChangeNote}
+                  onChange={(event) => setStatusChangeNote(event.target.value)}
+                  rows={3}
+                  placeholder="Add close-out context, handoff details, or reason for status change"
+                  className="w-full rounded-xl border border-(--border) bg-(--bg) px-4 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                />
+              </div>
+            )}
             <button
               onClick={() => setShowStatusChange(false)}
               className="w-full mt-4 px-4 py-2.5 rounded-full border border-(--border)/30 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
@@ -1058,6 +1090,15 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
 
               <div className="tl-card p-4 space-y-4">
                 <h4 className="text-sm font-semibold text-(--text)">Assignment & Execution</h4>
+                <div className="rounded-xl border border-(--border)/20 bg-(--bg) px-4 py-3 text-sm text-(--text)/75">
+                  <p className="font-semibold text-(--text)">Close-Out Audit</p>
+                  <p className="mt-1">
+                    Last status update:{" "}
+                    {workOrder.status_updated_at
+                      ? `${formatUsCentralDateTime(workOrder.status_updated_at)} CT${workOrder.status_updated_by_name ? ` by ${workOrder.status_updated_by_name}` : ""}`
+                      : "No status updates recorded yet."}
+                  </p>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-(--text) mb-1">Assign To</label>
@@ -1174,6 +1215,15 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
                     value={editForm.work_summary}
                     onChange={(e) => setEditForm({ ...editForm, work_summary: e.target.value })}
                     rows={4}
+                    className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-(--text) mb-1">Admin Close-Out Note</label>
+                  <textarea
+                    value={editForm.status_note}
+                    onChange={(e) => setEditForm({ ...editForm, status_note: e.target.value })}
+                    rows={3}
                     className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                   />
                 </div>

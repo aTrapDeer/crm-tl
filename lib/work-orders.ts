@@ -29,6 +29,10 @@ export interface WorkOrder {
   completed_date: string | null;
   completed_time: string | null;
   work_summary: string | null;
+  status_note: string | null;
+  status_updated_at: string | null;
+  status_updated_by: string | null;
+  status_updated_by_name?: string;
   project_id: string | null;
   project_name?: string;
   site: "bonan_towers" | null;
@@ -95,6 +99,10 @@ function mapRowToWorkOrder(row: Record<string, unknown>): WorkOrder {
     completed_date: row.completed_date as string | null,
     completed_time: row.completed_time as string | null,
     work_summary: row.work_summary as string | null,
+    status_note: row.status_note as string | null,
+    status_updated_at: row.status_updated_at as string | null,
+    status_updated_by: row.status_updated_by as string | null,
+    status_updated_by_name: row.status_updated_by_name as string | undefined,
     project_id: row.project_id as string | null,
     project_name: row.project_name as string | undefined,
     site: (row.site as WorkOrder["site"]) || null,
@@ -167,11 +175,13 @@ export async function getAllWorkOrders(): Promise<WorkOrder[]> {
     SELECT wo.*,
            u.first_name || ' ' || u.last_name as assigned_user_name,
            p.name as project_name,
-           c.first_name || ' ' || c.last_name as creator_name
+           c.first_name || ' ' || c.last_name as creator_name,
+           su.first_name || ' ' || su.last_name as status_updated_by_name
     FROM work_orders wo
     LEFT JOIN users u ON wo.assigned_to = u.id
     LEFT JOIN projects p ON wo.project_id = p.id
     LEFT JOIN users c ON wo.created_by = c.id
+    LEFT JOIN users su ON wo.status_updated_by = su.id
     ORDER BY wo.created_at DESC
   `);
   return result.rows.map(mapRowToWorkOrder);
@@ -183,11 +193,13 @@ export async function getWorkOrdersByAssignee(userId: string): Promise<WorkOrder
     sql: `SELECT wo.*,
                  u.first_name || ' ' || u.last_name as assigned_user_name,
                  p.name as project_name,
-                 c.first_name || ' ' || c.last_name as creator_name
+                 c.first_name || ' ' || c.last_name as creator_name,
+                 su.first_name || ' ' || su.last_name as status_updated_by_name
           FROM work_orders wo
           LEFT JOIN users u ON wo.assigned_to = u.id
           LEFT JOIN projects p ON wo.project_id = p.id
           LEFT JOIN users c ON wo.created_by = c.id
+          LEFT JOIN users su ON wo.status_updated_by = su.id
           WHERE wo.assigned_to = ?
           ORDER BY wo.created_at DESC`,
     args: [userId],
@@ -201,11 +213,13 @@ export async function getWorkOrderById(id: string): Promise<WorkOrder | null> {
     sql: `SELECT wo.*,
                  u.first_name || ' ' || u.last_name as assigned_user_name,
                  p.name as project_name,
-                 c.first_name || ' ' || c.last_name as creator_name
+                 c.first_name || ' ' || c.last_name as creator_name,
+                 su.first_name || ' ' || su.last_name as status_updated_by_name
           FROM work_orders wo
           LEFT JOIN users u ON wo.assigned_to = u.id
           LEFT JOIN projects p ON wo.project_id = p.id
           LEFT JOIN users c ON wo.created_by = c.id
+          LEFT JOIN users su ON wo.status_updated_by = su.id
           WHERE wo.id = ?`,
     args: [id],
   });
@@ -313,6 +327,9 @@ export async function updateWorkOrder(
     { key: "completed_date", column: "completed_date" },
     { key: "completed_time", column: "completed_time" },
     { key: "work_summary", column: "work_summary" },
+    { key: "status_note", column: "status_note" },
+    { key: "status_updated_at", column: "status_updated_at" },
+    { key: "status_updated_by", column: "status_updated_by" },
     { key: "project_id", column: "project_id" },
     { key: "site", column: "site" },
     { key: "publication_status", column: "publication_status" },
@@ -645,11 +662,13 @@ export async function searchWorkOrders(filters: WorkOrderFilters): Promise<WorkO
     sql: `SELECT wo.*,
                  u.first_name || ' ' || u.last_name as assigned_user_name,
                  p.name as project_name,
-                 c.first_name || ' ' || c.last_name as creator_name
+                 c.first_name || ' ' || c.last_name as creator_name,
+                 su.first_name || ' ' || su.last_name as status_updated_by_name
           FROM work_orders wo
           LEFT JOIN users u ON wo.assigned_to = u.id
           LEFT JOIN projects p ON wo.project_id = p.id
           LEFT JOIN users c ON wo.created_by = c.id
+          LEFT JOIN users su ON wo.status_updated_by = su.id
           ${whereClause}
           ORDER BY wo.created_at DESC`,
     args,

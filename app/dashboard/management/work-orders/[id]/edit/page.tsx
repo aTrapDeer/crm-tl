@@ -3,6 +3,7 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { formatUsCentralDateTime } from "@/lib/us-central-time";
 
 interface WorkOrder {
   id: string;
@@ -32,6 +33,10 @@ interface WorkOrder {
   completed_date: string | null;
   completed_time: string | null;
   work_summary: string | null;
+  status_note: string | null;
+  status_updated_at: string | null;
+  status_updated_by: string | null;
+  status_updated_by_name?: string;
   project_id: string | null;
   project_name?: string;
   publication_status: "draft" | "published";
@@ -75,6 +80,7 @@ interface EditFormState {
   completed_date: string;
   completed_time: string;
   work_summary: string;
+  status_note: string;
   project_id: string;
   date: string;
   time_received: string;
@@ -114,6 +120,7 @@ function getInitialFormState(workOrder: WorkOrder): EditFormState {
     completed_date: workOrder.completed_date || "",
     completed_time: workOrder.completed_time || "",
     work_summary: workOrder.work_summary || "",
+    status_note: workOrder.status_note || "",
     project_id: workOrder.project_id || "",
     date: workOrder.date || "",
     time_received: workOrder.time_received || "",
@@ -253,6 +260,7 @@ export default function EditWorkOrderPage({ params }: { params: Promise<{ id: st
               completed_date: form.completed_date || null,
               completed_time: form.completed_time || null,
               work_summary: form.work_summary || null,
+              status_note: form.status_note || null,
             }
           : {
               scheduled_date: form.scheduled_date || null,
@@ -265,12 +273,6 @@ export default function EditWorkOrderPage({ params }: { params: Promise<{ id: st
               completed_time: form.completed_time || null,
               work_summary: form.work_summary || null,
             };
-
-      if (form.work_completed === "completed" && !form.completed_date) {
-        const now = new Date();
-        payload.completed_date = now.toISOString().slice(0, 10);
-        payload.completed_time = now.toTimeString().slice(0, 5);
-      }
 
       const res = await fetch(`/api/work-orders/${id}`, {
         method: "PATCH",
@@ -470,6 +472,15 @@ export default function EditWorkOrderPage({ params }: { params: Promise<{ id: st
 
             <div className="tl-card p-5 space-y-4">
               <h2 className="text-lg font-semibold text-(--text)">Assignment & Execution</h2>
+              <div className="rounded-xl border border-(--border)/20 bg-(--bg) px-4 py-3 text-sm text-(--text)/75">
+                <p className="font-semibold text-(--text)">Close-Out Audit</p>
+                <p className="mt-1">
+                  Last status update:{" "}
+                  {workOrder.status_updated_at
+                    ? `${formatUsCentralDateTime(workOrder.status_updated_at)} CT${workOrder.status_updated_by_name ? ` by ${workOrder.status_updated_by_name}` : ""}`
+                    : "No status updates recorded yet."}
+                </p>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {isAdmin && (
                   <select value={form.assigned_to} onChange={(event) => setForm({ ...form, assigned_to: event.target.value })} className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)">
@@ -506,6 +517,9 @@ export default function EditWorkOrderPage({ params }: { params: Promise<{ id: st
                 <input type="time" value={form.completed_time} onChange={(event) => setForm({ ...form, completed_time: event.target.value })} placeholder="Completed Time" className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)" />
               </div>
               <textarea value={form.work_summary} onChange={(event) => setForm({ ...form, work_summary: event.target.value })} rows={4} placeholder="Work Summary" className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)" />
+              {isAdmin && (
+                <textarea value={form.status_note} onChange={(event) => setForm({ ...form, status_note: event.target.value })} rows={3} placeholder="Admin close-out note" className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)" />
+              )}
             </div>
           </fieldset>
 

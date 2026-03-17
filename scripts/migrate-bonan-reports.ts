@@ -89,6 +89,9 @@ async function migrateBonanReports() {
         actions_taken TEXT,
         work_order_or_vendor TEXT,
         status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'closed')),
+        status_note TEXT,
+        status_updated_at TEXT,
+        status_updated_by TEXT REFERENCES users(id) ON DELETE SET NULL,
         created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))

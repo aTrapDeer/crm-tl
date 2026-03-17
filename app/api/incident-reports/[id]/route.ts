@@ -86,6 +86,18 @@ export async function PATCH(
       body.status === "open" || body.status === "in_progress" || body.status === "closed"
         ? (body.status as IncidentReportStatus)
         : undefined;
+    const statusNoteProvided = Object.prototype.hasOwnProperty.call(body, "status_note");
+    const statusNote =
+      user.role === "admin" && statusNoteProvided
+        ? typeof body.status_note === "string"
+          ? body.status_note.trim() || null
+          : body.status_note === null
+            ? null
+            : existing.status_note
+        : undefined;
+    const shouldUpdateStatusAudit =
+      (status !== undefined && status !== existing.status) ||
+      (user.role === "admin" && statusNoteProvided);
     const publicationStatus =
       body.publication_status === "draft" || body.publication_status === "published"
         ? body.publication_status
@@ -106,6 +118,9 @@ export async function PATCH(
       work_order_or_vendor:
         typeof body.work_order_or_vendor === "string" ? body.work_order_or_vendor : undefined,
       status,
+      status_note: statusNote,
+      status_updated_at: shouldUpdateStatusAudit ? new Date().toISOString() : undefined,
+      status_updated_by: shouldUpdateStatusAudit ? user.id : undefined,
       publication_status: publicationStatus,
       published_at: publishedAt,
     });

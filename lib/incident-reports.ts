@@ -17,6 +17,10 @@ export interface IncidentReport {
   actions_taken: string | null;
   work_order_or_vendor: string | null;
   status: IncidentReportStatus;
+  status_note: string | null;
+  status_updated_at: string | null;
+  status_updated_by: string | null;
+  status_updated_by_name?: string;
   site: "bonan_towers" | null;
   client_visible_revision: number;
   publication_status: "draft" | "published";
@@ -42,6 +46,10 @@ function mapRowToIncidentReport(row: Record<string, unknown>): IncidentReport {
     actions_taken: row.actions_taken as string | null,
     work_order_or_vendor: row.work_order_or_vendor as string | null,
     status: row.status as IncidentReportStatus,
+    status_note: row.status_note as string | null,
+    status_updated_at: row.status_updated_at as string | null,
+    status_updated_by: row.status_updated_by as string | null,
+    status_updated_by_name: row.status_updated_by_name as string | undefined,
     site: (row.site as IncidentReport["site"]) || null,
     client_visible_revision: Number(row.client_visible_revision || 1),
     publication_status: row.publication_status as IncidentReport["publication_status"],
@@ -80,9 +88,11 @@ export async function getIncidentReports(): Promise<IncidentReport[]> {
   await ensureBonanClientSchema();
   const result = await turso.execute(`
     SELECT ir.*,
-           u.first_name || ' ' || u.last_name as creator_name
+           u.first_name || ' ' || u.last_name as creator_name,
+           su.first_name || ' ' || su.last_name as status_updated_by_name
     FROM incident_reports ir
     LEFT JOIN users u ON ir.created_by = u.id
+    LEFT JOIN users su ON ir.status_updated_by = su.id
     ORDER BY ir.created_at DESC
   `);
 
@@ -132,9 +142,11 @@ export async function searchIncidentReports(filters: IncidentReportFilters): Pro
 
   const result = await turso.execute({
     sql: `SELECT ir.*,
-                 u.first_name || ' ' || u.last_name as creator_name
+                 u.first_name || ' ' || u.last_name as creator_name,
+                 su.first_name || ' ' || su.last_name as status_updated_by_name
           FROM incident_reports ir
           LEFT JOIN users u ON ir.created_by = u.id
+          LEFT JOIN users su ON ir.status_updated_by = su.id
           ${whereClause}
           ORDER BY ir.created_at DESC`,
     args,
@@ -147,9 +159,11 @@ export async function getIncidentReportById(id: string): Promise<IncidentReport 
   await ensureBonanClientSchema();
   const result = await turso.execute({
     sql: `SELECT ir.*,
-                 u.first_name || ' ' || u.last_name as creator_name
+                 u.first_name || ' ' || u.last_name as creator_name,
+                 su.first_name || ' ' || su.last_name as status_updated_by_name
           FROM incident_reports ir
           LEFT JOIN users u ON ir.created_by = u.id
+          LEFT JOIN users su ON ir.status_updated_by = su.id
           WHERE ir.id = ?`,
     args: [id],
   });
@@ -162,9 +176,11 @@ export async function getIncidentReportsForBonanReport(reportId: string): Promis
   await ensureBonanClientSchema();
   const result = await turso.execute({
     sql: `SELECT ir.*,
-                 u.first_name || ' ' || u.last_name as creator_name
+                 u.first_name || ' ' || u.last_name as creator_name,
+                 su.first_name || ' ' || su.last_name as status_updated_by_name
           FROM incident_reports ir
           LEFT JOIN users u ON ir.created_by = u.id
+          LEFT JOIN users su ON ir.status_updated_by = su.id
           WHERE ir.bonan_report_id = ?
           ORDER BY ir.created_at DESC`,
     args: [reportId],
@@ -185,6 +201,9 @@ export async function createIncidentReport(data: {
   actions_taken?: string;
   work_order_or_vendor?: string;
   status?: IncidentReportStatus;
+  status_note?: string;
+  status_updated_at?: string;
+  status_updated_by?: string;
   site?: IncidentReport["site"];
   publication_status?: IncidentReport["publication_status"];
   published_at?: string;
@@ -209,12 +228,15 @@ export async function createIncidentReport(data: {
             actions_taken,
             work_order_or_vendor,
             status,
+            status_note,
+            status_updated_at,
+            status_updated_by,
             site,
             client_visible_revision,
             publication_status,
             published_at,
             created_by
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       data.bonan_report_id,
@@ -229,6 +251,9 @@ export async function createIncidentReport(data: {
       data.actions_taken?.trim() || null,
       data.work_order_or_vendor?.trim() || null,
       data.status || "open",
+      data.status_note?.trim() || null,
+      data.status_updated_at || null,
+      data.status_updated_by || null,
       data.site || null,
       1,
       data.publication_status || "draft",
@@ -287,6 +312,18 @@ export async function updateIncidentReport(
   if (data.status !== undefined) {
     updates.push("status = ?");
     args.push(data.status);
+  }
+  if (data.status_note !== undefined) {
+    updates.push("status_note = ?");
+    args.push(data.status_note);
+  }
+  if (data.status_updated_at !== undefined) {
+    updates.push("status_updated_at = ?");
+    args.push(data.status_updated_at);
+  }
+  if (data.status_updated_by !== undefined) {
+    updates.push("status_updated_by = ?");
+    args.push(data.status_updated_by);
   }
   if (data.site !== undefined) {
     updates.push("site = ?");

@@ -191,6 +191,9 @@ CREATE TABLE IF NOT EXISTS work_orders (
   completed_date TEXT,
   completed_time TEXT,
   work_summary TEXT,
+  status_note TEXT,
+  status_updated_at TEXT,
+  status_updated_by TEXT REFERENCES users(id) ON DELETE SET NULL,
 
   -- Optional Project Linking
   project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
@@ -261,6 +264,9 @@ CREATE TABLE IF NOT EXISTS incident_reports (
   actions_taken TEXT,
   work_order_or_vendor TEXT,
   status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'closed')),
+  status_note TEXT,
+  status_updated_at TEXT,
+  status_updated_by TEXT REFERENCES users(id) ON DELETE SET NULL,
   site TEXT CHECK (site IN ('bonan_towers')),
   client_visible_revision INTEGER NOT NULL DEFAULT 1,
   publication_status TEXT NOT NULL DEFAULT 'draft' CHECK (publication_status IN ('draft', 'published')),

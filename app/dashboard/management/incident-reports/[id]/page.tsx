@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { formatUsCentralDateTime } from "@/lib/us-central-time";
 
 type IncidentReportStatus = "open" | "in_progress" | "closed";
 type PublicationStatus = "draft" | "published";
@@ -21,6 +22,10 @@ interface IncidentReport {
   actions_taken: string | null;
   work_order_or_vendor: string | null;
   status: IncidentReportStatus;
+  status_note: string | null;
+  status_updated_at: string | null;
+  status_updated_by: string | null;
+  status_updated_by_name?: string;
   publication_status: PublicationStatus;
   published_at: string | null;
   creator_name?: string;
@@ -45,6 +50,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
   const { id } = use(params);
   const router = useRouter();
   const [incidentReport, setIncidentReport] = useState<IncidentReport | null>(null);
+  const [userRole, setUserRole] = useState<"admin" | "employee" | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -59,6 +65,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
     actions_taken: "",
     work_order_or_vendor: "",
     status: "open" as IncidentReportStatus,
+    status_note: "",
   });
 
   useEffect(() => {
@@ -74,6 +81,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
           router.push("/dashboard");
           return;
         }
+        setUserRole(sessionData.user.role as "admin" | "employee");
 
         const reportRes = await fetch(`/api/incident-reports/${id}`);
         const reportData = await reportRes.json();
@@ -93,6 +101,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
           actions_taken: report.actions_taken || "",
           work_order_or_vendor: report.work_order_or_vendor || "",
           status: report.status,
+          status_note: report.status_note || "",
         });
       } catch {
         setError("Failed to load incident report.");
@@ -105,6 +114,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
   }, [id, router]);
 
   const isPublished = incidentReport?.publication_status === "published";
+  const isAdmin = userRole === "admin";
 
   function updateField<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -137,6 +147,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
           actions_taken: form.actions_taken,
           work_order_or_vendor: form.work_order_or_vendor,
           status: form.status,
+          ...(isAdmin ? { status_note: form.status_note } : {}),
         }),
       });
       const data = await res.json();
@@ -260,6 +271,21 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
           </div>
         )}
 
+        <section className="rounded-xl border border-(--border)/20 bg-white px-4 py-3 text-sm text-(--text)/75">
+          <p className="font-semibold text-(--text)">Close-Out Audit</p>
+          <p className="mt-1">
+            Last status update:{" "}
+            {incidentReport.status_updated_at
+              ? `${formatUsCentralDateTime(incidentReport.status_updated_at)} CT${incidentReport.status_updated_by_name ? ` by ${incidentReport.status_updated_by_name}` : ""}`
+              : "No status updates recorded yet."}
+          </p>
+          {incidentReport.status_note && (
+            <p className="mt-2 whitespace-pre-wrap rounded-lg bg-(--bg) px-3 py-2 text-(--text)">
+              {incidentReport.status_note}
+            </p>
+          )}
+        </section>
+
         {isPublished && (
           <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-700">
             This report is published and locked. No further edits are allowed.
@@ -352,6 +378,19 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
                   </option>
                 ))}
               </select>
+            </label>
+            <label className="space-y-1 md:col-span-2">
+              <span className="text-(--text)/60">
+                {isAdmin ? "Admin Close-Out Note" : "Close-Out Note"}
+              </span>
+              <textarea
+                value={form.status_note}
+                onChange={(event) => updateField("status_note", event.target.value)}
+                rows={3}
+                disabled={isPublished || !isAdmin}
+                placeholder={isAdmin ? "Add status context, close-out details, or handoff notes" : ""}
+                className={inputClass}
+              />
             </label>
           </div>
         </section>

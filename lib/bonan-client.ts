@@ -215,8 +215,14 @@ export async function ensureBonanClientSchema(): Promise<void> {
   schemaReadyPromise = (async () => {
     await addColumnIfMissing("work_orders", "site", "TEXT");
     await addColumnIfMissing("work_orders", "client_visible_revision", "INTEGER NOT NULL DEFAULT 1");
+    await addColumnIfMissing("work_orders", "status_note", "TEXT");
+    await addColumnIfMissing("work_orders", "status_updated_at", "TEXT");
+    await addColumnIfMissing("work_orders", "status_updated_by", "TEXT");
     await addColumnIfMissing("incident_reports", "site", "TEXT");
     await addColumnIfMissing("incident_reports", "client_visible_revision", "INTEGER NOT NULL DEFAULT 1");
+    await addColumnIfMissing("incident_reports", "status_note", "TEXT");
+    await addColumnIfMissing("incident_reports", "status_updated_at", "TEXT");
+    await addColumnIfMissing("incident_reports", "status_updated_by", "TEXT");
     await addColumnIfMissing("bonan_reports", "client_visible_revision", "INTEGER NOT NULL DEFAULT 1");
 
     await turso.execute(`
