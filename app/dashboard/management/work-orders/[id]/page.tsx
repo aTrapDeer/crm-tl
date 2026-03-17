@@ -296,7 +296,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   }, [userRole, fetchWorkOrder, fetchMaterials, fetchSignatures]);
 
   async function handleStatusChange(newStatus: WorkOrder["work_completed"]) {
-    if (!workOrder || workOrder.publication_status === "published") return;
+    if (!workOrder) return;
     setUpdating(true);
 
     try {
@@ -608,8 +608,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
             )}
             <button
               onClick={() => setShowStatusChange(true)}
-              disabled={isPublished}
-              className="tl-btn px-4 py-2 text-sm disabled:opacity-50"
+              className="tl-btn px-4 py-2 text-sm"
             >
               Change Status
             </button>
@@ -642,7 +641,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
         </div>
         {isPublished && (
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-            This work order is published and locked from edits.
+            This work order is published. General edits are locked, but status and close-out updates remain available.
             {workOrder.published_at ? ` Published ${new Date(workOrder.published_at).toLocaleString()}.` : ""}
           </div>
         )}
@@ -864,7 +863,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
       </div>
 
       {/* Status Change Modal */}
-      {showStatusChange && !isPublished && (
+      {showStatusChange && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-10000 p-4" onClick={() => setShowStatusChange(false)}>
           <div className="tl-card p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-(--text) mb-4">Change Status</h3>

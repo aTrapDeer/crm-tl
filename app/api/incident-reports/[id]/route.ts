@@ -5,6 +5,7 @@ import {
   updateIncidentReport,
   type IncidentReportStatus,
 } from "@/lib/incident-reports";
+import { sendIncidentReportStatusNotification } from "@/lib/email";
 
 export async function GET(
   request: Request,
@@ -74,14 +75,18 @@ export async function PATCH(
     if (!existing) {
       return Response.json({ error: "Incident report not found" }, { status: 404 });
     }
-    if (existing.publication_status === "published") {
-      return Response.json(
-        { error: "Published incident reports are locked and cannot be edited." },
-        { status: 409 }
-      );
-    }
 
     const body = await request.json().catch(() => ({}));
+    if (existing.publication_status === "published") {
+      const publishedEditableFields = new Set(["status", "status_note"]);
+      const hasDisallowedPublishedEdit = Object.keys(body).some((key) => !publishedEditableFields.has(key));
+      if (hasDisallowedPublishedEdit) {
+        return Response.json(
+          { error: "Published incident reports only allow status updates and close-out notes." },
+          { status: 409 }
+        );
+      }
+    }
     const status =
       body.status === "open" || body.status === "in_progress" || body.status === "closed"
         ? (body.status as IncidentReportStatus)
@@ -124,6 +129,18 @@ export async function PATCH(
       publication_status: publicationStatus,
       published_at: publishedAt,
     });
+
+    if (incidentReport && status && status !== existing.status) {
+      sendIncidentReportStatusNotification({
+        incidentReportId: incidentReport.id,
+        reportNumber: incidentReport.report_number,
+        sectionName: incidentReport.section_name,
+        newStatus: status,
+        description: incidentReport.description,
+        performedBy: `${user.first_name} ${user.last_name}`,
+        location: incidentReport.location || undefined,
+      }).catch(console.error);
+    }
 
     return Response.json({ incidentReport });
   } catch (error) {

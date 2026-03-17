@@ -220,11 +220,7 @@ export default function WorkOrderDetailsModal({
     try {
       const updateData: Record<string, string | null> = { work_completed: newStatus };
 
-      if (newStatus === "completed") {
-        const now = new Date();
-        updateData.completed_date = now.toISOString().slice(0, 10);
-        updateData.completed_time = now.toTimeString().slice(0, 5);
-      } else {
+      if (newStatus !== "completed") {
         updateData.completed_date = null;
         updateData.completed_time = null;
       }

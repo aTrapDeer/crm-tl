@@ -94,6 +94,21 @@ export async function PATCH(
     }
 
     const body = await request.json().catch(() => ({}));
+    if (workOrder.publication_status === "published") {
+      const publishedEditableFields = new Set([
+        "work_completed",
+        "status_note",
+        "completed_date",
+        "completed_time",
+      ]);
+      const hasDisallowedPublishedEdit = Object.keys(body).some((key) => !publishedEditableFields.has(key));
+      if (hasDisallowedPublishedEdit) {
+        return Response.json(
+          { error: "Published work orders only allow status updates and close-out notes." },
+          { status: 409 }
+        );
+      }
+    }
     const requestedPublicationStatus =
       body.publication_status === "draft" || body.publication_status === "published"
         ? body.publication_status
@@ -103,13 +118,6 @@ export async function PATCH(
       return Response.json(
         { error: "Published work orders cannot be reverted to draft." },
         { status: 400 }
-      );
-    }
-
-    if (workOrder.publication_status === "published") {
-      return Response.json(
-        { error: "Published work orders are locked and cannot be edited." },
-        { status: 409 }
       );
     }
 

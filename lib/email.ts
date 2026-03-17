@@ -425,6 +425,59 @@ export async function sendWorkOrderChangeNotification(data: {
   });
 }
 
+export async function sendIncidentReportStatusNotification(data: {
+  incidentReportId: string;
+  reportNumber: string;
+  sectionName: string;
+  newStatus: string;
+  description: string;
+  performedBy: string;
+  location?: string;
+}): Promise<boolean> {
+  const adminEmails = await getAdminEmails();
+  if (adminEmails.length === 0) return true;
+
+  const incidentUrl = `${APP_URL}/dashboard/management/incident-reports/${data.incidentReportId}`;
+
+  const content = `
+    <div style="background-color: #8b5cf615; border-left: 4px solid #8b5cf6; padding: 16px; border-radius: 0 12px 12px 0; margin-bottom: 24px;">
+      <p style="margin: 0; color: #8b5cf6; font-size: 14px; font-weight: 600; text-transform: uppercase;">
+        Incident Status Changed: ${data.newStatus.replace("_", " ").toUpperCase()}
+      </p>
+    </div>
+    <h2 style="margin: 0 0 16px; color: #01224f; font-size: 20px; font-weight: 600;">
+      Incident Report #${data.reportNumber}
+    </h2>
+    <p style="margin: 0 0 16px; color: #6b7280; font-size: 14px;">
+      <strong>${data.sectionName}</strong>${data.location ? ` - ${data.location}` : ""}
+    </p>
+    <div style="background-color: #f7f8fb; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+      <p style="margin: 0 0 8px; color: #6b7280; font-size: 12px; text-transform: uppercase;">Description</p>
+      <p style="margin: 0; color: #01224f; font-size: 14px; line-height: 1.5;">
+        ${data.description.substring(0, 200)}${data.description.length > 200 ? "..." : ""}
+      </p>
+    </div>
+    <p style="margin: 0 0 24px; color: #6b7280; font-size: 14px;">
+      Action performed by: <strong>${data.performedBy}</strong>
+    </p>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td align="center">
+          <a href="${incidentUrl}" style="display: inline-block; padding: 14px 28px; background-color: #01224f; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 12px;">
+            View Incident Report
+          </a>
+        </td>
+      </tr>
+    </table>
+  `;
+
+  return sendEmail({
+    to: adminEmails,
+    subject: `[Incident Status Changed] IR #${data.reportNumber}`,
+    html: getEmailTemplate(content, "Incident Report Notification"),
+  });
+}
+
 // ============ SIGNATURE ALERT EMAIL ============
 
 export async function sendSignatureAlertEmail(data: {

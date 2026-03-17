@@ -220,7 +220,7 @@ export default function EditWorkOrderPage({ params }: { params: Promise<{ id: st
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!form || !workOrder || !userRole || isPublished) return;
+    if (!form || !workOrder || !userRole) return;
 
     setError("");
     setSaveMessage("");
@@ -233,7 +233,14 @@ export default function EditWorkOrderPage({ params }: { params: Promise<{ id: st
     setSaving(true);
     try {
       const payload: Record<string, string | number | null> =
-        userRole === "admin"
+        isPublished
+          ? {
+              work_completed: form.work_completed,
+              completed_date: form.completed_date || null,
+              completed_time: form.completed_time || null,
+              ...(isAdmin ? { status_note: form.status_note || null } : {}),
+            }
+          : userRole === "admin"
           ? {
               date: form.date || null,
               time_received: form.time_received || null,
@@ -405,7 +412,7 @@ export default function EditWorkOrderPage({ params }: { params: Promise<{ id: st
 
         {isPublished && (
           <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-sm">
-            This work order is published and locked. No edits can be made.
+            This work order is published. General edits are locked, but status and close-out updates can still be saved here.
           </div>
         )}
 
@@ -418,7 +425,34 @@ export default function EditWorkOrderPage({ params }: { params: Promise<{ id: st
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <fieldset disabled={isPublished} className={`space-y-6 ${isPublished ? "opacity-75" : ""}`}>
+          {isPublished ? (
+            <div className="tl-card p-5 space-y-4">
+              <h2 className="text-lg font-semibold text-(--text)">Status & Close-Out</h2>
+              <div className="rounded-xl border border-(--border)/20 bg-(--bg) px-4 py-3 text-sm text-(--text)/75">
+                <p className="font-semibold text-(--text)">Close-Out Audit</p>
+                <p className="mt-1">
+                  Last status update:{" "}
+                  {workOrder.status_updated_at
+                    ? `${formatUsCentralDateTime(workOrder.status_updated_at)} CT${workOrder.status_updated_by_name ? ` by ${workOrder.status_updated_by_name}` : ""}`
+                    : "No status updates recorded yet."}
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <select value={form.work_completed} onChange={(event) => setForm({ ...form, work_completed: event.target.value as WorkOrder["work_completed"] })} className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)">
+                  <option value="pending">Pending</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+                <input type="date" value={form.completed_date} onChange={(event) => setForm({ ...form, completed_date: event.target.value })} placeholder="Completed Date" className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)" />
+                <input type="time" value={form.completed_time} onChange={(event) => setForm({ ...form, completed_time: event.target.value })} placeholder="Completed Time" className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)" />
+              </div>
+              {isAdmin && (
+                <textarea value={form.status_note} onChange={(event) => setForm({ ...form, status_note: event.target.value })} rows={3} placeholder="Admin close-out note" className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)" />
+              )}
+            </div>
+          ) : (
+          <fieldset className="space-y-6">
             {isAdmin && (
               <div className="tl-card p-5 space-y-4">
                 <h2 className="text-lg font-semibold text-(--text)">Contact Information</h2>
@@ -522,6 +556,7 @@ export default function EditWorkOrderPage({ params }: { params: Promise<{ id: st
               )}
             </div>
           </fieldset>
+          )}
 
           <div className="sticky bottom-0 bg-(--bg)/95 backdrop-blur border-t border-(--border) pt-4 pb-2">
             <div className="flex gap-3">
@@ -541,15 +576,13 @@ export default function EditWorkOrderPage({ params }: { params: Promise<{ id: st
                   {publishing ? "Publishing..." : "Publish Work Order"}
                 </button>
               )}
-              {!isPublished && (
-                <button
-                  type="submit"
-                  disabled={saving || publishing}
-                  className="flex-1 tl-btn px-4 py-2.5 text-sm disabled:opacity-50"
-                >
-                  {saving ? "Saving..." : "Save Draft Changes"}
-                </button>
-              )}
+              <button
+                type="submit"
+                disabled={saving || publishing}
+                className="flex-1 tl-btn px-4 py-2.5 text-sm disabled:opacity-50"
+              >
+                {saving ? "Saving..." : isPublished ? "Save Status Update" : "Save Draft Changes"}
+              </button>
             </div>
           </div>
         </form>
