@@ -5,7 +5,6 @@ import {
   updateIncidentReport,
   type IncidentReportStatus,
 } from "@/lib/incident-reports";
-import { sendIncidentReportStatusNotification } from "@/lib/email";
 
 export async function GET(
   request: Request,
@@ -77,7 +76,7 @@ export async function PATCH(
     }
 
     const body = await request.json().catch(() => ({}));
-    if (existing.publication_status === "published") {
+    if (existing.publication_status === "published" && user.role !== "admin") {
       const publishedEditableFields = new Set(["status", "status_note"]);
       const hasDisallowedPublishedEdit = Object.keys(body).some((key) => !publishedEditableFields.has(key));
       if (hasDisallowedPublishedEdit) {
@@ -129,18 +128,6 @@ export async function PATCH(
       publication_status: publicationStatus,
       published_at: publishedAt,
     });
-
-    if (incidentReport && status && status !== existing.status) {
-      sendIncidentReportStatusNotification({
-        incidentReportId: incidentReport.id,
-        reportNumber: incidentReport.report_number,
-        sectionName: incidentReport.section_name,
-        newStatus: status,
-        description: incidentReport.description,
-        performedBy: `${user.first_name} ${user.last_name}`,
-        location: incidentReport.location || undefined,
-      }).catch(console.error);
-    }
 
     return Response.json({ incidentReport });
   } catch (error) {

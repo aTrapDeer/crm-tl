@@ -212,18 +212,6 @@ export async function PATCH(
           company: updatedWorkOrder.company || undefined,
           location: updatedWorkOrder.location || undefined,
         }).catch(console.error);
-      } else if (nextStatus && nextStatus !== previousStatus) {
-        // Status changed to something other than completed
-        sendWorkOrderChangeNotification({
-          workOrderId: id,
-          workOrderNumber: updatedWorkOrder.work_order_number,
-          action: "status_changed",
-          newStatus: nextStatus,
-          description: updatedWorkOrder.description,
-          performedBy: `${user.first_name} ${user.last_name}`,
-          company: updatedWorkOrder.company || undefined,
-          location: updatedWorkOrder.location || undefined,
-        }).catch(console.error);
       }
     }
 

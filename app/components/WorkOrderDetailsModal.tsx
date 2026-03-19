@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import Image from "next/image";
 import Link from "next/link";
 import SignatureCapture from "./SignatureCapture";
+import { formatUsCentralDateTime } from "@/lib/us-central-time";
 
 interface WorkOrder {
   id: string;
@@ -768,7 +769,7 @@ export default function WorkOrderDetailsModal({
                           <p className="text-xs text-(--text)/60">{tlCorpSignature.signer_title}</p>
                         )}
                         <p className="text-xs text-(--text)/60">
-                          {new Date(tlCorpSignature.signed_date).toLocaleDateString()}
+                          {formatUsCentralDateTime(tlCorpSignature.signed_at)} CT
                         </p>
                       </div>
                     ) : canEdit ? (
@@ -801,7 +802,7 @@ export default function WorkOrderDetailsModal({
                           <p className="text-xs text-(--text)/60">{buildingRepSignature.signer_title}</p>
                         )}
                         <p className="text-xs text-(--text)/60">
-                          {new Date(buildingRepSignature.signed_date).toLocaleDateString()}
+                          {formatUsCentralDateTime(buildingRepSignature.signed_at)} CT
                         </p>
                       </div>
                     ) : canEdit ? (

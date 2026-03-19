@@ -1,6 +1,7 @@
 // Email service using Gmail SMTP with nodemailer
 import nodemailer from "nodemailer";
 import { turso } from "./turso";
+import { formatUsCentralDateTime } from "./us-central-time";
 
 const GMAIL_LOGIN = process.env.GMAIL_LOGIN;
 const GMAIL_PASSWORD = process.env.GMAIL_PW;
@@ -113,41 +114,6 @@ async function getAdminEmails(): Promise<string[]> {
     "SELECT email FROM users WHERE role = 'admin'"
   );
   return result.rows.map((row) => row.email as string);
-}
-
-async function getProjectAssociatedEmails(projectId: string): Promise<string[]> {
-  const result = await turso.execute({
-    sql: `SELECT DISTINCT u.email
-          FROM users u
-          INNER JOIN project_assignments pa ON u.id = pa.user_id
-          WHERE pa.project_id = ?`,
-    args: [projectId],
-  });
-  return result.rows.map((row) => row.email as string);
-}
-
-async function getWorkOrderAssociatedEmails(workOrderId: string): Promise<string[]> {
-  // Get assigned and creator emails
-  const result = await turso.execute({
-    sql: `SELECT DISTINCT u.email
-          FROM users u
-          LEFT JOIN work_orders wo ON (u.id = wo.assigned_to OR u.id = wo.created_by)
-          WHERE wo.id = ? AND u.email IS NOT NULL`,
-    args: [workOrderId],
-  });
-
-  // Get invited customer emails from work_order_invitations
-  const invitations = await turso.execute({
-    sql: `SELECT email FROM work_order_invitations WHERE work_order_id = ? AND status = 'accepted'`,
-    args: [workOrderId],
-  });
-
-  // Also get all admins
-  const admins = await getAdminEmails();
-  const userEmails = result.rows.map((row) => row.email as string);
-  const customerEmails = invitations.rows.map((row) => row.email as string);
-
-  return [...new Set([...userEmails, ...customerEmails, ...admins])];
 }
 
 // ============ PROJECT INVITATION EMAIL ============
@@ -425,6 +391,146 @@ export async function sendWorkOrderChangeNotification(data: {
   });
 }
 
+export async function sendProjectCompletionNotification(data: {
+  projectId: string;
+  projectName: string;
+  performedBy: string;
+}): Promise<boolean> {
+  const adminEmails = await getAdminEmails();
+  if (adminEmails.length === 0) return true;
+
+  const projectUrl = `${APP_URL}/dashboard/projects/${data.projectId}`;
+
+  const content = `
+    <div style="background-color: #16a34a15; border-left: 4px solid #16a34a; padding: 16px; border-radius: 0 12px 12px 0; margin-bottom: 24px;">
+      <p style="margin: 0; color: #16a34a; font-size: 14px; font-weight: 600; text-transform: uppercase;">
+        Project Completed
+      </p>
+    </div>
+    <h2 style="margin: 0 0 16px; color: #01224f; font-size: 20px; font-weight: 600;">
+      ${data.projectName} has been marked complete
+    </h2>
+    <p style="margin: 0 0 24px; color: #0d3e8d; font-size: 16px; line-height: 1.6;">
+      Completion was recorded by <strong>${data.performedBy}</strong>.
+    </p>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td align="center">
+          <a href="${projectUrl}" style="display: inline-block; padding: 14px 28px; background-color: #01224f; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 12px;">
+            View Project
+          </a>
+        </td>
+      </tr>
+    </table>
+  `;
+
+  return sendEmail({
+    to: adminEmails,
+    subject: `[Project Completed] ${data.projectName}`,
+    html: getEmailTemplate(content, "Project Completion"),
+  });
+}
+
+export async function sendProjectSignatureNotification(data: {
+  projectId: string;
+  projectName: string;
+  signerName: string;
+  signerRole: "admin" | "client";
+}): Promise<boolean> {
+  const adminEmails = await getAdminEmails();
+  if (adminEmails.length === 0) return true;
+
+  const signerRoleLabel = data.signerRole === "admin" ? "Admin" : "Client";
+  const projectUrl = `${APP_URL}/dashboard/projects/${data.projectId}`;
+
+  const content = `
+    <div style="background-color: #16a34a15; border-left: 4px solid #16a34a; padding: 16px; border-radius: 0 12px 12px 0; margin-bottom: 24px;">
+      <p style="margin: 0; color: #16a34a; font-size: 14px; font-weight: 600; text-transform: uppercase;">
+        Project Signature Received
+      </p>
+    </div>
+    <h2 style="margin: 0 0 16px; color: #01224f; font-size: 20px; font-weight: 600;">
+      ${data.projectName}
+    </h2>
+    <div style="background-color: #f7f8fb; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+      <p style="margin: 0 0 8px; color: #6b7280; font-size: 12px; text-transform: uppercase;">Signed By</p>
+      <p style="margin: 0; color: #01224f; font-size: 18px; font-weight: 600;">
+        ${data.signerName}
+      </p>
+      <p style="margin: 8px 0 0; color: #01224f; font-size: 14px; font-weight: 500;">
+        ${signerRoleLabel}
+      </p>
+    </div>
+    <p style="margin: 0 0 24px; color: #6b7280; font-size: 14px;">
+      Signed on: <strong>${formatUsCentralDateTime(new Date())} CT</strong>
+    </p>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td align="center">
+          <a href="${projectUrl}" style="display: inline-block; padding: 14px 28px; background-color: #01224f; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 12px;">
+            View Project
+          </a>
+        </td>
+      </tr>
+    </table>
+  `;
+
+  return sendEmail({
+    to: adminEmails,
+    subject: `[Project Signature] ${data.projectName} - ${signerRoleLabel}`,
+    html: getEmailTemplate(content, "Project Signature"),
+  });
+}
+
+export async function sendBonanApprovalSignatureNotification(data: {
+  entityType: "bonan_report" | "work_order" | "incident_report";
+  entityId: string;
+  entityLabel: string;
+  signerName: string;
+}): Promise<boolean> {
+  const adminEmails = await getAdminEmails();
+  if (adminEmails.length === 0) return true;
+
+  const entityPath =
+    data.entityType === "work_order"
+      ? `/dashboard/management/work-orders/${data.entityId}`
+      : data.entityType === "incident_report"
+        ? `/dashboard/management/incident-reports/${data.entityId}`
+        : `/dashboard/management/bonan/daily/${data.entityId}`;
+
+  const content = `
+    <div style="background-color: #16a34a15; border-left: 4px solid #16a34a; padding: 16px; border-radius: 0 12px 12px 0; margin-bottom: 24px;">
+      <p style="margin: 0; color: #16a34a; font-size: 14px; font-weight: 600; text-transform: uppercase;">
+        Bonan Client Sign-Off Received
+      </p>
+    </div>
+    <h2 style="margin: 0 0 16px; color: #01224f; font-size: 20px; font-weight: 600;">
+      ${data.entityLabel}
+    </h2>
+    <p style="margin: 0 0 24px; color: #0d3e8d; font-size: 16px; line-height: 1.6;">
+      <strong>${data.signerName}</strong> submitted a client approval signature for this ${data.entityType.replace("_", " ")}.
+    </p>
+    <p style="margin: 0 0 24px; color: #6b7280; font-size: 14px;">
+      Signed on: <strong>${formatUsCentralDateTime(new Date())} CT</strong>
+    </p>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td align="center">
+          <a href="${APP_URL}${entityPath}" style="display: inline-block; padding: 14px 28px; background-color: #01224f; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 12px;">
+            Review Item
+          </a>
+        </td>
+      </tr>
+    </table>
+  `;
+
+  return sendEmail({
+    to: adminEmails,
+    subject: `[Bonan Sign-Off] ${data.entityLabel}`,
+    html: getEmailTemplate(content, "Bonan Client Sign-Off"),
+  });
+}
+
 export async function sendIncidentReportStatusNotification(data: {
   incidentReportId: string;
   reportNumber: string;
@@ -489,9 +595,8 @@ export async function sendSignatureAlertEmail(data: {
   company?: string;
   location?: string;
 }): Promise<boolean> {
-  // Get all associated emails (admins + assigned users + creator)
-  const emails = await getWorkOrderAssociatedEmails(data.workOrderId);
-  if (emails.length === 0) return true;
+  const adminEmails = await getAdminEmails();
+  if (adminEmails.length === 0) return true;
 
   const signerTypeLabel = data.signerType === "tl_corp_rep"
     ? "TL Corp Representative"
@@ -538,7 +643,7 @@ export async function sendSignatureAlertEmail(data: {
   `;
 
   return sendEmail({
-    to: emails,
+    to: adminEmails,
     subject: `[Signature Received] WO #${data.workOrderNumber} - ${signerTypeLabel}`,
     html: getEmailTemplate(content, "Signature Alert"),
   });
@@ -553,12 +658,8 @@ export async function sendManagementSignatureAlertEmail(data: {
   signerEmail?: string;
   documentName: string;
 }): Promise<boolean> {
-  // Get all associated emails for the project
-  const emails = await getProjectAssociatedEmails(data.projectId);
   const adminEmails = await getAdminEmails();
-  const allEmails = [...new Set([...emails, ...adminEmails])];
-
-  if (allEmails.length === 0) return true;
+  if (adminEmails.length === 0) return true;
 
   const projectUrl = `${APP_URL}/dashboard/projects/${data.projectId}`;
 
@@ -600,7 +701,7 @@ export async function sendManagementSignatureAlertEmail(data: {
   `;
 
   return sendEmail({
-    to: allEmails,
+    to: adminEmails,
     subject: `[Contract Signed] ${data.documentName} - ${data.projectName}`,
     html: getEmailTemplate(content, "Contract Signature Alert"),
   });

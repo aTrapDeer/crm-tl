@@ -6,6 +6,7 @@ import {
   deleteProjectById,
   clearProjectSignatures,
 } from "@/lib/projects";
+import { sendProjectCompletionNotification } from "@/lib/email";
 import { cookies } from "next/headers";
 
 export async function GET(
@@ -80,6 +81,11 @@ export async function PATCH(
     }
 
     const body = await request.json();
+    const currentProject = await getProjectById(id);
+
+    if (!currentProject) {
+      return Response.json({ error: "Project not found" }, { status: 404 });
+    }
 
     if (body.name !== undefined) {
       if (typeof body.name !== "string" || !body.name.trim()) {
@@ -105,9 +111,7 @@ export async function PATCH(
     }
 
     // Clear on_hold fields when status changes from on_hold
-    const currentProject = await getProjectById(id);
     if (
-      currentProject &&
       currentProject.status === "on_hold" &&
       body.status &&
       body.status !== "on_hold"
@@ -123,6 +127,14 @@ export async function PATCH(
     }
 
     await clearProjectSignatures(id);
+
+    if (currentProject.status !== "completed" && project.status === "completed") {
+      sendProjectCompletionNotification({
+        projectId: id,
+        projectName: project.name,
+        performedBy: `${user.first_name} ${user.last_name}`,
+      }).catch(console.error);
+    }
 
     return Response.json({ project });
   } catch (error) {

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import SignatureCapture from "@/app/components/SignatureCapture";
+import { formatUsCentralDateTime } from "@/lib/us-central-time";
 
 interface Project {
   id: string;
@@ -762,12 +763,7 @@ export default function ProjectPage() {
   }
 
   function formatDateTime(dateStr: string) {
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return `${formatUsCentralDateTime(dateStr)} CT`;
   }
 
   function formatCurrency(amount: number) {

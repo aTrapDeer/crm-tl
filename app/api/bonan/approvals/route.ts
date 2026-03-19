@@ -10,7 +10,10 @@ import {
   userHasBonanClientMembership,
   type BonanEntityType,
 } from "@/lib/bonan-client";
-import { sendNotificationEmail } from "@/lib/email";
+import {
+  sendBonanApprovalSignatureNotification,
+  sendNotificationEmail,
+} from "@/lib/email";
 
 async function getAuthenticatedUser() {
   const cookieStore = await cookies();
@@ -138,6 +141,20 @@ export async function POST(request: Request) {
           : new Date().toISOString().slice(0, 10),
       ip_address: ipAddress,
     });
+
+    const entityLabel =
+      "report_number" in accessibleEntity
+        ? String(accessibleEntity.report_number || "")
+        : "work_order_number" in accessibleEntity
+          ? `Work Order #${String(accessibleEntity.work_order_number || entityId)}`
+          : `Bonan report ${entityId}`;
+
+    sendBonanApprovalSignatureNotification({
+      entityType,
+      entityId,
+      entityLabel,
+      signerName: body.signer_name.trim(),
+    }).catch(console.error);
 
     await sendNotificationEmail({
       to: user.email,

@@ -18,6 +18,7 @@ interface IncidentReport {
   actions_taken: string | null;
   work_order_or_vendor: string | null;
   status: string;
+  status_note: string | null;
   updated_at: string;
 }
 
@@ -116,6 +117,7 @@ export default function BonanClientIncidentDetailPage({ params }: { params: Prom
             description: incidentReport.description,
             actions_taken: incidentReport.actions_taken,
             work_order_or_vendor: incidentReport.work_order_or_vendor,
+            close_out_note: incidentReport.status_note,
           }}
         />
 

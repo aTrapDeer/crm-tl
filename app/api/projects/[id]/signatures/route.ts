@@ -6,6 +6,7 @@ import {
   getProjectSignatures,
   upsertProjectSignature,
 } from "@/lib/projects";
+import { sendProjectSignatureNotification } from "@/lib/email";
 
 function isDataImage(value: string): boolean {
   return /^data:image\/(png|jpeg|jpg);base64,/.test(value);
@@ -139,6 +140,13 @@ export async function POST(
       signed_by: user.id,
       ip_address: ipAddress || undefined,
     });
+
+    sendProjectSignatureNotification({
+      projectId: id,
+      projectName: project.name,
+      signerName,
+      signerRole: user.role === "admin" ? "admin" : "client",
+    }).catch(console.error);
 
     const signatures = await getProjectSignatures(id);
     return Response.json({ signature, signatures });

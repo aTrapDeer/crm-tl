@@ -115,12 +115,12 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
 
   const isPublished = incidentReport?.publication_status === "published";
   const isAdmin = userRole === "admin";
-  const canEditMainFields = !isPublished;
+  const canEditMainFields = !isPublished || isAdmin;
   const canEditStatus = !isPublished || isAdmin;
 
   function updateField<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((current) => ({ ...current, [key]: value }));
-    if (!isPublished && saveMessage) {
+    if (saveMessage) {
       setSaveMessage("");
     }
   }
@@ -137,7 +137,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
     setError("");
     setSaveMessage("");
     try {
-      const payload = isPublished
+      const payload = isPublished && !isAdmin
         ? {
             status: form.status,
             ...(isAdmin ? { status_note: form.status_note } : {}),
@@ -167,6 +167,8 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
       setIncidentReport(updatedReport);
       if (updatedReport.publication_status === "draft") {
         setSaveMessage(`Draft saved at ${formatSavedTime(new Date())}`);
+      } else {
+        setSaveMessage("Published incident report updated.");
       }
     } catch {
       setError("Failed to update incident report.");
@@ -195,7 +197,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
         return;
       }
       setIncidentReport(data.incidentReport as IncidentReport);
-      setSaveMessage("Incident report published. Editing is now locked.");
+      setSaveMessage("Incident report published. Admins can continue updating report details and close-out notes.");
     } catch {
       setError("Failed to publish incident report.");
     } finally {
@@ -227,9 +229,11 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
     );
   }
 
-  const inputClass = `w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm ${
-    isPublished ? "opacity-75 cursor-not-allowed" : ""
-  }`;
+  function getInputClass(disabled: boolean) {
+    return `w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm ${
+      disabled ? "opacity-75 cursor-not-allowed" : ""
+    }`;
+  }
 
   return (
     <div className="min-h-screen bg-(--bg)">
@@ -296,7 +300,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
 
         {isPublished && (
           <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-700">
-            This report is published. Core report details are locked, but admins can still post status and close-out updates.
+            This report is published. Admins can still update report details, status, and close out notes.
           </div>
         )}
 
@@ -309,7 +313,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
                 value={form.report_date}
                 onChange={(event) => updateField("report_date", event.target.value)}
                 disabled={!canEditMainFields}
-                className={inputClass}
+                className={getInputClass(!canEditMainFields)}
               />
             </label>
             <label className="space-y-1">
@@ -319,7 +323,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
                 value={form.incident_time}
                 onChange={(event) => updateField("incident_time", event.target.value)}
                 disabled={!canEditMainFields}
-                className={inputClass}
+                className={getInputClass(!canEditMainFields)}
               />
             </label>
             <label className="space-y-1">
@@ -329,7 +333,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
                 value={form.location}
                 onChange={(event) => updateField("location", event.target.value)}
                 disabled={!canEditMainFields}
-                className={inputClass}
+                className={getInputClass(!canEditMainFields)}
               />
             </label>
             <label className="space-y-1">
@@ -339,7 +343,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
                 value={form.system_area}
                 onChange={(event) => updateField("system_area", event.target.value)}
                 disabled={!canEditMainFields}
-                className={inputClass}
+                className={getInputClass(!canEditMainFields)}
               />
             </label>
             <label className="space-y-1 md:col-span-2">
@@ -349,7 +353,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
                 onChange={(event) => updateField("description", event.target.value)}
                 rows={4}
                 disabled={!canEditMainFields}
-                className={inputClass}
+                className={getInputClass(!canEditMainFields)}
               />
             </label>
             <label className="space-y-1 md:col-span-2">
@@ -359,7 +363,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
                 onChange={(event) => updateField("actions_taken", event.target.value)}
                 rows={3}
                 disabled={!canEditMainFields}
-                className={inputClass}
+                className={getInputClass(!canEditMainFields)}
               />
             </label>
             <label className="space-y-1">
@@ -369,7 +373,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
                 value={form.work_order_or_vendor}
                 onChange={(event) => updateField("work_order_or_vendor", event.target.value)}
                 disabled={!canEditMainFields}
-                className={inputClass}
+                className={getInputClass(!canEditMainFields)}
               />
             </label>
             <label className="space-y-1">
@@ -378,7 +382,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
                 value={form.status}
                 onChange={(event) => updateField("status", event.target.value as IncidentReportStatus)}
                 disabled={!canEditStatus}
-                className={inputClass}
+                className={getInputClass(!canEditStatus)}
               >
                 {STATUS_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -388,16 +392,14 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
               </select>
             </label>
             <label className="space-y-1 md:col-span-2">
-              <span className="text-(--text)/60">
-                {isAdmin ? "Admin Close-Out Note" : "Close-Out Note"}
-              </span>
+              <span className="text-(--text)/60">Close out note</span>
               <textarea
                 value={form.status_note}
                 onChange={(event) => updateField("status_note", event.target.value)}
                 rows={3}
                 disabled={!isAdmin}
                 placeholder={isAdmin ? "Add status context, close-out details, or handoff notes" : ""}
-                className={inputClass}
+                className={getInputClass(!isAdmin)}
               />
             </label>
           </div>
@@ -422,7 +424,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
                 disabled={saving || publishing}
                 className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
               >
-                {saving ? "Saving..." : isPublished ? "Save Status Update" : "Save Draft Changes"}
+                {saving ? "Saving..." : isPublished && !isAdmin ? "Save Status Update" : "Save Changes"}
               </button>
             </div>
           </div>

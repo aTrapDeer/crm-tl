@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect, useCallback } from "react";
+import { formatUsCentralDateTime } from "@/lib/us-central-time";
 
 interface SignatureCaptureProps {
   onSave: (signatureData: string) => void;
@@ -126,17 +127,37 @@ export default function SignatureCapture({
     const canvas = canvasRef.current;
     if (!canvas || !hasSignature) return;
 
-    // Create a temporary canvas to export at standard resolution
+    const timestampLabel = `${formatUsCentralDateTime(new Date())} CT`;
+
+    // Create a temporary canvas to export at standard resolution with a signature footer.
     const tempCanvas = document.createElement("canvas");
     const rect = canvas.getBoundingClientRect();
     tempCanvas.width = rect.width;
-    tempCanvas.height = rect.height;
+    tempCanvas.height = rect.height + 72;
 
     const tempCtx = tempCanvas.getContext("2d");
     if (!tempCtx) return;
 
-    // Draw the signature canvas onto the temp canvas at standard resolution
-    tempCtx.drawImage(canvas, 0, 0, tempCanvas.width, tempCanvas.height);
+    tempCtx.fillStyle = "#ffffff";
+    tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+    tempCtx.drawImage(canvas, 0, 0, rect.width, rect.height);
+
+    tempCtx.strokeStyle = "#d5dce6";
+    tempCtx.lineWidth = 1;
+    tempCtx.beginPath();
+    tempCtx.moveTo(16, rect.height + 8);
+    tempCtx.lineTo(tempCanvas.width - 16, rect.height + 8);
+    tempCtx.stroke();
+
+    tempCtx.fillStyle = "#01224f";
+    tempCtx.textBaseline = "top";
+    tempCtx.font = '28px "Brush Script MT", "Segoe Script", "Lucida Handwriting", cursive';
+    tempCtx.fillText(signerName, 16, rect.height + 16);
+
+    tempCtx.fillStyle = "#4b5563";
+    tempCtx.font = '12px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
+    tempCtx.fillText(timestampLabel, 16, rect.height + 48);
 
     const signatureData = tempCanvas.toDataURL("image/png");
     onSave(signatureData);
@@ -184,7 +205,7 @@ export default function SignatureCapture({
         </div>
 
         <p className="text-xs text-center text-(--text)/60 mb-4">
-          Sign in the box above using your mouse or finger
+          Sign in the box above using your mouse or finger. The saved signature will include your name and a US Central timestamp.
         </p>
 
         <div className="flex gap-3">

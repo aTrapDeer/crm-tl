@@ -819,7 +819,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
                   <Image src={tlCorpSignature.signature_data} alt="TL Corp Rep Signature" width={200} height={64} className="h-16 w-auto object-contain" unoptimized />
                   <p className="text-sm font-medium text-(--text) mt-2">{tlCorpSignature.signer_name}</p>
                   {tlCorpSignature.signer_title && <p className="text-xs text-(--text)/60">{tlCorpSignature.signer_title}</p>}
-                  <p className="text-xs text-(--text)/60">{new Date(tlCorpSignature.signed_date).toLocaleDateString()}</p>
+                  <p className="text-xs text-(--text)/60">{formatUsCentralDateTime(tlCorpSignature.signed_at)} CT</p>
                 </div>
               ) : (
                 <button
@@ -840,7 +840,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
                   <Image src={buildingRepSignature.signature_data} alt="Building Rep Signature" width={200} height={64} className="h-16 w-auto object-contain" unoptimized />
                   <p className="text-sm font-medium text-(--text) mt-2">{buildingRepSignature.signer_name}</p>
                   {buildingRepSignature.signer_title && <p className="text-xs text-(--text)/60">{buildingRepSignature.signer_title}</p>}
-                  <p className="text-xs text-(--text)/60">{new Date(buildingRepSignature.signed_date).toLocaleDateString()}</p>
+                  <p className="text-xs text-(--text)/60">{formatUsCentralDateTime(buildingRepSignature.signed_at)} CT</p>
                 </div>
               ) : (
                 <button
