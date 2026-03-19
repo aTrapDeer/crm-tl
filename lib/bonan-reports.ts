@@ -224,36 +224,6 @@ function mapRowToAssociatedWorkOrder(row: Record<string, unknown>): BonanAssocia
   };
 }
 
-async function createLinkedWorkOrder(
-  reportType: BonanReportType,
-  createdBy: string,
-  reportDate?: string
-): Promise<string> {
-  const workOrderNumber = await generateWorkOrderNumber();
-
-  const descriptionByType: Record<BonanReportType, string> = {
-    daily: "Bonan Towers Daily Walk-Through",
-    weekly: "Bonan Towers Weekly Report",
-    monthly: "Bonan Towers Monthly Report",
-  };
-
-  const workOrder = await createWorkOrder({
-    work_order_number: workOrderNumber,
-    date: reportDate || getTodayDate(),
-    time_received: getCurrentTime(),
-    company: "Bonan Towers",
-    department: "Facilities",
-    location: "Bonan Towers",
-    site: "bonan_towers",
-    priority: "normal",
-    service_type: "inspection",
-    description: descriptionByType[reportType],
-    created_by: createdBy,
-  });
-
-  return workOrder.id;
-}
-
 export async function getBonanReportByDate(data: {
   report_type: BonanReportType;
   report_date: string;
@@ -356,8 +326,6 @@ export async function createBonanReport(data: {
     payload = {};
   }
 
-  const workOrderId = await createLinkedWorkOrder(data.report_type, data.created_by, reportDate);
-
   await turso.execute({
     sql: `INSERT INTO bonan_reports (
             id, site, report_type, status, report_date, work_order_id, client_visible_revision, created_by, payload_json
@@ -367,7 +335,7 @@ export async function createBonanReport(data: {
       site,
       data.report_type,
       reportDate,
-      workOrderId,
+      null,
       1,
       data.created_by,
       JSON.stringify(payload),
