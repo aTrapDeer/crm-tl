@@ -238,6 +238,24 @@ CREATE INDEX IF NOT EXISTS idx_bonan_reports_status ON bonan_reports(status);
 CREATE INDEX IF NOT EXISTS idx_bonan_reports_date ON bonan_reports(report_date);
 CREATE INDEX IF NOT EXISTS idx_bonan_reports_work_order ON bonan_reports(work_order_id);
 
+CREATE TABLE IF NOT EXISTS bonan_report_signatures (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  bonan_report_id TEXT NOT NULL REFERENCES bonan_reports(id) ON DELETE CASCADE,
+  signature_scope TEXT NOT NULL CHECK (signature_scope IN ('daily_walkthrough', 'fire_alarm')),
+  signer_name TEXT NOT NULL,
+  signer_title TEXT,
+  signature_data TEXT NOT NULL,
+  signed_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  signed_date TEXT NOT NULL DEFAULT (date('now')),
+  signed_at TEXT NOT NULL DEFAULT (datetime('now')),
+  ip_address TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(bonan_report_id, signature_scope)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bonan_report_signatures_report ON bonan_report_signatures(bonan_report_id);
+CREATE INDEX IF NOT EXISTS idx_bonan_report_signatures_scope ON bonan_report_signatures(signature_scope);
+
 CREATE TABLE IF NOT EXISTS bonan_report_work_orders (
   id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
   bonan_report_id TEXT NOT NULL REFERENCES bonan_reports(id) ON DELETE CASCADE,
@@ -316,6 +334,24 @@ CREATE TABLE IF NOT EXISTS work_order_signatures (
 CREATE INDEX IF NOT EXISTS idx_work_order_signatures_order ON work_order_signatures(work_order_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_work_order_signatures_unique ON work_order_signatures(work_order_id, signer_type);
 CREATE INDEX IF NOT EXISTS idx_work_orders_site ON work_orders(site);
+
+CREATE TABLE IF NOT EXISTS entity_photos (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  entity_type TEXT NOT NULL CHECK (entity_type IN ('work_order', 'incident_report')),
+  entity_id TEXT NOT NULL,
+  photo_role TEXT NOT NULL DEFAULT 'general' CHECK (photo_role IN ('before', 'after', 'general')),
+  filename TEXT NOT NULL,
+  s3_key TEXT,
+  s3_url TEXT,
+  caption TEXT,
+  captured_at TEXT NOT NULL DEFAULT (datetime('now')),
+  uploaded_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_entity_photos_entity ON entity_photos(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_entity_photos_role ON entity_photos(entity_type, entity_id, photo_role);
+CREATE INDEX IF NOT EXISTS idx_entity_photos_uploaded_by ON entity_photos(uploaded_by);
 
 CREATE TABLE IF NOT EXISTS bonan_client_memberships (
   id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),

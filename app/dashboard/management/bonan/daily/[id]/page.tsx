@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
+import SignatureCapture from "@/app/components/SignatureCapture";
 import {
   normalizeDailyReportPayload,
   type DailyReportPayload,
@@ -62,6 +63,19 @@ interface AssociatedIncidentReport {
   work_order_or_vendor: string | null;
   status: "open" | "in_progress" | "closed";
   created_at: string;
+}
+
+type BonanReportSignatureScope = "daily_walkthrough" | "fire_alarm";
+
+interface BonanReportSignature {
+  id: string;
+  bonan_report_id: string;
+  signature_scope: BonanReportSignatureScope;
+  signer_name: string;
+  signer_title: string | null;
+  signature_data: string;
+  signed_date: string;
+  signed_at: string;
 }
 
 const STEP_TITLES = [
@@ -239,6 +253,9 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
   const [showDeleteDailyWarning, setShowDeleteDailyWarning] = useState(false);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
   const [deleteReportError, setDeleteReportError] = useState("");
+  const [reportSignatures, setReportSignatures] = useState<BonanReportSignature[]>([]);
+  const [showReportSignatureCapture, setShowReportSignatureCapture] =
+    useState<BonanReportSignatureScope | null>(null);
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [syncState, setSyncState] = useState<DraftSyncState>("idle");
@@ -248,6 +265,20 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
   const isReadOnly = report?.status === "submitted" || userRole === "client";
   const draftCacheKey = useMemo(() => getDraftCacheKey(id), [id]);
   const draftQueueKey = useMemo(() => getDraftQueueKey(id), [id]);
+  const dailyWalkthroughSignature = useMemo(
+    () =>
+      reportSignatures.find(
+        (signature) => signature.signature_scope === "daily_walkthrough"
+      ),
+    [reportSignatures]
+  );
+  const fireAlarmSignature = useMemo(
+    () =>
+      reportSignatures.find(
+        (signature) => signature.signature_scope === "fire_alarm"
+      ),
+    [reportSignatures]
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -407,19 +438,24 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
         setPayload(initialPayload);
 
         try {
-          const [associatedWorkOrdersRes, associatedIncidentReportsRes] = await Promise.all([
+          const [associatedWorkOrdersRes, associatedIncidentReportsRes, signaturesRes] = await Promise.all([
             fetch(`/api/bonan/reports/${id}/work-orders`),
             fetch(`/api/bonan/reports/${id}/incident-reports`),
+            fetch(`/api/bonan/reports/${id}/signatures`),
           ]);
-          const [associatedWorkOrdersData, associatedIncidentReportsData] = await Promise.all([
+          const [associatedWorkOrdersData, associatedIncidentReportsData, signaturesData] = await Promise.all([
             associatedWorkOrdersRes.json(),
             associatedIncidentReportsRes.json(),
+            signaturesRes.json().catch(() => ({})),
           ]);
           if (associatedWorkOrdersRes.ok) {
             setAssociatedWorkOrders(associatedWorkOrdersData.associatedWorkOrders || []);
           }
           if (associatedIncidentReportsRes.ok) {
             setAssociatedIncidentReports(associatedIncidentReportsData.associatedIncidentReports || []);
+          }
+          if (signaturesRes.ok) {
+            setReportSignatures(signaturesData.signatures || []);
           }
         } catch (associatedError) {
           console.error("Failed to load associated records:", associatedError);
@@ -691,6 +727,101 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
         : current.fireAlarmEntries.filter((_, rowIndex) => rowIndex !== index),
     }));
   }
+
+  function openReportSignaturePrompt(scope: BonanReportSignatureScope) {
+    setShowReportSignatureCapture(scope);
+  }
+
+  function getReportSignatureDetails(
+    scope: BonanReportSignatureScope,
+    currentPayload: DailyReportPayload
+  ) {
+    if (scope === "daily_walkthrough") {
+      return {
+        signerName:
+          currentPayload.metadata.inspector.trim() ||
+          currentPayload.metadata.supervisorReview.trim() ||
+          "Signer",
+        signerTitle:
+          currentPayload.metadata.supervisorReview.trim()
+            ? `Supervisor: ${currentPayload.metadata.supervisorReview.trim()}`
+            : "",
+      };
+    }
+
+    return {
+      signerName:
+        currentPayload.fireAlarmMeta.preparedBy.trim() ||
+        currentPayload.fireAlarmMeta.supervisorReview.trim() ||
+        "Signer",
+      signerTitle:
+        currentPayload.fireAlarmMeta.supervisorReview.trim()
+          ? `Supervisor: ${currentPayload.fireAlarmMeta.supervisorReview.trim()}`
+          : "",
+    };
+  }
+
+  async function handleSaveReportSignature(signatureData: string) {
+    if (!showReportSignatureCapture || !report || !payload) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setError("You are offline. Reconnect before saving a signature.");
+      return;
+    }
+
+    setError("");
+    if (dirty) {
+      const saved = await persistDraftToServer(payload);
+      if (!saved) {
+        setError("Save the current draft successfully before adding a signature.");
+        return;
+      }
+    }
+
+    try {
+      const res = await fetch(`/api/bonan/reports/${id}/signatures`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          signature_scope: showReportSignatureCapture,
+          signer_name: getReportSignatureDetails(showReportSignatureCapture, payload).signerName,
+          signer_title:
+            getReportSignatureDetails(showReportSignatureCapture, payload).signerTitle || null,
+          signature_data: signatureData,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || "Failed to save walkthrough signature.");
+        return;
+      }
+
+      const normalizedPayload = normalizeDailyReportPayload(
+        data.report?.payload || payload
+      );
+      if (data.report) {
+        setReport({
+          ...(data.report as Omit<BonanDailyReport, "payload">),
+          payload: normalizedPayload,
+        });
+      }
+      setPayload(normalizedPayload);
+      setDirty(false);
+      setSyncState("idle");
+      clearLocalDraftRecord(draftQueueKey);
+      writeLocalDraftRecord(draftCacheKey, {
+        payload: normalizedPayload,
+        savedAt: new Date().toISOString(),
+        serverUpdatedAt: data.report?.updated_at ?? report.updated_at,
+      });
+      setReportSignatures(data.signatures || []);
+      setSaveMessage(`Signature saved at ${formatUsCentralTime(new Date())} CT`);
+      setShowReportSignatureCapture(null);
+    } catch (saveError) {
+      console.error("Failed to save Bonan report signature:", saveError);
+      setError("Failed to save walkthrough signature.");
+    }
+  }
+
   async function handleSubmitReport() {
     if (!payload || !report || submitting) return;
     if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -1444,16 +1575,55 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                     className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
-                <label className="space-y-1 text-xs">
-                  <span className="font-medium text-(--text)/60">Signature (typed)</span>
-                  <input
-                    type="text"
-                    value={payload.metadata.signature}
-                    onChange={(event) => updateMetadata("signature", event.target.value)}
-                    disabled={isReadOnly}
-                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
-                  />
-                </label>
+                <div className="space-y-1 text-xs">
+                  <span className="font-medium text-(--text)/60">Daily Walkthrough Signature</span>
+                  {dailyWalkthroughSignature ? (
+                    <div className="rounded-lg border border-(--border)/30 bg-white p-3">
+                      <img
+                        src={dailyWalkthroughSignature.signature_data}
+                        alt="Daily walkthrough signature"
+                        className="h-24 w-auto max-w-full object-contain"
+                      />
+                      <p className="mt-2 text-sm font-medium text-(--text)">
+                        {dailyWalkthroughSignature.signer_name}
+                      </p>
+                      {dailyWalkthroughSignature.signer_title && (
+                        <p className="text-xs text-(--text)/60">
+                          {dailyWalkthroughSignature.signer_title}
+                        </p>
+                      )}
+                      <p className="text-xs text-(--text)/60">
+                        {formatUsCentralDateTime(dailyWalkthroughSignature.signed_at)} CT
+                      </p>
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          onClick={() => openReportSignaturePrompt("daily_walkthrough")}
+                          className="mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700"
+                        >
+                          Replace signature
+                        </button>
+                      )}
+                    </div>
+                  ) : !isReadOnly ? (
+                    <button
+                      type="button"
+                      onClick={() => openReportSignaturePrompt("daily_walkthrough")}
+                      className="w-full rounded-lg border-2 border-dashed border-(--border)/40 px-3 py-4 text-sm text-(--text)/60 transition hover:border-blue-400 hover:text-(--text)"
+                    >
+                      Capture handwritten signature
+                    </button>
+                  ) : (
+                    <div className="rounded-lg border border-(--border)/30 bg-(--bg) px-3 py-3 text-sm text-(--text)/60">
+                      {payload.metadata.signature || "No signature recorded"}
+                    </div>
+                  )}
+                  {!dailyWalkthroughSignature && payload.metadata.signature && (
+                    <p className="text-[11px] text-(--text)/50">
+                      Legacy typed value: {payload.metadata.signature}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -2672,16 +2842,55 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                     className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
                 </label>
-                <label className="min-w-0 space-y-1 text-xs">
-                  <span className="font-medium text-(--text)/60">Signature</span>
-                  <input
-                    type="text"
-                    value={payload.fireAlarmMeta.signature}
-                    onChange={(event) => updateFireAlarmMeta("signature", event.target.value)}
-                    disabled={isReadOnly}
-                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
-                  />
-                </label>
+                <div className="min-w-0 space-y-1 text-xs">
+                  <span className="font-medium text-(--text)/60">Fire Alarm Signature</span>
+                  {fireAlarmSignature ? (
+                    <div className="rounded-lg border border-(--border)/30 bg-white p-3">
+                      <img
+                        src={fireAlarmSignature.signature_data}
+                        alt="Fire alarm signature"
+                        className="h-24 w-auto max-w-full object-contain"
+                      />
+                      <p className="mt-2 text-sm font-medium text-(--text)">
+                        {fireAlarmSignature.signer_name}
+                      </p>
+                      {fireAlarmSignature.signer_title && (
+                        <p className="text-xs text-(--text)/60">
+                          {fireAlarmSignature.signer_title}
+                        </p>
+                      )}
+                      <p className="text-xs text-(--text)/60">
+                        {formatUsCentralDateTime(fireAlarmSignature.signed_at)} CT
+                      </p>
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          onClick={() => openReportSignaturePrompt("fire_alarm")}
+                          className="mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700"
+                        >
+                          Replace signature
+                        </button>
+                      )}
+                    </div>
+                  ) : !isReadOnly ? (
+                    <button
+                      type="button"
+                      onClick={() => openReportSignaturePrompt("fire_alarm")}
+                      className="w-full rounded-lg border-2 border-dashed border-(--border)/40 px-3 py-4 text-sm text-(--text)/60 transition hover:border-blue-400 hover:text-(--text)"
+                    >
+                      Capture handwritten signature
+                    </button>
+                  ) : (
+                    <div className="rounded-lg border border-(--border)/30 bg-(--bg) px-3 py-3 text-sm text-(--text)/60">
+                      {payload.fireAlarmMeta.signature || "No signature recorded"}
+                    </div>
+                  )}
+                  {!fireAlarmSignature && payload.fireAlarmMeta.signature && (
+                    <p className="text-[11px] text-(--text)/50">
+                      Legacy typed value: {payload.fireAlarmMeta.signature}
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-(--border)/10 bg-slate-50/50">
@@ -3076,6 +3285,25 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
           </div>
         </div>
       </div>
+
+      {showReportSignatureCapture && payload && (
+        <SignatureCapture
+          signerType={showReportSignatureCapture}
+          signerLabel={
+            showReportSignatureCapture === "daily_walkthrough"
+              ? "Daily Walkthrough Signer"
+              : "Fire Alarm Signer"
+          }
+          signerName={
+            getReportSignatureDetails(showReportSignatureCapture, payload).signerName
+          }
+          signerTitle={
+            getReportSignatureDetails(showReportSignatureCapture, payload).signerTitle
+          }
+          onSave={handleSaveReportSignature}
+          onCancel={() => setShowReportSignatureCapture(null)}
+        />
+      )}
 
       {pendingSectionAction && (
         <div

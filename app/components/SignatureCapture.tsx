@@ -7,8 +7,9 @@ interface SignatureCaptureProps {
   onSave: (signatureData: string) => void;
   onCancel: () => void;
   signerName: string;
-  signerType: "tl_corp_rep" | "building_rep";
+  signerType: string;
   signerTitle?: string;
+  signerLabel?: string;
 }
 
 export default function SignatureCapture({
@@ -17,6 +18,7 @@ export default function SignatureCapture({
   signerName,
   signerType,
   signerTitle,
+  signerLabel,
 }: SignatureCaptureProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -167,6 +169,10 @@ export default function SignatureCapture({
     tl_corp_rep: "TL Corp Representative",
     building_rep: "Building Representative",
   };
+  const resolvedSignerLabel =
+    signerLabel ||
+    signerTypeLabels[signerType as keyof typeof signerTypeLabels] ||
+    "Signer";
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[10000] p-4">
@@ -177,7 +183,7 @@ export default function SignatureCapture({
 
         <div className="mb-4 space-y-1">
           <p className="text-sm text-(--text)/70">
-            {signerTypeLabels[signerType]}
+            {resolvedSignerLabel}
           </p>
           <p className="text-base font-medium text-(--text)">
             {signerName}

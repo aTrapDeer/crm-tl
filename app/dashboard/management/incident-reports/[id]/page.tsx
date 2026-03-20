@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import EntityPhotoManager from "@/app/components/EntityPhotoManager";
 import { formatUsCentralDateTime } from "@/lib/us-central-time";
 
 type IncidentReportStatus = "open" | "in_progress" | "closed";
@@ -117,6 +118,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
   const isAdmin = userRole === "admin";
   const canEditMainFields = !isPublished || isAdmin;
   const canEditStatus = !isPublished || isAdmin;
+  const canManagePhotos = !isPublished || isAdmin;
 
   function updateField<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -404,6 +406,14 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
             </label>
           </div>
         </section>
+
+        <EntityPhotoManager
+          endpoint={`/api/incident-reports/${incidentReport.id}/photos`}
+          title="Before & After Photos"
+          description="Store incident-report photos in S3 with before/after grouping and upload timestamps."
+          canManage={canManagePhotos}
+          lockedMessage="Only admins can add or remove photos after an incident report has been published."
+        />
 
         {canEditStatus && (
           <div className="sticky bottom-0 bg-(--bg)/95 backdrop-blur border-t border-(--border) px-1 py-3">

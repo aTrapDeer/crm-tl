@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import SignatureCapture from "@/app/components/SignatureCapture";
+import EntityPhotoManager from "@/app/components/EntityPhotoManager";
 import { formatUsCentralDateTime } from "@/lib/us-central-time";
 
 interface WorkOrder {
@@ -529,6 +530,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   const tlCorpSignature = signatures.find((s) => s.signer_type === "tl_corp_rep");
   const buildingRepSignature = signatures.find((s) => s.signer_type === "building_rep");
   const isPublished = workOrder?.publication_status === "published";
+  const canManagePhotos = !isPublished || userRole === "admin";
 
   if (loading || !workOrder) {
     return (
@@ -806,6 +808,14 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
             </>
           )}
         </div>
+
+        <EntityPhotoManager
+          endpoint={`/api/work-orders/${id}/photos`}
+          title="Before & After Photos"
+          description="Store work-order photos in S3 with before/after grouping and upload timestamps."
+          canManage={canManagePhotos}
+          lockedMessage="Only admins can add or remove photos after a work order has been published."
+        />
 
         {/* Signatures */}
         <div className="tl-card p-6 space-y-4">

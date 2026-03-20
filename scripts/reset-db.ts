@@ -19,6 +19,8 @@ async function resetDatabase() {
     
     // Drop tables in reverse order of dependencies
     const dropStatements = [
+      "DROP TABLE IF EXISTS entity_photos",
+      "DROP TABLE IF EXISTS bonan_report_signatures",
       "DROP TABLE IF EXISTS sessions",
       "DROP TABLE IF EXISTS project_images",
       "DROP TABLE IF EXISTS project_tasks",

@@ -8,10 +8,25 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const S3_BUCKET = process.env.S3_BUCKET_NAME || "crm-tlcorp";
 const AWS_REGION = process.env.AWS_REGION || "us-east-1";
-const S3_KEY_PREFIX = (process.env.S3_KEY_PREFIX || "projects/images").replace(
-  /^\/+|\/+$/g,
-  ""
+
+function normalizePrefix(value: string): string {
+  return value.replace(/^\/+|\/+$/g, "");
+}
+
+const DEFAULT_PROJECT_KEY_PREFIX = normalizePrefix(
+  process.env.S3_KEY_PREFIX || "projects/images"
 );
+const S3_KEY_PREFIXES = {
+  project: normalizePrefix(
+    process.env.S3_PROJECT_KEY_PREFIX || DEFAULT_PROJECT_KEY_PREFIX
+  ),
+  work_order: normalizePrefix(
+    process.env.S3_WORK_ORDER_KEY_PREFIX || "work-orders/images"
+  ),
+  incident_report: normalizePrefix(
+    process.env.S3_INCIDENT_REPORT_KEY_PREFIX || "incident-reports/images"
+  ),
+} as const;
 
 let s3Client: S3Client | null = null;
 
@@ -38,14 +53,25 @@ export interface UploadResult {
 }
 
 /**
+ * Generate the S3 key (path) for an entity image
+ */
+export function generateEntityS3Key(
+  entityType: keyof typeof S3_KEY_PREFIXES,
+  entityId: string,
+  filename: string
+): string {
+  const sanitizedEntityId = entityId.replace(/[^a-zA-Z0-9_-]/g, "_");
+  const timestamp = Date.now();
+  const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, "_");
+  return `${S3_KEY_PREFIXES[entityType]}/${sanitizedEntityId}/${timestamp}-${sanitizedFilename}`;
+}
+
+/**
  * Generate the S3 key (path) for a project image
  * Format: projects/images/{projectId}/{filename}
  */
 export function generateS3Key(projectId: string, filename: string): string {
-  const sanitizedProjectId = projectId.replace(/[^a-zA-Z0-9_-]/g, "_");
-  const timestamp = Date.now();
-  const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, "_");
-  return `${S3_KEY_PREFIX}/${sanitizedProjectId}/${timestamp}-${sanitizedFilename}`;
+  return generateEntityS3Key("project", projectId, filename);
 }
 
 export function getPublicS3Url(key: string): string {
@@ -53,10 +79,11 @@ export function getPublicS3Url(key: string): string {
 }
 
 /**
- * Upload a file to S3
+ * Upload a file to S3 for any supported entity type
  */
-export async function uploadToS3(
-  projectId: string,
+export async function uploadEntityFileToS3(
+  entityType: keyof typeof S3_KEY_PREFIXES,
+  entityId: string,
   filename: string,
   fileBuffer: Buffer,
   contentType: string
@@ -69,7 +96,7 @@ export async function uploadToS3(
     };
   }
 
-  const key = generateS3Key(projectId, filename);
+  const key = generateEntityS3Key(entityType, entityId, filename);
 
   try {
     await getS3Client().send(
@@ -93,6 +120,24 @@ export async function uploadToS3(
       error: "Failed to upload file to S3.",
     };
   }
+}
+
+/**
+ * Upload a file to S3 for a project image
+ */
+export async function uploadToS3(
+  projectId: string,
+  filename: string,
+  fileBuffer: Buffer,
+  contentType: string
+): Promise<UploadResult> {
+  return uploadEntityFileToS3(
+    "project",
+    projectId,
+    filename,
+    fileBuffer,
+    contentType
+  );
 }
 
 /**
