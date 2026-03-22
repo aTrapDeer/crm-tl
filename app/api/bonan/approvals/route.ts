@@ -4,6 +4,10 @@ import { getBonanReportById } from "@/lib/bonan-reports";
 import { getIncidentReportById } from "@/lib/incident-reports";
 import { getWorkOrderById } from "@/lib/work-orders";
 import {
+  isBonanClientVisibleIncidentReport,
+  isBonanClientVisibleWorkOrder,
+} from "@/lib/bonan-visibility";
+import {
   getBonanApprovals,
   getBonanEntityRevision,
   saveBonanApproval,
@@ -26,7 +30,7 @@ async function getAuthenticatedUser() {
   return getUserById(session.user_id);
 }
 
-async function assertEntityAccess(userId: string, entityType: BonanEntityType, entityId: string) {
+async function assertEntityAccess(_userId: string, entityType: BonanEntityType, entityId: string) {
   if (entityType === "bonan_report") {
     const report = await getBonanReportById(entityId);
     if (!report || report.status !== "submitted") return null;
@@ -35,18 +39,14 @@ async function assertEntityAccess(userId: string, entityType: BonanEntityType, e
 
   if (entityType === "work_order") {
     const workOrder = await getWorkOrderById(entityId);
-    if (!workOrder || workOrder.site !== "bonan_towers" || workOrder.publication_status !== "published") {
+    if (!workOrder || !isBonanClientVisibleWorkOrder(workOrder)) {
       return null;
     }
     return workOrder;
   }
 
   const incidentReport = await getIncidentReportById(entityId);
-  if (
-    !incidentReport ||
-    incidentReport.site !== "bonan_towers" ||
-    incidentReport.publication_status !== "published"
-  ) {
+  if (!incidentReport || !isBonanClientVisibleIncidentReport(incidentReport)) {
     return null;
   }
   return incidentReport;

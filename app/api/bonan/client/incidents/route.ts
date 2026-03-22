@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { getSession, getUserById } from "@/lib/auth";
 import { searchIncidentReports } from "@/lib/incident-reports";
+import { isBonanClientVisibleIncidentReport } from "@/lib/bonan-visibility";
 import { userHasBonanClientMembership } from "@/lib/bonan-client";
 
 async function getAuthenticatedUser() {
@@ -24,10 +25,9 @@ export async function GET() {
       return Response.json({ error: "Bonan access denied" }, { status: 403 });
     }
 
-    const incidentReports = await searchIncidentReports({
+    const incidentReports = (await searchIncidentReports({
       site: "bonan_towers",
-      publication_status: "published",
-    });
+    })).filter(isBonanClientVisibleIncidentReport);
     return Response.json({ incidentReports });
   } catch (error) {
     console.error("Error fetching Bonan client incidents:", error);

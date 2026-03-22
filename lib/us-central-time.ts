@@ -76,6 +76,27 @@ export function getUsCentralTimeHHMM(now: Date = new Date()): string {
   return `${map.hour}:${map.minute}`;
 }
 
+/** Work order `time_received` and similar fields are stored as 24-hour HH:mm (or HH:mm:ss). */
+export function formatWallClockTime12Hour(time: string | null | undefined): string {
+  if (time == null) return "";
+  const trimmed = String(time).trim();
+  if (!trimmed) return "";
+
+  const m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(trimmed);
+  if (!m) return trimmed;
+
+  const h = parseInt(m[1], 10);
+  const minute = m[2];
+  if (!Number.isFinite(h) || h < 0 || h > 23) return trimmed;
+  const mi = parseInt(minute, 10);
+  if (!Number.isFinite(mi) || mi < 0 || mi > 59) return trimmed;
+
+  const suffix = h >= 12 ? "PM" : "AM";
+  let h12 = h % 12;
+  if (h12 === 0) h12 = 12;
+  return `${h12}:${minute} ${suffix}`;
+}
+
 export function formatUsCentralDateTime(value: DateInput): string {
   const date = parseDateInput(value);
   if (!date) return "";

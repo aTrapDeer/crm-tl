@@ -19,7 +19,7 @@ export default function NewIncidentReportPage() {
           return;
         }
 
-        if (data.user.role !== "admin") {
+        if (data.user.role === "client") {
           router.push("/dashboard");
           return;
         }

@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { getSession, getUserById } from "@/lib/auth";
-import { getWorkOrderById } from "@/lib/work-orders";
+import { canEmployeeViewWorkOrder, getWorkOrderById } from "@/lib/work-orders";
 import {
   addEntityPhoto,
   deleteEntityPhoto,
@@ -44,7 +44,7 @@ export async function GET(
     if (!workOrder) {
       return Response.json({ error: "Work order not found" }, { status: 404 });
     }
-    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
+    if (user.role === "employee" && !canEmployeeViewWorkOrder(user.id, workOrder)) {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
 
@@ -77,13 +77,6 @@ export async function POST(
     if (user.role === "employee" && workOrder.assigned_to !== user.id) {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
-    if (workOrder.publication_status === "published" && user.role !== "admin") {
-      return Response.json(
-        { error: "Published work orders only allow photo updates by admins." },
-        { status: 409 }
-      );
-    }
-
     const formData = await request.formData();
     const file = formData.get("file");
     if (!(file instanceof File)) {
@@ -148,13 +141,6 @@ export async function DELETE(
     if (user.role === "employee" && workOrder.assigned_to !== user.id) {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
-    if (workOrder.publication_status === "published" && user.role !== "admin") {
-      return Response.json(
-        { error: "Published work orders only allow photo updates by admins." },
-        { status: 409 }
-      );
-    }
-
     const body = await request.json().catch(() => ({}));
     if (typeof body.photoId !== "string" || !body.photoId.trim()) {
       return Response.json({ error: "Photo ID is required" }, { status: 400 });

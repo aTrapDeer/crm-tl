@@ -10,6 +10,10 @@ import {
 import { getBonanReportById } from "@/lib/bonan-reports";
 import { getIncidentReportById } from "@/lib/incident-reports";
 import { getWorkOrderById } from "@/lib/work-orders";
+import {
+  isBonanClientVisibleIncidentReport,
+  isBonanClientVisibleWorkOrder,
+} from "@/lib/bonan-visibility";
 import { sendNotificationEmail } from "@/lib/email";
 import { turso } from "@/lib/turso";
 
@@ -58,12 +62,12 @@ async function assertClientVisibleEntity(entityType: BonanEntityType, entityId: 
   }
   if (entityType === "work_order") {
     const workOrder = await getWorkOrderById(entityId);
-    return workOrder && workOrder.site === "bonan_towers" && workOrder.publication_status === "published"
+    return workOrder && isBonanClientVisibleWorkOrder(workOrder)
       ? workOrder
       : null;
   }
   const incident = await getIncidentReportById(entityId);
-  return incident && incident.site === "bonan_towers" && incident.publication_status === "published"
+  return incident && isBonanClientVisibleIncidentReport(incident)
     ? incident
     : null;
 }

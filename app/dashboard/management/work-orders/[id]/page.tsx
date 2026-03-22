@@ -6,7 +6,8 @@ import Link from "next/link";
 import Image from "next/image";
 import SignatureCapture from "@/app/components/SignatureCapture";
 import EntityPhotoManager from "@/app/components/EntityPhotoManager";
-import { formatUsCentralDateTime } from "@/lib/us-central-time";
+import { ModalLayer } from "@/app/components/ModalLayer";
+import { formatUsCentralDateTime, formatWallClockTime12Hour } from "@/lib/us-central-time";
 
 interface WorkOrder {
   id: string;
@@ -100,6 +101,11 @@ const STATUS_COLORS = {
   cancelled: "bg-gray-100 text-gray-700",
 };
 
+function formatWorkOrderStatusLabel(status: WorkOrder["work_completed"]) {
+  if (status === "pending") return "Approval Needed";
+  return status.replace("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 const SERVICE_TYPES = [
   { value: "maintenance", label: "Maintenance" },
   { value: "repair", label: "Repair" },
@@ -118,6 +124,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   const [signatures, setSignatures] = useState<Signature[]>([]);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<"admin" | "employee" | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
 
@@ -193,6 +200,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
           return;
         }
 
+        setCurrentUserId(data.user.id);
         setUserRole(data.user.role);
       } catch {
         router.push("/login");
@@ -253,20 +261,22 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
     fetchAdminData();
   }, [userRole]);
 
+  const dashboardHref = userRole === "employee" ? "/dashboard/work-orders" : "/dashboard/management";
+
   const fetchWorkOrder = useCallback(async () => {
     try {
       const res = await fetch(`/api/work-orders/${id}`);
       if (!res.ok) {
-        router.push("/dashboard/management");
+        router.push(dashboardHref);
         return;
       }
       const data = await res.json();
       setWorkOrder(data.workOrder);
     } catch (error) {
       console.error("Failed to fetch work order:", error);
-      router.push("/dashboard/management");
+      router.push(dashboardHref);
     }
-  }, [id, router]);
+  }, [dashboardHref, id, router]);
 
   const fetchMaterials = useCallback(async () => {
     try {
@@ -299,6 +309,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   async function handleStatusChange(newStatus: WorkOrder["work_completed"]) {
     if (!workOrder) return;
     setUpdating(true);
+    setActionError("");
 
     try {
       const updateData: Record<string, string | null> = {
@@ -322,9 +333,13 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
         setWorkOrder(data.workOrder);
         setStatusChangeNote(data.workOrder?.status_note || "");
         setShowStatusChange(false);
+      } else {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setActionError(data.error || "Failed to update status.");
       }
     } catch (error) {
       console.error("Failed to update status:", error);
+      setActionError("Failed to update status.");
     } finally {
       setUpdating(false);
     }
@@ -332,7 +347,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
 
   async function handleAddMaterial(e: React.FormEvent) {
     e.preventDefault();
-    if (!newMaterial.material_name.trim() || workOrder?.publication_status === "published") return;
+    if (!newMaterial.material_name.trim()) return;
 
     try {
       const res = await fetch(`/api/work-orders/${id}/materials`, {
@@ -358,7 +373,6 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   }
 
   async function handleDeleteMaterial(materialId: string) {
-    if (workOrder?.publication_status === "published") return;
     try {
       const res = await fetch(`/api/work-orders/${id}/materials`, {
         method: "DELETE",
@@ -376,7 +390,6 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
 
   async function handleUpdateWorkOrder(e: React.FormEvent) {
     e.preventDefault();
-    if (workOrder?.publication_status === "published") return;
     setEditError("");
 
     if (!editForm.description.trim()) {
@@ -440,7 +453,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   }
 
   async function handleSaveSignature(signatureData: string) {
-    if (!showSignatureCapture || !signatureForm.signer_name.trim() || workOrder?.publication_status === "published") return;
+    if (!showSignatureCapture || !signatureForm.signer_name.trim()) return;
 
     try {
       const res = await fetch(`/api/work-orders/${id}/signatures`, {
@@ -495,7 +508,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   }
 
   async function handlePublishWorkOrder() {
-    if (!workOrder || workOrder.publication_status === "published" || publishingWorkOrder) return;
+    if (!workOrder || userRole !== "admin" || workOrder.publication_status === "published" || publishingWorkOrder) return;
 
     setPublishingWorkOrder(true);
     setPublishMessage("");
@@ -514,7 +527,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
       }
 
       setWorkOrder(data.workOrder as WorkOrder);
-      setPublishMessage("Work order published. Editing is now locked.");
+      setPublishMessage("Work order published. Assigned employees and admins can keep updating it.");
       setShowStatusChange(false);
       setShowAddMaterial(false);
       setShowSignatureCapture(null);
@@ -530,7 +543,32 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   const tlCorpSignature = signatures.find((s) => s.signer_type === "tl_corp_rep");
   const buildingRepSignature = signatures.find((s) => s.signer_type === "building_rep");
   const isPublished = workOrder?.publication_status === "published";
-  const canManagePhotos = !isPublished || userRole === "admin";
+  const canEditWorkOrder =
+    !!workOrder &&
+    !!userRole &&
+    (userRole === "admin" || (userRole === "employee" && workOrder.assigned_to === currentUserId));
+  const isSharedInProgressView =
+    userRole === "employee" &&
+    !!workOrder &&
+    workOrder.assigned_to !== currentUserId &&
+    workOrder.work_completed === "in_progress";
+  const canManagePhotos = !!canEditWorkOrder;
+  const canChangeStatus = canEditWorkOrder;
+  const canAddMaterial = canEditWorkOrder;
+  const canCaptureSignature = canEditWorkOrder;
+  const sharedEditRestrictionMessage = "Only the assigned employee or an admin can make changes.";
+  const materialActionTitle = canAddMaterial
+    ? "Add a material"
+    : sharedEditRestrictionMessage;
+  const signatureActionTitle = canCaptureSignature
+    ? "Capture signature"
+    : sharedEditRestrictionMessage;
+  const photoLockedMessage = !canEditWorkOrder
+    ? "Only the assigned employee or an admin can add or remove photos."
+    : "";
+  const availableStatusOptions = (["pending", "in_progress", "completed", "cancelled"] as const).filter(
+    (status) => userRole === "admin" || status !== "in_progress" || workOrder?.work_completed === "in_progress"
+  );
 
   if (loading || !workOrder) {
     return (
@@ -547,7 +585,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-4">
             <Link
-              href="/dashboard/management"
+              href={dashboardHref}
               className="p-2 hover:bg-white/80 rounded-lg transition tl-card"
             >
               <svg className="w-5 h-5 text-(--text)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -561,7 +599,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
                   {workOrder.priority.charAt(0).toUpperCase() + workOrder.priority.slice(1)}
                 </span>
                 <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_COLORS[workOrder.work_completed]}`}>
-                  {workOrder.work_completed.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                  {formatWorkOrderStatusLabel(workOrder.work_completed)}
                 </span>
                 <span
                   className={`text-xs px-2.5 py-1 rounded-full font-medium uppercase tracking-wide ${
@@ -577,13 +615,12 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {userRole === "admin" && (
+            {canEditWorkOrder && (
               <button
-                onClick={() => router.push(`/dashboard/management/work-orders/${id}/edit`)}
-                disabled={isPublished}
-                className="tl-btn px-4 py-2 text-sm disabled:opacity-50"
+                onClick={() => setShowEditWorkOrder(true)}
+                className="tl-btn px-4 py-2 text-sm"
               >
-                Edit Work Order
+                {userRole === "admin" ? "Edit Work Order" : "Edit Details"}
               </button>
             )}
             {userRole === "admin" && (
@@ -609,8 +646,13 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
               </button>
             )}
             <button
-              onClick={() => setShowStatusChange(true)}
+              onClick={() => {
+                setActionError("");
+                setShowStatusChange(true);
+              }}
+              disabled={!canChangeStatus}
               className="tl-btn px-4 py-2 text-sm"
+              title={canChangeStatus ? "Change work order status" : "Only the assigned employee or an admin can change status."}
             >
               Change Status
             </button>
@@ -625,6 +667,11 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
         {publishMessage && (
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
             {publishMessage}
+          </div>
+        )}
+        {isSharedInProgressView && (
+          <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+            This work order is visible to all employees while it is in progress. Only the assigned employee or an admin can make changes.
           </div>
         )}
         <div className="rounded-xl border border-(--border)/20 bg-white px-4 py-3 text-sm text-(--text)/75">
@@ -643,7 +690,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
         </div>
         {isPublished && (
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-            This work order is published. General edits are locked, but status and close-out updates remain available.
+            This work order is published and visible wherever published work orders appear. Assigned employees and admins can still update the details.
             {workOrder.published_at ? ` Published ${new Date(workOrder.published_at).toLocaleString()}.` : ""}
           </div>
         )}
@@ -667,7 +714,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
             <div>
               <p className="text-xs text-(--text)/60 uppercase tracking-wide">Time Received</p>
               <p className="text-sm font-medium text-(--text) mt-1">
-                {workOrder.time_received || "-"}
+                {formatWallClockTime12Hour(workOrder.time_received) || "-"}
               </p>
             </div>
             {workOrder.project_name && (
@@ -759,8 +806,9 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
             <h2 className="text-lg font-semibold text-(--text)">Materials & Parts</h2>
             <button
               onClick={() => setShowAddMaterial(true)}
-              disabled={isPublished}
+              disabled={!canAddMaterial}
               className="text-sm text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
+              title={materialActionTitle}
             >
               + Add Material
             </button>
@@ -788,8 +836,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
                       {userRole === "admin" && (
                         <button
                           onClick={() => handleDeleteMaterial(material.id)}
-                          disabled={isPublished}
-                          className="text-red-400 hover:text-red-600 transition disabled:opacity-50"
+                          className="text-red-400 hover:text-red-600 transition"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -814,7 +861,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
           title="Before & After Photos"
           description="Store work-order photos in S3 with before/after grouping and upload timestamps."
           canManage={canManagePhotos}
-          lockedMessage="Only admins can add or remove photos after a work order has been published."
+          lockedMessage={photoLockedMessage}
         />
 
         {/* Signatures */}
@@ -834,8 +881,9 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
               ) : (
                 <button
                   onClick={() => setShowSignatureCapture("tl_corp_rep")}
-                  disabled={isPublished}
+                  disabled={!canCaptureSignature}
                   className="w-full border-2 border-dashed border-(--border) rounded-lg p-4 text-sm text-(--text)/60 hover:border-(--ring) hover:text-(--text) transition disabled:opacity-50"
+                  title={signatureActionTitle}
                 >
                   Click to capture signature
                 </button>
@@ -855,8 +903,9 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
               ) : (
                 <button
                   onClick={() => setShowSignatureCapture("building_rep")}
-                  disabled={isPublished}
+                  disabled={!canCaptureSignature}
                   className="w-full border-2 border-dashed border-(--border) rounded-lg p-4 text-sm text-(--text)/60 hover:border-(--ring) hover:text-(--text) transition disabled:opacity-50"
+                  title={signatureActionTitle}
                 >
                   Click to capture signature
                 </button>
@@ -873,26 +922,64 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
       </div>
 
       {/* Status Change Modal */}
-      {showStatusChange && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-10000 p-4" onClick={() => setShowStatusChange(false)}>
+      {showStatusChange && canChangeStatus && (
+        <ModalLayer align="center" className="bg-black/50" onBackdropClick={() => setShowStatusChange(false)}>
           <div className="tl-card p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-(--text) mb-4">Change Status</h3>
+            <h3 className="text-lg font-semibold text-(--text)">Change Status</h3>
+            <p className="text-xs text-(--text)/60 mt-1 mb-4">
+              The outlined option is the current status. Pick another to save and close, or tap the current one to dismiss.
+            </p>
+            {actionError && (
+              <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{actionError}</div>
+            )}
             <div className="space-y-2">
-              {(["pending", "in_progress", "completed", "cancelled"] as const).map((status) => (
-                <button
-                  key={status}
-                  onClick={() => handleStatusChange(status)}
-                  disabled={updating || workOrder.work_completed === status}
-                  className={`w-full px-4 py-3 rounded-xl text-left text-sm font-medium transition ${
-                    workOrder.work_completed === status
-                      ? "bg-(--bg) text-(--text)/50 cursor-not-allowed"
-                      : "hover:bg-(--bg) text-(--text)"
-                  }`}
-                >
-                  <span className={`inline-block w-3 h-3 rounded-full mr-3 ${STATUS_COLORS[status].replace("text-", "bg-").replace("-100", "-500").replace("-700", "-500")}`}></span>
-                  {status.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())}
-                </button>
-              ))}
+              {availableStatusOptions.map((status) => {
+                const isCurrent = workOrder.work_completed === status;
+                const dotClass = STATUS_COLORS[status]
+                  .replace("text-", "bg-")
+                  .replace("-100", "-500")
+                  .replace("-700", "-500");
+                return (
+                  <button
+                    type="button"
+                    key={status}
+                    onClick={() => {
+                      if (isCurrent) {
+                        setShowStatusChange(false);
+                        return;
+                      }
+                      void handleStatusChange(status);
+                    }}
+                    disabled={updating}
+                    aria-current={isCurrent ? "true" : undefined}
+                    className={`flex w-full items-center justify-between gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition border-2 ${
+                      isCurrent
+                        ? "border-(--ring) bg-(--bg) text-(--text) shadow-sm"
+                        : "border-transparent text-(--text) hover:bg-(--bg) hover:border-(--border)/40"
+                    } ${updating && !isCurrent ? "opacity-60" : ""}`}
+                  >
+                    <span className="flex min-w-0 items-center">
+                      <span className={`inline-block h-3 w-3 shrink-0 rounded-full mr-3 ${dotClass}`} aria-hidden />
+                      <span className="truncate">{formatWorkOrderStatusLabel(status)}</span>
+                      {isCurrent && (
+                        <span className="ml-2 shrink-0 rounded-md bg-(--ring)/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-(--ring)">
+                          Current
+                        </span>
+                      )}
+                    </span>
+                    {isCurrent && (
+                      <span
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-(--ring)/15 text-(--ring)"
+                        aria-hidden
+                      >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
             {userRole === "admin" && (
               <div className="mt-4 space-y-2">
@@ -913,12 +1000,12 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
               Cancel
             </button>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {/* Edit Work Order Modal */}
-      {showEditWorkOrder && userRole === "admin" && (
-        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-10000 p-0 md:p-4" onClick={() => setShowEditWorkOrder(false)}>
+      {showEditWorkOrder && canEditWorkOrder && (
+        <ModalLayer align="sheet" className="bg-black/50" onBackdropClick={() => setShowEditWorkOrder(false)}>
           <div className="tl-card p-4 md:p-6 w-full max-w-3xl rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-(--text)">Edit Work Order</h3>
@@ -1109,36 +1196,40 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
                   </p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-(--text) mb-1">Assign To</label>
-                    <select
-                      value={editForm.assigned_to}
-                      onChange={(e) => setEditForm({ ...editForm, assigned_to: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                    >
-                      <option value="">Unassigned</option>
-                      {users.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.first_name} {u.last_name} ({u.role})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-(--text) mb-1">Linked Project</label>
-                    <select
-                      value={editForm.project_id}
-                      onChange={(e) => setEditForm({ ...editForm, project_id: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                    >
-                      <option value="">No Project</option>
-                      {projects.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {userRole === "admin" && (
+                    <div>
+                      <label className="block text-sm font-medium text-(--text) mb-1">Assign To</label>
+                      <select
+                        value={editForm.assigned_to}
+                        onChange={(e) => setEditForm({ ...editForm, assigned_to: e.target.value })}
+                        className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                      >
+                        <option value="">Unassigned</option>
+                        {users.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.first_name} {u.last_name} ({u.role})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {userRole === "admin" && (
+                    <div>
+                      <label className="block text-sm font-medium text-(--text) mb-1">Linked Project</label>
+                      <select
+                        value={editForm.project_id}
+                        onChange={(e) => setEditForm({ ...editForm, project_id: e.target.value })}
+                        className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                      >
+                        <option value="">No Project</option>
+                        {projects.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-(--text) mb-1">Scheduled Date</label>
                     <input
@@ -1193,10 +1284,11 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
                       onChange={(e) => setEditForm({ ...editForm, work_completed: e.target.value as WorkOrder["work_completed"] })}
                       className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                     >
-                      <option value="pending">Pending</option>
-                      <option value="in_progress">In Progress</option>
-                      <option value="completed">Completed</option>
-                      <option value="cancelled">Cancelled</option>
+                      {availableStatusOptions.map((status) => (
+                        <option key={status} value={status}>
+                          {formatWorkOrderStatusLabel(status)}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div>
@@ -1227,15 +1319,17 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
                     className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-(--text) mb-1">Admin Close-Out Note</label>
-                  <textarea
-                    value={editForm.status_note}
-                    onChange={(e) => setEditForm({ ...editForm, status_note: e.target.value })}
-                    rows={3}
-                    className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                  />
-                </div>
+                {userRole === "admin" && (
+                  <div>
+                    <label className="block text-sm font-medium text-(--text) mb-1">Admin Close-Out Note</label>
+                    <textarea
+                      value={editForm.status_note}
+                      onChange={(e) => setEditForm({ ...editForm, status_note: e.target.value })}
+                      rows={3}
+                      className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3">
@@ -1256,12 +1350,12 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
               </div>
             </form>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {/* Add Material Modal */}
-      {showAddMaterial && !isPublished && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-10000 p-4" onClick={() => setShowAddMaterial(false)}>
+      {showAddMaterial && canAddMaterial && (
+        <ModalLayer align="center" className="bg-black/50" onBackdropClick={() => setShowAddMaterial(false)}>
           <div className="tl-card p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-(--text) mb-4">Add Material</h3>
             <form onSubmit={handleAddMaterial} className="space-y-4">
@@ -1325,13 +1419,14 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
               </div>
             </form>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {showDeleteWorkOrderWarning && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-10000 p-4"
-          onClick={() => {
+        <ModalLayer
+          align="center"
+          className="bg-black/50"
+          onBackdropClick={() => {
             if (deletingWorkOrder) return;
             setShowDeleteWorkOrderWarning(false);
             setDeleteConfirmInput("");
@@ -1384,12 +1479,12 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
               </button>
             </div>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {/* Signature Name Modal */}
-      {showSignatureCapture && !signatureForm.signer_name && !isPublished && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-10000 p-4" onClick={() => setShowSignatureCapture(null)}>
+      {showSignatureCapture && !signatureForm.signer_name && canCaptureSignature && (
+        <ModalLayer align="center" className="bg-black/50" onBackdropClick={() => setShowSignatureCapture(null)}>
           <div className="tl-card p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-(--text) mb-4">
               {showSignatureCapture === "tl_corp_rep" ? "TL Corp Representative" : "Building Representative"}
@@ -1437,11 +1532,11 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
               </div>
             </div>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {/* Signature Capture */}
-      {showSignatureCapture && signatureForm.signer_name && !isPublished && (
+      {showSignatureCapture && signatureForm.signer_name && canCaptureSignature && (
         <SignatureCapture
           signerType={showSignatureCapture}
           signerName={signatureForm.signer_name}

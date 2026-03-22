@@ -21,6 +21,7 @@ import {
   getUsCentralDate,
 } from "@/lib/us-central-time";
 import BonanClientReportReview from "@/app/components/BonanClientReportReview";
+import { ModalLayer } from "@/app/components/ModalLayer";
 
 interface BonanDailyReport {
   id: string;
@@ -3306,10 +3307,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
       )}
 
       {pendingSectionAction && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
-          onClick={closePendingSectionActionPrompt}
-        >
+        <ModalLayer align="sheet-sm" className="bg-black/50 backdrop-blur-sm" onBackdropClick={closePendingSectionActionPrompt}>
           <div
             className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-white p-5 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
@@ -3366,13 +3364,14 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
               </button>
             </div>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {showDeleteDailyWarning && report && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
-          onClick={() => {
+        <ModalLayer
+          align="sheet-sm"
+          className="bg-black/50 backdrop-blur-sm"
+          onBackdropClick={() => {
             if (deletingReport) return;
             setShowDeleteDailyWarning(false);
             setDeleteConfirmInput("");
@@ -3426,7 +3425,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
               </button>
             </div>
           </div>
-        </div>
+        </ModalLayer>
       )}
     </div>
   );

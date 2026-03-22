@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ProjectDetailsModal from "@/app/components/ProjectDetailsModal";
+import { ModalLayer } from "@/app/components/ModalLayer";
 
 interface Project {
   id: string;
@@ -465,8 +466,11 @@ export default function EmployeeDashboard() {
 
       {/* Add Update Modal */}
       {showAddUpdate && selectedProject && (
-        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-9999 p-0 md:p-4">
-          <div className="tl-card p-4 md:p-8 w-full max-w-md rounded-t-3xl md:rounded-3xl rounded-b-none md:rounded-b-3xl">
+        <ModalLayer align="sheet" className="bg-black/50" onBackdropClick={() => setShowAddUpdate(false)}>
+          <div
+            className="tl-card p-4 md:p-8 w-full max-w-md rounded-t-3xl md:rounded-3xl rounded-b-none md:rounded-b-3xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-lg md:text-xl font-semibold text-(--text) mb-4 md:mb-6">
               Add Project Update
             </h3>
@@ -517,12 +521,15 @@ export default function EmployeeDashboard() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {showOnboarding && (
-        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-9999 p-0 md:p-4">
-          <div className="tl-card p-4 md:p-8 w-full max-w-lg rounded-t-3xl md:rounded-3xl rounded-b-none md:rounded-b-3xl">
+        <ModalLayer align="sheet" className="bg-black/50" onBackdropClick={() => setShowOnboarding(false)}>
+          <div
+            className="tl-card p-4 md:p-8 w-full max-w-lg rounded-t-3xl md:rounded-3xl rounded-b-none md:rounded-b-3xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-lg md:text-xl font-semibold text-(--text) mb-2">
               Employee Onboarding
             </h3>
@@ -595,7 +602,7 @@ export default function EmployeeDashboard() {
               {completingOnboarding ? "Saving..." : "Complete Onboarding"}
             </button>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {/* Project Details Modal */}

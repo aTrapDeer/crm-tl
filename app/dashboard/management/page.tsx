@@ -6,6 +6,7 @@ import Link from "next/link";
 import WorkOrderListView from "@/app/components/WorkOrderListView";
 import WorkOrderDetailsModal from "@/app/components/WorkOrderDetailsModal";
 import DocumentManager from "@/app/components/DocumentManager";
+import { ModalLayer } from "@/app/components/ModalLayer";
 
 type ManagementTab = "work-orders" | "incident-reports" | "documents";
 type SiteFilter = "all" | "bonan_towers";
@@ -88,7 +89,59 @@ function parseStatuses<T extends string>(value: string | null, allowed: readonly
 }
 
 function formatIncidentStatusLabel(status: IncidentStatus) {
+  if (status === "open") return "Approval Needed";
   return status === "in_progress" ? "In Progress" : status[0].toUpperCase() + status.slice(1);
+}
+
+function WorkOrderStatCard({
+  href,
+  label,
+  value,
+  valueClassName,
+  infoMessage,
+  infoOpen,
+  onToggleInfo,
+}: {
+  href: string;
+  label: string;
+  value: number;
+  valueClassName: string;
+  infoMessage?: string;
+  infoOpen?: boolean;
+  onToggleInfo?: () => void;
+}) {
+  return (
+    <div className="group relative">
+      <Link href={href} className="tl-card block p-4 pr-12 transition hover:-translate-y-0.5 hover:shadow-md">
+        <p className="text-xs text-(--text)/60 uppercase tracking-wide">{label}</p>
+        <p className={`text-2xl font-bold ${valueClassName}`}>{value}</p>
+      </Link>
+      {infoMessage && onToggleInfo && (
+        <>
+          <button
+            type="button"
+            aria-label={`${label} status info`}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onToggleInfo();
+            }}
+            className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full border border-(--border)/30 bg-white text-[11px] font-semibold text-(--text)/70 shadow-sm transition hover:bg-(--bg)"
+          >
+            i
+          </button>
+          <div
+            role="tooltip"
+            className={`pointer-events-none absolute right-3 top-10 z-10 w-56 rounded-xl border border-(--border)/20 bg-slate-900 px-3 py-2 text-xs text-white shadow-lg transition ${
+              infoOpen ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100"
+            }`}
+          >
+            {infoMessage}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 export default function ManagementPage() {
@@ -104,6 +157,7 @@ export default function ManagementPage() {
   const [deleteWorkOrderConfirmInput, setDeleteWorkOrderConfirmInput] = useState("");
   const [deleteWorkOrderError, setDeleteWorkOrderError] = useState("");
   const [deletingWorkOrder, setDeletingWorkOrder] = useState(false);
+  const [activeWorkOrderInfo, setActiveWorkOrderInfo] = useState<"pending" | "in_progress" | null>(null);
 
   const activeTab: ManagementTab = useMemo(() => {
     const tab = searchParams.get("tab");
@@ -455,14 +509,28 @@ export default function ManagementPage() {
               <p className="text-xs text-(--text)/60 uppercase tracking-wide">Total</p>
               <p className="text-2xl font-bold text-(--text)">{workOrderStats.total}</p>
             </Link>
-            <Link href={buildHref({ tab: "work-orders", statuses: "pending" })} className="tl-card p-4 transition hover:-translate-y-0.5 hover:shadow-md">
-              <p className="text-xs text-(--text)/60 uppercase tracking-wide">Pending</p>
-              <p className="text-2xl font-bold text-yellow-600">{workOrderStats.pending}</p>
-            </Link>
-            <Link href={buildHref({ tab: "work-orders", statuses: "in_progress" })} className="tl-card p-4 transition hover:-translate-y-0.5 hover:shadow-md">
-              <p className="text-xs text-(--text)/60 uppercase tracking-wide">In Progress</p>
-              <p className="text-2xl font-bold text-blue-600">{workOrderStats.in_progress}</p>
-            </Link>
+            <WorkOrderStatCard
+              href={buildHref({ tab: "work-orders", statuses: "pending" })}
+              label="Approval Needed"
+              value={workOrderStats.pending}
+              valueClassName="text-yellow-600"
+              infoMessage="Waiting for client approval before work can start."
+              infoOpen={activeWorkOrderInfo === "pending"}
+              onToggleInfo={() =>
+                setActiveWorkOrderInfo((current) => (current === "pending" ? null : "pending"))
+              }
+            />
+            <WorkOrderStatCard
+              href={buildHref({ tab: "work-orders", statuses: "in_progress" })}
+              label="In Progress"
+              value={workOrderStats.in_progress}
+              valueClassName="text-blue-600"
+              infoMessage="Employees will start working on this soon."
+              infoOpen={activeWorkOrderInfo === "in_progress"}
+              onToggleInfo={() =>
+                setActiveWorkOrderInfo((current) => (current === "in_progress" ? null : "in_progress"))
+              }
+            />
             <Link href={buildHref({ tab: "work-orders", statuses: "completed" })} className="tl-card p-4 transition hover:-translate-y-0.5 hover:shadow-md">
               <p className="text-xs text-(--text)/60 uppercase tracking-wide">Completed</p>
               <p className="text-2xl font-bold text-green-600">{workOrderStats.completed}</p>
@@ -485,7 +553,7 @@ export default function ManagementPage() {
               <p className="text-2xl font-bold text-(--text)">{incidentStats.total}</p>
             </Link>
             <Link href={buildHref({ tab: "incident-reports", incidentStatus: "open" })} className="tl-card p-4 transition hover:-translate-y-0.5 hover:shadow-md">
-              <p className="text-xs text-(--text)/60 uppercase tracking-wide">Open</p>
+              <p className="text-xs text-(--text)/60 uppercase tracking-wide">Approval Needed</p>
               <p className="text-2xl font-bold text-amber-600">{incidentStats.open}</p>
             </Link>
             <Link href={buildHref({ tab: "incident-reports", incidentStatus: "in_progress" })} className="tl-card p-4 transition hover:-translate-y-0.5 hover:shadow-md">
@@ -595,7 +663,16 @@ export default function ManagementPage() {
       </div>
 
       {pendingDeleteWorkOrder && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-10000 p-4">
+        <ModalLayer
+          align="center"
+          className="bg-black/50"
+          onBackdropClick={() => {
+            if (deletingWorkOrder) return;
+            setPendingDeleteWorkOrder(null);
+            setDeleteWorkOrderConfirmInput("");
+            setDeleteWorkOrderError("");
+          }}
+        >
           <div className="tl-card p-6 w-full max-w-md space-y-4" onClick={(event) => event.stopPropagation()}>
             <div>
               <h3 className="text-lg font-semibold text-red-700">Delete Work Order Warning</h3>
@@ -640,7 +717,7 @@ export default function ManagementPage() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {selectedWorkOrder && (

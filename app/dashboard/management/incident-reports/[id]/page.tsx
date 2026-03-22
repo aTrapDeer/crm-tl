@@ -35,10 +35,21 @@ interface IncidentReport {
 }
 
 const STATUS_OPTIONS: Array<{ value: IncidentReportStatus; label: string }> = [
-  { value: "open", label: "Open" },
+  { value: "open", label: "Approval Needed" },
   { value: "in_progress", label: "In Progress" },
   { value: "closed", label: "Closed" },
 ];
+
+const STATUS_STYLES: Record<IncidentReportStatus, string> = {
+  open: "bg-amber-100 text-amber-800 ring-2 ring-amber-400/50",
+  in_progress: "bg-blue-100 text-blue-800 ring-2 ring-blue-400/50",
+  closed: "bg-emerald-100 text-emerald-800 ring-2 ring-emerald-400/50",
+};
+
+function formatIncidentStatusLabel(status: IncidentReportStatus) {
+  if (status === "open") return "Approval Needed";
+  return status.replace("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 function formatSavedTime(date: Date) {
   return date.toLocaleTimeString("en-US", {
@@ -116,9 +127,13 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
 
   const isPublished = incidentReport?.publication_status === "published";
   const isAdmin = userRole === "admin";
-  const canEditMainFields = !isPublished || isAdmin;
-  const canEditStatus = !isPublished || isAdmin;
-  const canManagePhotos = !isPublished || isAdmin;
+  const detailBaseHref = userRole === "employee" ? "/dashboard/incident-reports" : "/dashboard/management";
+  const canEditMainFields = true;
+  const canEditStatus = true;
+  const canManagePhotos = true;
+  const availableStatusOptions = STATUS_OPTIONS.filter(
+    (option) => isAdmin || option.value !== "in_progress" || incidentReport?.status === "in_progress"
+  );
 
   function updateField<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -139,22 +154,17 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
     setError("");
     setSaveMessage("");
     try {
-      const payload = isPublished && !isAdmin
-        ? {
-            status: form.status,
-            ...(isAdmin ? { status_note: form.status_note } : {}),
-          }
-        : {
-            report_date: form.report_date,
-            incident_time: form.incident_time,
-            location: form.location,
-            system_area: form.system_area,
-            description: form.description,
-            actions_taken: form.actions_taken,
-            work_order_or_vendor: form.work_order_or_vendor,
-            status: form.status,
-            ...(isAdmin ? { status_note: form.status_note } : {}),
-          };
+      const payload = {
+        report_date: form.report_date,
+        incident_time: form.incident_time,
+        location: form.location,
+        system_area: form.system_area,
+        description: form.description,
+        actions_taken: form.actions_taken,
+        work_order_or_vendor: form.work_order_or_vendor,
+        status: form.status,
+        ...(isAdmin ? { status_note: form.status_note } : {}),
+      };
       const res = await fetch(`/api/incident-reports/${incidentReport.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -180,7 +190,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
   }
 
   async function handlePublish() {
-    if (!incidentReport || publishing || isPublished) return;
+    if (!incidentReport || !isAdmin || publishing || isPublished) return;
 
     setPublishing(true);
     setError("");
@@ -199,7 +209,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
         return;
       }
       setIncidentReport(data.incidentReport as IncidentReport);
-      setSaveMessage("Incident report published. Admins can continue updating report details and close-out notes.");
+      setSaveMessage("Incident report published. Employees and admins can keep updating it.");
     } catch {
       setError("Failed to publish incident report.");
     } finally {
@@ -222,7 +232,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
           <div className="tl-card p-6">
             <h1 className="text-lg font-semibold text-(--text)">Unable to load incident report</h1>
             {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-            <Link href="/dashboard/management" className="mt-4 inline-flex text-sm font-medium text-blue-600">
+            <Link href={detailBaseHref} className="mt-4 inline-flex text-sm font-medium text-blue-600">
               Back to Management
             </Link>
           </div>
@@ -250,6 +260,12 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <span
+                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLES[form.status]}`}
+                title="Workflow status (updates when you change the Status field)"
+              >
+                {formatIncidentStatusLabel(form.status)}
+              </span>
+              <span
                 className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
                   incidentReport.publication_status === "published"
                     ? "bg-slate-800 text-white"
@@ -266,7 +282,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
             </div>
           </div>
           <Link
-            href="/dashboard/management"
+            href={detailBaseHref}
             className="inline-flex w-fit rounded-lg border border-(--border)/30 px-3 py-2 text-sm text-(--text)"
           >
             Back
@@ -302,7 +318,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
 
         {isPublished && (
           <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-700">
-            This report is published. Admins can still update report details, status, and close out notes.
+            This report is published and visible wherever published incident reports appear. Employees and admins can still update it.
           </div>
         )}
 
@@ -378,15 +394,18 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
                 className={getInputClass(!canEditMainFields)}
               />
             </label>
-            <label className="space-y-1">
+            <label className="space-y-1 rounded-xl border-2 border-(--ring)/35 bg-(--bg)/40 p-3 md:col-span-2">
               <span className="text-(--text)/60">Status</span>
+              <p className="text-[11px] text-(--text)/50 mb-1">
+                Current selection matches the badge in the header. Save changes to persist.
+              </p>
               <select
                 value={form.status}
                 onChange={(event) => updateField("status", event.target.value as IncidentReportStatus)}
                 disabled={!canEditStatus}
-                className={getInputClass(!canEditStatus)}
+                className={`${getInputClass(!canEditStatus)} border-(--ring)/25 font-medium`}
               >
-                {STATUS_OPTIONS.map((option) => (
+                {availableStatusOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -412,13 +431,13 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
           title="Before & After Photos"
           description="Store incident-report photos in S3 with before/after grouping and upload timestamps."
           canManage={canManagePhotos}
-          lockedMessage="Only admins can add or remove photos after an incident report has been published."
+          lockedMessage=""
         />
 
         {canEditStatus && (
           <div className="sticky bottom-0 bg-(--bg)/95 backdrop-blur border-t border-(--border) px-1 py-3">
             <div className="flex flex-col sm:flex-row gap-2 justify-end">
-              {!isPublished && (
+              {isAdmin && !isPublished && (
                 <button
                   type="button"
                   onClick={() => void handlePublish()}
@@ -434,7 +453,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
                 disabled={saving || publishing}
                 className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
               >
-                {saving ? "Saving..." : isPublished && !isAdmin ? "Save Status Update" : "Save Changes"}
+                {saving ? "Saving..." : "Save Changes"}
               </button>
             </div>
           </div>

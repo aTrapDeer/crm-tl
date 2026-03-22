@@ -58,7 +58,12 @@ export async function POST(request: Request) {
       actions_taken: typeof body.actions_taken === "string" ? body.actions_taken : undefined,
       work_order_or_vendor:
         typeof body.work_order_or_vendor === "string" ? body.work_order_or_vendor : undefined,
-      status: isIncidentStatus(body.status) ? body.status : undefined,
+      status:
+        user.role === "employee"
+          ? "in_progress"
+          : isIncidentStatus(body.status)
+            ? body.status
+            : "open",
     });
 
     return Response.json(

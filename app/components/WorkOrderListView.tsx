@@ -21,6 +21,7 @@ interface WorkOrder {
   assigned_user_name?: string;
   work_completed: "pending" | "in_progress" | "completed" | "cancelled";
   project_name?: string;
+  publication_status: "draft" | "published";
   created_at: string;
 }
 
@@ -45,6 +46,11 @@ const STATUS_COLORS = {
   completed: "bg-green-100 text-green-700",
   cancelled: "bg-gray-100 text-gray-700",
 };
+
+function formatWorkOrderStatusLabel(status: WorkOrder["work_completed"]) {
+  if (status === "pending") return "Approval Needed";
+  return status.replace("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 const SERVICE_TYPES = [
   { value: "maintenance", label: "Maintenance" },
@@ -180,7 +186,7 @@ export default function WorkOrderListView({
             className="px-3 py-2 rounded-lg border border-(--border) bg-(--bg) text-(--text) text-sm focus:outline-none focus:ring-2 focus:ring-(--ring)"
           >
             <option value="">All Status</option>
-            <option value="pending">Pending</option>
+            <option value="pending">Approval Needed</option>
             <option value="in_progress">In Progress</option>
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
@@ -286,7 +292,21 @@ export default function WorkOrderListView({
                     <span
                       className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[workOrder.work_completed]}`}
                     >
-                      {workOrder.work_completed.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                      {formatWorkOrderStatusLabel(workOrder.work_completed)}
+                    </span>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full font-medium uppercase tracking-wide ${
+                        workOrder.publication_status === "published"
+                          ? "bg-slate-800 text-white"
+                          : "bg-amber-100 text-amber-700"
+                      }`}
+                      title={
+                        workOrder.publication_status === "published"
+                          ? "Published — visible in shared / client views"
+                          : "Draft — publish from the work order page when ready"
+                      }
+                    >
+                      {workOrder.publication_status}
                     </span>
                   </div>
                   <p className="text-sm text-(--text)/70 mb-1">

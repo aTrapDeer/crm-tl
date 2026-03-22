@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { getSession, getUserById } from "@/lib/auth";
 import { getIncidentReportById } from "@/lib/incident-reports";
+import { isBonanClientVisibleIncidentReport } from "@/lib/bonan-visibility";
 import { userHasBonanClientMembership } from "@/lib/bonan-client";
 
 async function getAuthenticatedUser() {
@@ -29,11 +30,7 @@ export async function GET(
 
     const { id } = await params;
     const incidentReport = await getIncidentReportById(id);
-    if (
-      !incidentReport ||
-      incidentReport.site !== "bonan_towers" ||
-      incidentReport.publication_status !== "published"
-    ) {
+    if (!incidentReport || !isBonanClientVisibleIncidentReport(incidentReport)) {
       return Response.json({ error: "Bonan incident report not found" }, { status: 404 });
     }
 

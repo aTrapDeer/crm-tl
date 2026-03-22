@@ -84,8 +84,10 @@ export default function NewWorkOrderPage() {
           return;
         }
 
-        // Only admin can access
-        if (data.user.role !== "admin") {
+        const isEmployeeBonanCreate = data.user.role === "employee" && isBonanOrder;
+
+        // Only admins can access general work order creation. Employees can use the Bonan isolated create flow.
+        if (data.user.role !== "admin" && !isEmployeeBonanCreate) {
           router.push("/dashboard");
           return;
         }

@@ -31,8 +31,14 @@ const STATUS_STYLES: Record<WorkOrder["work_completed"], string> = {
   cancelled: "bg-slate-100 text-slate-700",
 };
 
+function formatWorkOrderStatusLabel(status: WorkOrder["work_completed"]) {
+  if (status === "pending") return "Approval Needed";
+  return status.replace("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 export default function EmployeeWorkOrdersPage() {
   const router = useRouter();
+  const createHref = "/dashboard/management/work-orders/new?site=bonan_towers&returnTo=/dashboard/work-orders";
   const [loading, setLoading] = useState(true);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [search, setSearch] = useState("");
@@ -93,15 +99,23 @@ export default function EmployeeWorkOrdersPage() {
           <div>
             <h1 className="text-2xl font-bold text-(--text)">Work Orders</h1>
             <p className="text-sm text-(--text)/60">
-              Assigned work orders and Bonan-linked follow-up tasks.
+              Assigned work orders, company-wide in-progress work, and Bonan-linked follow-up tasks.
             </p>
           </div>
-          <Link
-            href="/dashboard/employee"
-            className="rounded-full border border-(--border)/40 px-4 py-2 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
-          >
-            Back to Employee Portal
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href={createHref}
+              className="rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition"
+            >
+              + New Bonan Work Order
+            </Link>
+            <Link
+              href="/dashboard/employee"
+              className="rounded-full border border-(--border)/40 px-4 py-2 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
+            >
+              Back to Employee Portal
+            </Link>
+          </div>
         </div>
 
         <div className="tl-card p-4">
@@ -128,7 +142,7 @@ export default function EmployeeWorkOrdersPage() {
           <div className="tl-card p-8 text-center">
             <p className="text-(--text)/70">No work orders found.</p>
             <p className="text-sm text-(--text)/50 mt-1">
-              New orders tied to your daily walkthrough sections will appear here.
+              New orders tied to your daily walkthrough sections or created from Bonan follow-up will appear here.
             </p>
           </div>
         ) : (
@@ -147,7 +161,7 @@ export default function EmployeeWorkOrdersPage() {
                         {workOrder.priority}
                       </span>
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[workOrder.work_completed]}`}>
-                        {workOrder.work_completed.replace("_", " ")}
+                        {formatWorkOrderStatusLabel(workOrder.work_completed)}
                       </span>
                     </div>
                     <p className="text-sm text-(--text)/70 line-clamp-1">{workOrder.description}</p>
@@ -167,4 +181,3 @@ export default function EmployeeWorkOrdersPage() {
     </div>
   );
 }
-

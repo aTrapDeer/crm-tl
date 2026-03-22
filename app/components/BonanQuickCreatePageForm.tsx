@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getUsCentralDate } from "@/lib/us-central-time";
 
 type BonanQuickCreateMode = "work-order" | "incident-report";
+type UserRole = "admin" | "employee" | "client";
 type WorkOrderPriority = "emergency" | "high" | "normal" | "low";
 type WorkOrderServiceType =
   | "maintenance"
@@ -15,6 +16,7 @@ type WorkOrderServiceType =
   | "preventive"
   | "cleaning"
   | "other";
+type WorkOrderStatus = "pending" | "in_progress";
 type IncidentStatus = "open" | "in_progress" | "closed";
 
 interface BonanQuickCreatePageFormProps {
@@ -38,10 +40,14 @@ const SERVICE_TYPES: Array<{ value: WorkOrderServiceType; label: string }> = [
   { value: "other", label: "Other" },
 ];
 
-const INCIDENT_STATUSES: Array<{ value: IncidentStatus; label: string }> = [
-  { value: "open", label: "Open" },
+const WORK_ORDER_STATUSES: Array<{ value: WorkOrderStatus; label: string }> = [
+  { value: "pending", label: "Approval Needed" },
   { value: "in_progress", label: "In Progress" },
-  { value: "closed", label: "Closed" },
+];
+
+const INCIDENT_STATUSES: Array<{ value: Extract<IncidentStatus, "open" | "in_progress">; label: string }> = [
+  { value: "open", label: "Approval Needed" },
+  { value: "in_progress", label: "In Progress" },
 ];
 
 function createInitialWorkOrderForm() {
@@ -53,6 +59,7 @@ function createInitialWorkOrderForm() {
     preferred_entry_time: "",
     priority: "normal" as WorkOrderPriority,
     service_type: "maintenance" as WorkOrderServiceType,
+    work_completed: "pending" as WorkOrderStatus,
     description: "",
   };
 }
@@ -77,23 +84,33 @@ function getSafeReturnHref(mode: BonanQuickCreateMode, requestedHref: string | n
       : "/dashboard/management?tab=incident-reports&site=bonan_towers";
 
   if (!requestedHref) return fallback;
-  if (!requestedHref.startsWith("/dashboard/management")) return fallback;
+  const allowedPrefixes = [
+    "/dashboard/management",
+    "/dashboard/work-orders",
+    "/dashboard/incident-reports",
+    "/dashboard/bonan",
+    "/dashboard/employee",
+  ];
+  if (!allowedPrefixes.some((prefix) => requestedHref.startsWith(prefix))) return fallback;
   return requestedHref;
 }
 
 export default function BonanQuickCreatePageForm({ mode }: BonanQuickCreatePageFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [workOrderForm, setWorkOrderForm] = useState(createInitialWorkOrderForm);
   const [incidentForm, setIncidentForm] = useState(createInitialIncidentForm);
 
   const isWorkOrder = mode === "work-order";
+  const isEmployee = userRole === "employee";
+  const isAdmin = userRole === "admin";
   const title = isWorkOrder ? "New Bonan Work Order" : "New Bonan Incident Report";
   const description = isWorkOrder
-    ? "Create a Bonan Towers work order on a dedicated page with the full form visible on mobile."
-    : "Create a Bonan Towers incident report on a dedicated page with the full form visible on mobile.";
+    ? "Create a Bonan Towers work order for items that were not captured during a walkthrough, including weekend or after-hours follow-up."
+    : "Create a Bonan Towers incident report for events that were not captured during a walkthrough, including weekend or after-hours follow-up.";
   const submitLabel = submitting
     ? "Saving..."
     : isWorkOrder
@@ -103,6 +120,36 @@ export default function BonanQuickCreatePageForm({ mode }: BonanQuickCreatePageF
     () => getSafeReturnHref(mode, searchParams.get("returnTo")),
     [mode, searchParams]
   );
+
+  useEffect(() => {
+    async function loadSession() {
+      try {
+        const res = await fetch("/api/auth/session");
+        const data = await res.json().catch(() => ({}));
+        if (data.user?.role === "admin" || data.user?.role === "employee" || data.user?.role === "client") {
+          setUserRole(data.user.role as UserRole);
+          return;
+        }
+      } catch (sessionError) {
+        console.error("Failed to load quick create session:", sessionError);
+      }
+
+      setUserRole("admin");
+    }
+
+    void loadSession();
+  }, []);
+
+  useEffect(() => {
+    if (!isEmployee) return;
+
+    setWorkOrderForm((current) =>
+      current.work_completed === "in_progress" ? current : { ...current, work_completed: "in_progress" }
+    );
+    setIncidentForm((current) =>
+      current.status === "in_progress" ? current : { ...current, status: "in_progress" }
+    );
+  }, [isEmployee]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -180,6 +227,11 @@ export default function BonanQuickCreatePageForm({ mode }: BonanQuickCreatePageF
         <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
           Location is fixed to Bonan Towers. The record is linked to the matching Bonan reporting
           period for the selected date so it appears in Bonan rollups and monthly reporting.
+          {isEmployee && (
+            <span className="mt-2 block font-medium">
+              Employee-created records start In Progress automatically so they are visible to the team right away.
+            </span>
+          )}
         </div>
 
         {error && (
@@ -318,6 +370,30 @@ export default function BonanQuickCreatePageForm({ mode }: BonanQuickCreatePageF
                         ))}
                       </select>
                     </label>
+                    {isAdmin && (
+                      <label className="block md:col-span-2">
+                        <span className="mb-1.5 block text-sm font-medium text-slate-700">
+                          Starting status
+                        </span>
+                        <select
+                          value={workOrderForm.work_completed}
+                          onChange={(event) =>
+                            setWorkOrderForm((current) => ({
+                              ...current,
+                              work_completed: event.target.value as WorkOrderStatus,
+                            }))
+                          }
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                          disabled={submitting}
+                        >
+                          {WORK_ORDER_STATUSES.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                   </div>
 
                   <label className="block">
@@ -414,26 +490,28 @@ export default function BonanQuickCreatePageForm({ mode }: BonanQuickCreatePageF
                         disabled={submitting}
                       />
                     </label>
-                    <label className="block md:col-span-2">
-                      <span className="mb-1.5 block text-sm font-medium text-slate-700">Status</span>
-                      <select
-                        value={incidentForm.status}
-                        onChange={(event) =>
-                          setIncidentForm((current) => ({
-                            ...current,
-                            status: event.target.value as IncidentStatus,
-                          }))
-                        }
-                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                        disabled={submitting}
-                      >
-                        {INCIDENT_STATUSES.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    {isAdmin && (
+                      <label className="block md:col-span-2">
+                        <span className="mb-1.5 block text-sm font-medium text-slate-700">Starting status</span>
+                        <select
+                          value={incidentForm.status}
+                          onChange={(event) =>
+                            setIncidentForm((current) => ({
+                              ...current,
+                              status: event.target.value as IncidentStatus,
+                            }))
+                          }
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                          disabled={submitting}
+                        >
+                          {INCIDENT_STATUSES.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                   </div>
 
                   <label className="block">

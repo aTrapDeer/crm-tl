@@ -61,6 +61,7 @@ export async function createBonanIsolatedWorkOrder(data: {
   service_type?: WorkOrder["service_type"];
   description: string;
   assigned_to?: string | null;
+  work_completed?: WorkOrder["work_completed"];
   scheduled_date?: string;
   scheduled_time?: string;
   project_id?: string;
@@ -89,6 +90,9 @@ export async function createBonanIsolatedWorkOrder(data: {
     service_type: data.service_type || "maintenance",
     description: data.description.trim(),
     assigned_to: data.assigned_to || undefined,
+    work_completed: data.work_completed || "pending",
+    status_updated_at: data.work_completed ? new Date().toISOString() : undefined,
+    status_updated_by: data.work_completed ? data.created_by : undefined,
     scheduled_date: normalizeOptionalString(data.scheduled_date),
     scheduled_time: normalizeOptionalString(data.scheduled_time),
     project_id: normalizeOptionalString(data.project_id),
@@ -138,6 +142,8 @@ export async function createBonanIsolatedIncidentReport(data: {
     actions_taken: normalizeOptionalString(data.actions_taken),
     work_order_or_vendor: normalizeOptionalString(data.work_order_or_vendor),
     status: data.status || "open",
+    status_updated_at: data.status ? new Date().toISOString() : undefined,
+    status_updated_by: data.status ? data.created_by : undefined,
     site: "bonan_towers",
     created_by: data.created_by,
   });

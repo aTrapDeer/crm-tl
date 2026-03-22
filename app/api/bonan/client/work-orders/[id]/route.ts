@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { getSession, getUserById } from "@/lib/auth";
 import { getWorkOrderById } from "@/lib/work-orders";
+import { isBonanClientVisibleWorkOrder } from "@/lib/bonan-visibility";
 import { userHasBonanClientMembership } from "@/lib/bonan-client";
 
 async function getAuthenticatedUser() {
@@ -29,7 +30,7 @@ export async function GET(
 
     const { id } = await params;
     const workOrder = await getWorkOrderById(id);
-    if (!workOrder || workOrder.site !== "bonan_towers" || workOrder.publication_status !== "published") {
+    if (!workOrder || !isBonanClientVisibleWorkOrder(workOrder)) {
       return Response.json({ error: "Bonan work order not found" }, { status: 404 });
     }
 

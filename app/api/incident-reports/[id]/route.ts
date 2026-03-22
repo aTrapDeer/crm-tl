@@ -76,20 +76,16 @@ export async function PATCH(
     }
 
     const body = await request.json().catch(() => ({}));
-    if (existing.publication_status === "published" && user.role !== "admin") {
-      const publishedEditableFields = new Set(["status", "status_note"]);
-      const hasDisallowedPublishedEdit = Object.keys(body).some((key) => !publishedEditableFields.has(key));
-      if (hasDisallowedPublishedEdit) {
-        return Response.json(
-          { error: "Published incident reports only allow status updates and close-out notes." },
-          { status: 409 }
-        );
-      }
-    }
     const status =
       body.status === "open" || body.status === "in_progress" || body.status === "closed"
         ? (body.status as IncidentReportStatus)
         : undefined;
+    if (user.role === "employee" && status === "in_progress" && existing.status !== "in_progress") {
+      return Response.json(
+        { error: "Employees cannot move an incident report into In Progress." },
+        { status: 403 }
+      );
+    }
     const statusNoteProvided = Object.prototype.hasOwnProperty.call(body, "status_note");
     const statusNote =
       user.role === "admin" && statusNoteProvided
@@ -106,6 +102,12 @@ export async function PATCH(
       body.publication_status === "draft" || body.publication_status === "published"
         ? body.publication_status
         : undefined;
+    if (publicationStatus === "published" && user.role !== "admin") {
+      return Response.json(
+        { error: "Only admins can publish incident reports." },
+        { status: 403 }
+      );
+    }
     const publishedAt =
       publicationStatus === "published"
         ? existing.published_at || new Date().toISOString()

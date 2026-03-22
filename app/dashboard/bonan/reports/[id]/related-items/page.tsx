@@ -51,6 +51,16 @@ const WORK_ORDER_STATUS_STYLES: Record<RelatedWorkOrder["work_completed"], strin
   cancelled: "bg-slate-100 text-slate-700",
 };
 
+function formatIncidentStatusLabel(status: RelatedIncidentReport["status"]) {
+  if (status === "open") return "Approval Needed";
+  return status.replace("_", " ");
+}
+
+function formatWorkOrderStatusLabel(status: RelatedWorkOrder["work_completed"]) {
+  if (status === "pending") return "Approval Needed";
+  return status.replace("_", " ");
+}
+
 function getBackLink(reportType: ReportType, reportId: string, userRole: "admin" | "employee" | "client" | null) {
   if (reportType === "daily") return `/dashboard/bonan/daily/${reportId}`;
   if (reportType === "weekly") return `/dashboard/bonan/weekly/${reportId}`;
@@ -186,7 +196,7 @@ export default function BonanRelatedItemsPage({ params }: { params: Promise<{ id
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-semibold text-(--text)">{workOrder.work_order_number}</p>
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${WORK_ORDER_STATUS_STYLES[workOrder.work_completed]}`}>
-                          {workOrder.work_completed.replace("_", " ")}
+                          {formatWorkOrderStatusLabel(workOrder.work_completed)}
                         </span>
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${workOrder.priority === "emergency" ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-700"}`}>
                           {workOrder.priority}
@@ -224,7 +234,7 @@ export default function BonanRelatedItemsPage({ params }: { params: Promise<{ id
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-semibold text-(--text)">{incidentReport.report_number}</p>
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${INCIDENT_STATUS_STYLES[incidentReport.status]}`}>
-                          {incidentReport.status.replace("_", " ")}
+                          {formatIncidentStatusLabel(incidentReport.status)}
                         </span>
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium uppercase ${incidentReport.publication_status === "published" ? "bg-slate-800 text-white" : "bg-amber-100 text-amber-700"}`}>
                           {incidentReport.publication_status}

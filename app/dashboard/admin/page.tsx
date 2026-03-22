@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ProjectDetailsModal from "@/app/components/ProjectDetailsModal";
 import AddressAutocomplete from "@/app/components/AddressAutocomplete";
+import { ModalLayer } from "@/app/components/ModalLayer";
 import {
   formatUsCentralDateTime,
   getMonthKey,
@@ -755,7 +756,7 @@ export default function AdminDashboard() {
         </div>
         <div className="tl-card p-3 md:p-5">
           <p className="text-[10px] md:text-xs uppercase tracking-[0.15em] md:tracking-[0.2em] text-(--text)">
-            Bonan Open WOs
+            Bonan Approval / Active WOs
           </p>
           <Link
             href="/dashboard/management?tab=work-orders&site=bonan_towers&statuses=pending%2Cin_progress"
@@ -766,7 +767,7 @@ export default function AdminDashboard() {
         </div>
         <div className="tl-card p-3 md:p-5">
           <p className="text-[10px] md:text-xs uppercase tracking-[0.15em] md:tracking-[0.2em] text-(--text)">
-            Bonan Active Incidents
+            Bonan Approval / Active Incidents
           </p>
           <Link
             href="/dashboard/management?tab=incident-reports&site=bonan_towers&incidentStatus=open%2Cin_progress"
@@ -1090,8 +1091,11 @@ export default function AdminDashboard() {
 
       {/* New Project Modal */}
       {showNewProject && (
-        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-9999 p-0 md:p-4">
-          <div className="tl-card p-4 md:p-8 w-full max-w-lg max-h-[95vh] md:max-h-[90vh] overflow-y-auto rounded-t-3xl md:rounded-3xl rounded-b-none md:rounded-b-3xl">
+        <ModalLayer align="sheet" className="bg-black/50" onBackdropClick={() => setShowNewProject(false)}>
+          <div
+            className="tl-card p-4 md:p-8 w-full max-w-lg max-h-[95vh] md:max-h-[90vh] overflow-y-auto rounded-t-3xl md:rounded-3xl rounded-b-none md:rounded-b-3xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-lg md:text-xl font-semibold text-(--text) mb-4 md:mb-6">
               Create New Project
             </h3>
@@ -1410,7 +1414,7 @@ export default function AdminDashboard() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {/* Project Details Modal */}

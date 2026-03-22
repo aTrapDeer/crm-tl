@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { formatUsCentralDateTime } from "@/lib/us-central-time";
+import { ModalLayer } from "@/app/components/ModalLayer";
 
 type EntityPhotoType = "work_order" | "incident_report";
 type EntityPhotoRole = "before" | "after" | "general";
@@ -250,9 +251,10 @@ export default function EntityPhotoManager({
       )}
 
       {showUploadModal && (
-        <div
-          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4"
-          onClick={() => {
+        <ModalLayer
+          align="center"
+          className="bg-black/50"
+          onBackdropClick={() => {
             setShowUploadModal(false);
             setSelectedFile(null);
           }}
@@ -341,14 +343,11 @@ export default function EntityPhotoManager({
               </div>
             </form>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {viewerPhoto && (
-        <div
-          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 p-4"
-          onClick={() => setViewerPhoto(null)}
-        >
+        <ModalLayer align="center" className="bg-black/70" onBackdropClick={() => setViewerPhoto(null)}>
           <div
             className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl"
             onClick={(event) => event.stopPropagation()}
@@ -405,7 +404,7 @@ export default function EntityPhotoManager({
               <p>{new Date(viewerPhoto.created_at).toLocaleString()}</p>
             </div>
           </div>
-        </div>
+        </ModalLayer>
       )}
     </section>
   );

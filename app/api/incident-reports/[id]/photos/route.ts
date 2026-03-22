@@ -71,13 +71,6 @@ export async function POST(
     if (!incidentReport) {
       return Response.json({ error: "Incident report not found" }, { status: 404 });
     }
-    if (incidentReport.publication_status === "published" && user.role !== "admin") {
-      return Response.json(
-        { error: "Published incident reports only allow photo updates by admins." },
-        { status: 409 }
-      );
-    }
-
     const formData = await request.formData();
     const file = formData.get("file");
     if (!(file instanceof File)) {
@@ -139,13 +132,6 @@ export async function DELETE(
     if (!incidentReport) {
       return Response.json({ error: "Incident report not found" }, { status: 404 });
     }
-    if (incidentReport.publication_status === "published" && user.role !== "admin") {
-      return Response.json(
-        { error: "Published incident reports only allow photo updates by admins." },
-        { status: 409 }
-      );
-    }
-
     const body = await request.json().catch(() => ({}));
     if (typeof body.photoId !== "string" || !body.photoId.trim()) {
       return Response.json({ error: "Photo ID is required" }, { status: 400 });

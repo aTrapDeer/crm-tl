@@ -21,10 +21,10 @@ const S3_KEY_PREFIXES = {
     process.env.S3_PROJECT_KEY_PREFIX || DEFAULT_PROJECT_KEY_PREFIX
   ),
   work_order: normalizePrefix(
-    process.env.S3_WORK_ORDER_KEY_PREFIX || "work-orders/images"
+    process.env.S3_WORK_ORDER_KEY_PREFIX || "work-incident-reports/work-orders"
   ),
   incident_report: normalizePrefix(
-    process.env.S3_INCIDENT_REPORT_KEY_PREFIX || "incident-reports/images"
+    process.env.S3_INCIDENT_REPORT_KEY_PREFIX || "work-incident-reports/incident-reports"
   ),
 } as const;
 

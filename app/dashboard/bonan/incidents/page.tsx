@@ -14,6 +14,11 @@ interface IncidentReport {
   status: "open" | "in_progress" | "closed";
 }
 
+function formatIncidentStatusLabel(status: IncidentReport["status"]) {
+  if (status === "open") return "Approval Needed";
+  return status.replace(/_/g, " ");
+}
+
 export default function BonanClientIncidentsPage() {
   const router = useRouter();
   const [incidentReports, setIncidentReports] = useState<IncidentReport[]>([]);
@@ -60,8 +65,8 @@ export default function BonanClientIncidentsPage() {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-(--text)/55">Bonan Towers</p>
-            <h1 className="text-2xl font-bold text-(--text)">Published Incident Reports</h1>
-            <p className="text-sm text-(--text)/60 mt-1">Review incident details, response notes, and sign approval when the record is correct.</p>
+            <h1 className="text-2xl font-bold text-(--text)">Bonan Incident Reports</h1>
+            <p className="text-sm text-(--text)/60 mt-1">Review approval-needed drafts plus any incident reports that have already been published to the client portal.</p>
           </div>
           <Link href="/dashboard/bonan" className="rounded-full border border-(--border)/30 px-4 py-2 text-sm font-medium text-(--text)">
             Back to Bonan
@@ -73,7 +78,7 @@ export default function BonanClientIncidentsPage() {
         ) : error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         ) : incidentReports.length === 0 ? (
-          <div className="tl-card p-6 text-sm text-(--text)/60">No published Bonan incident reports are available yet.</div>
+          <div className="tl-card p-6 text-sm text-(--text)/60">No Bonan incident reports are available for client review yet.</div>
         ) : (
           <div className="space-y-3">
             {incidentReports.map((incident) => (
@@ -87,7 +92,7 @@ export default function BonanClientIncidentsPage() {
                     </p>
                   </div>
                   <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 capitalize">
-                    {incident.status.replace(/_/g, " ")}
+                    {formatIncidentStatusLabel(incident.status)}
                   </span>
                 </div>
               </Link>

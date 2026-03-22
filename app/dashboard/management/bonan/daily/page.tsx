@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { BonanReportStatus } from "@/lib/bonan-types";
 import { formatUsCentralDateTime, getUsCentralDate } from "@/lib/us-central-time";
+import { ModalLayer } from "@/app/components/ModalLayer";
 
 interface BonanReportSummary {
   id: string;
@@ -284,9 +285,10 @@ export default function BonanDailyReportsPage() {
       </div>
 
       {showCreatePrompt && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
-          onClick={() => {
+        <ModalLayer
+          align="sheet-sm"
+          className="bg-black/50 backdrop-blur-sm"
+          onBackdropClick={() => {
             if (creating) return;
             setShowCreatePrompt(false);
             setCreatePromptError("");
@@ -351,13 +353,14 @@ export default function BonanDailyReportsPage() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {pendingDeleteReport && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
-          onClick={() => {
+        <ModalLayer
+          align="sheet-sm"
+          className="bg-black/50 backdrop-blur-sm"
+          onBackdropClick={() => {
             if (deletingId) return;
             setPendingDeleteReport(null);
             setDeleteConfirmInput("");
@@ -411,7 +414,7 @@ export default function BonanDailyReportsPage() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalLayer>
       )}
     </div>
   );

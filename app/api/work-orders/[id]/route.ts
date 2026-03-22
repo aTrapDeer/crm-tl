@@ -3,6 +3,7 @@ import {
   getWorkOrderById,
   updateWorkOrder,
   deleteWorkOrder,
+  canEmployeeViewWorkOrder,
 } from "@/lib/work-orders";
 import { sendWorkOrderChangeNotification } from "@/lib/email";
 import { getUsCentralDate, getUsCentralTimeHHMM } from "@/lib/us-central-time";
@@ -42,8 +43,8 @@ export async function GET(
       return Response.json({ error: "Work order not found" }, { status: 404 });
     }
 
-    // Employees can only see work orders assigned to them
-    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
+    // Employees can view assigned work orders and any work order already in progress.
+    if (user.role === "employee" && !canEmployeeViewWorkOrder(user.id, workOrder)) {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
 
@@ -94,25 +95,17 @@ export async function PATCH(
     }
 
     const body = await request.json().catch(() => ({}));
-    if (workOrder.publication_status === "published") {
-      const publishedEditableFields = new Set([
-        "work_completed",
-        "status_note",
-        "completed_date",
-        "completed_time",
-      ]);
-      const hasDisallowedPublishedEdit = Object.keys(body).some((key) => !publishedEditableFields.has(key));
-      if (hasDisallowedPublishedEdit) {
-        return Response.json(
-          { error: "Published work orders only allow status updates and close-out notes." },
-          { status: 409 }
-        );
-      }
-    }
     const requestedPublicationStatus =
       body.publication_status === "draft" || body.publication_status === "published"
         ? body.publication_status
         : undefined;
+
+    if (requestedPublicationStatus === "published" && user.role !== "admin") {
+      return Response.json(
+        { error: "Only admins can publish work orders." },
+        { status: 403 }
+      );
+    }
 
     if (requestedPublicationStatus === "draft") {
       return Response.json(
@@ -129,6 +122,12 @@ export async function PATCH(
       body.work_completed === "cancelled"
         ? body.work_completed
         : undefined;
+    if (user.role === "employee" && nextStatus === "in_progress" && previousStatus !== "in_progress") {
+      return Response.json(
+        { error: "Employees cannot move a work order into In Progress." },
+        { status: 403 }
+      );
+    }
     const statusNoteProvided = Object.prototype.hasOwnProperty.call(body, "status_note");
     const statusNote =
       user.role === "admin" && statusNoteProvided

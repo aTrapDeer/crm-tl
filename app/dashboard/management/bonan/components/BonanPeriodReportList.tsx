@@ -10,6 +10,7 @@ import {
   getWeekEndSaturday,
   getWeekStartSunday,
 } from "@/lib/us-central-time";
+import { ModalLayer } from "@/app/components/ModalLayer";
 
 interface BonanReportSummary {
   id: string;
@@ -332,9 +333,10 @@ export default function BonanPeriodReportList({
       </div>
 
       {showCreateModal && canCreate && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
-          onClick={() => {
+        <ModalLayer
+          align="sheet-sm"
+          className="bg-black/50 backdrop-blur-sm"
+          onBackdropClick={() => {
             if (!creating) setShowCreateModal(false);
           }}
         >
@@ -380,13 +382,14 @@ export default function BonanPeriodReportList({
               </button>
             </div>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {pendingDelete && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
-          onClick={() => {
+        <ModalLayer
+          align="sheet-sm"
+          className="bg-black/50 backdrop-blur-sm"
+          onBackdropClick={() => {
             if (!deletingId) {
               setPendingDelete(null);
               setDeleteConfirmInput("");
@@ -438,7 +441,7 @@ export default function BonanPeriodReportList({
               </button>
             </div>
           </div>
-        </div>
+        </ModalLayer>
       )}
     </div>
   );

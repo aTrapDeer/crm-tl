@@ -1,10 +1,10 @@
 import { getSession, getUserById } from "@/lib/auth";
 import {
   getAllWorkOrders,
-  getWorkOrdersByAssignee,
   createWorkOrder,
   generateWorkOrderNumber,
   searchWorkOrders,
+  canEmployeeViewWorkOrder,
   type WorkOrderFilters,
 } from "@/lib/work-orders";
 import { cookies } from "next/headers";
@@ -75,18 +75,15 @@ export async function GET(request: Request) {
       filters.search = searchParams.get("search")!;
     }
 
-    // Employee can only see their assigned work orders
-    if (user.role === "employee") {
-      filters.assigned_to = user.id;
-    }
-
     // If filters provided, use search function
     const hasFilters = Object.keys(filters).length > 0;
-    const workOrders = hasFilters
+    const loadedWorkOrders = hasFilters
       ? await searchWorkOrders(filters)
-      : user.role === "admin"
-        ? await getAllWorkOrders()
-        : await getWorkOrdersByAssignee(user.id);
+      : await getAllWorkOrders();
+    const workOrders =
+      user.role === "employee"
+        ? loadedWorkOrders.filter((workOrder) => canEmployeeViewWorkOrder(user.id, workOrder))
+        : loadedWorkOrders;
 
     return Response.json({ workOrders });
   } catch (error) {

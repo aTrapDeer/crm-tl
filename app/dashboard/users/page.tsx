@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ModalLayer } from "@/app/components/ModalLayer";
 
 interface User {
   id: string;
@@ -562,8 +563,15 @@ export default function UsersPage() {
       </section>
 
       {pendingRoleEditUser && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4">
-          <div className="tl-card w-full max-w-md rounded-none md:rounded-3xl p-5 md:p-6">
+        <ModalLayer
+          align="sheet"
+          className="bg-black/50"
+          onBackdropClick={() => !updatingRoleUserId && setPendingRoleEditUser(null)}
+        >
+          <div
+            className="tl-card w-full max-w-md rounded-none md:rounded-3xl p-5 md:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-lg font-semibold text-(--text)">Update User Role</h3>
             <p className="mt-2 text-sm text-(--text)">
               Change role for{" "}
@@ -607,12 +615,19 @@ export default function UsersPage() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {pendingDeleteUser && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4">
-          <div className="tl-card w-full max-w-md rounded-none md:rounded-3xl p-5 md:p-6">
+        <ModalLayer
+          align="sheet"
+          className="bg-black/50"
+          onBackdropClick={() => !deletingUserId && setPendingDeleteUser(null)}
+        >
+          <div
+            className="tl-card w-full max-w-md rounded-none md:rounded-3xl p-5 md:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-lg font-semibold text-(--text)">Delete User</h3>
             <p className="mt-2 text-sm text-(--text)">
               Are you sure you want to delete{" "}
@@ -642,12 +657,19 @@ export default function UsersPage() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {pendingPasswordResetUser && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4">
-          <div className="tl-card w-full max-w-md rounded-none md:rounded-3xl p-5 md:p-6">
+        <ModalLayer
+          align="sheet"
+          className="bg-black/50"
+          onBackdropClick={() => !resettingPasswordUserId && setPendingPasswordResetUser(null)}
+        >
+          <div
+            className="tl-card w-full max-w-md rounded-none md:rounded-3xl p-5 md:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-lg font-semibold text-(--text)">Confirm Password Reset</h3>
             <p className="mt-2 text-sm text-(--text)">
               Send a password reset email to{" "}
@@ -679,7 +701,7 @@ export default function UsersPage() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalLayer>
       )}
     </div>
   );

@@ -45,6 +45,12 @@ export default function BonanDashboardPage() {
   const monthlyLogsHref = userRole === "client"
     ? "/dashboard/bonan/monthly-summaries"
     : "/dashboard/bonan/monthly";
+  const bonanWorkOrdersHref =
+    userRole === "client" ? "/dashboard/bonan/work-orders" : "/dashboard/management?tab=work-orders&site=bonan_towers";
+  const bonanIncidentsHref =
+    userRole === "client" ? "/dashboard/bonan/incidents" : "/dashboard/management?tab=incident-reports&site=bonan_towers";
+  const bonanWorkOrderCreateHref = `/dashboard/management/work-orders/new?site=bonan_towers&returnTo=${encodeURIComponent("/dashboard/bonan")}`;
+  const bonanIncidentCreateHref = `/dashboard/management/incident-reports/new?returnTo=${encodeURIComponent("/dashboard/bonan")}`;
 
   const accessMode =
     userRole === "client"
@@ -287,19 +293,31 @@ export default function BonanDashboardPage() {
                   <h3 className="text-base font-bold text-slate-900">Work Orders</h3>
                 </div>
                 <p className="text-sm text-slate-600 leading-relaxed">
-                  Review published Bonan work orders and sign off on the current revision.
+                  {userRole === "client"
+                    ? "Review published Bonan work orders and sign off on the current revision."
+                    : "View Bonan work orders and create isolated follow-up work outside the daily walkthrough flow."}
                 </p>
               </div>
               <div className="p-4 border-t border-slate-100 bg-slate-50/50 group-hover:bg-rose-50/30 transition-colors">
-                <Link 
-                  href={userRole === "client" ? "/dashboard/bonan/work-orders" : "/dashboard/management?tab=work-orders&site=bonan_towers"}
-                  className="flex w-full items-center justify-center rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 border border-slate-200 shadow-sm group-hover:border-rose-200 group-hover:text-rose-700 transition-all"
-                >
-                  Open Work Orders
-                  <svg className="ml-1.5 h-4 w-4 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </Link>
+                <div className={`grid gap-2 ${userRole === "client" ? "grid-cols-1" : "grid-cols-2"}`}>
+                  <Link
+                    href={bonanWorkOrdersHref}
+                    className="flex w-full items-center justify-center rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 border border-slate-200 shadow-sm group-hover:border-rose-200 group-hover:text-rose-700 transition-all"
+                  >
+                    View Work Orders
+                    <svg className="ml-1.5 h-4 w-4 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Link>
+                  {userRole !== "client" && (
+                    <Link
+                      href={bonanWorkOrderCreateHref}
+                      className="flex w-full items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 shadow-sm transition-all hover:bg-rose-100"
+                    >
+                      Create
+                    </Link>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -314,19 +332,31 @@ export default function BonanDashboardPage() {
                   <h3 className="text-base font-bold text-slate-900">Incident Reports</h3>
                 </div>
                 <p className="text-sm text-slate-600 leading-relaxed">
-                  Review published incident reports and request targeted corrections when needed.
+                  {userRole === "client"
+                    ? "Review published incident reports and request targeted corrections when needed."
+                    : "View Bonan incident reports and create isolated incident documentation outside the daily walkthrough flow."}
                 </p>
               </div>
               <div className="p-4 border-t border-slate-100 bg-slate-50/50 group-hover:bg-amber-50/30 transition-colors">
-                <Link 
-                  href={userRole === "client" ? "/dashboard/bonan/incidents" : "/dashboard/management?tab=incident-reports&site=bonan_towers"}
-                  className="flex w-full items-center justify-center rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 border border-slate-200 shadow-sm group-hover:border-amber-200 group-hover:text-amber-700 transition-all"
-                >
-                  Open Incidents
-                  <svg className="ml-1.5 h-4 w-4 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </Link>
+                <div className={`grid gap-2 ${userRole === "client" ? "grid-cols-1" : "grid-cols-2"}`}>
+                  <Link
+                    href={bonanIncidentsHref}
+                    className="flex w-full items-center justify-center rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 border border-slate-200 shadow-sm group-hover:border-amber-200 group-hover:text-amber-700 transition-all"
+                  >
+                    View Incidents
+                    <svg className="ml-1.5 h-4 w-4 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Link>
+                  {userRole !== "client" && (
+                    <Link
+                      href={bonanIncidentCreateHref}
+                      className="flex w-full items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 shadow-sm transition-all hover:bg-amber-100"
+                    >
+                      Create
+                    </Link>
+                  )}
+                </div>
               </div>
             </div>
           </div>

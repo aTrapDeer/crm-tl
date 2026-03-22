@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect, useCallback } from "react";
 import { formatUsCentralDateTime } from "@/lib/us-central-time";
+import { ModalLayer } from "@/app/components/ModalLayer";
 
 interface SignatureCaptureProps {
   onSave: (signatureData: string) => void;
@@ -175,8 +176,8 @@ export default function SignatureCapture({
     "Signer";
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[10000] p-4">
-      <div className="tl-card p-6 w-full max-w-lg">
+    <ModalLayer align="center" className="bg-black/60" onBackdropClick={onCancel}>
+      <div className="tl-card p-6 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-semibold text-(--text) mb-4">
           Capture Signature
         </h3>
@@ -239,6 +240,6 @@ export default function SignatureCapture({
           </button>
         </div>
       </div>
-    </div>
+    </ModalLayer>
   );
 }

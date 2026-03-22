@@ -4,6 +4,7 @@ import {
   getWorkOrderMaterials,
   addWorkOrderMaterial,
   deleteWorkOrderMaterial,
+  canEmployeeViewWorkOrder,
 } from "@/lib/work-orders";
 import { cookies } from "next/headers";
 
@@ -41,8 +42,8 @@ export async function GET(
       return Response.json({ error: "Work order not found" }, { status: 404 });
     }
 
-    // Workers can only see materials for work orders assigned to them
-    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
+    // Employees can view materials for assigned work orders and any work order already in progress.
+    if (user.role === "employee" && !canEmployeeViewWorkOrder(user.id, workOrder)) {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
 
@@ -88,13 +89,6 @@ export async function POST(
     if (!workOrder) {
       return Response.json({ error: "Work order not found" }, { status: 404 });
     }
-    if (workOrder.publication_status === "published") {
-      return Response.json(
-        { error: "Published work orders are locked and cannot be edited." },
-        { status: 409 }
-      );
-    }
-
     // Workers can only add materials to work orders assigned to them
     if (user.role === "employee" && workOrder.assigned_to !== user.id) {
       return Response.json({ error: "Access denied" }, { status: 403 });
@@ -155,13 +149,6 @@ export async function DELETE(
     if (!workOrder) {
       return Response.json({ error: "Work order not found" }, { status: 404 });
     }
-    if (workOrder.publication_status === "published") {
-      return Response.json(
-        { error: "Published work orders are locked and cannot be edited." },
-        { status: 409 }
-      );
-    }
-
     // Workers can only delete materials from work orders assigned to them
     if (user.role === "employee" && workOrder.assigned_to !== user.id) {
       return Response.json({ error: "Access denied" }, { status: 403 });

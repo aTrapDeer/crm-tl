@@ -22,8 +22,14 @@ const STATUS_STYLES: Record<IncidentReport["status"], string> = {
   closed: "bg-emerald-100 text-emerald-700",
 };
 
+function formatIncidentStatusLabel(status: IncidentReport["status"]) {
+  if (status === "open") return "Approval Needed";
+  return status.replace("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 export default function IncidentReportsPage() {
   const router = useRouter();
+  const createHref = "/dashboard/management/incident-reports/new?returnTo=/dashboard/incident-reports";
   const [loading, setLoading] = useState(true);
   const [incidentReports, setIncidentReports] = useState<IncidentReport[]>([]);
   const [search, setSearch] = useState("");
@@ -84,15 +90,23 @@ export default function IncidentReportsPage() {
           <div>
             <h1 className="text-2xl font-bold text-(--text)">Incident Reports</h1>
             <p className="text-sm text-(--text)/60">
-              Open, review, and publish incident reports tied to operations.
+              Approval-needed, in-progress, and completed incident reports tied to operations.
             </p>
           </div>
-          <Link
-            href="/dashboard/employee"
-            className="rounded-full border border-(--border)/40 px-4 py-2 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
-          >
-            Back to Employee Portal
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href={createHref}
+              className="rounded-full bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition"
+            >
+              + New Bonan Incident
+            </Link>
+            <Link
+              href="/dashboard/employee"
+              className="rounded-full border border-(--border)/40 px-4 py-2 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
+            >
+              Back to Employee Portal
+            </Link>
+          </div>
         </div>
 
         <div className="tl-card p-4">
@@ -132,7 +146,7 @@ export default function IncidentReportsPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-semibold text-(--text)">{incidentReport.report_number}</p>
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[incidentReport.status]}`}>
-                        {incidentReport.status.replace("_", " ")}
+                        {formatIncidentStatusLabel(incidentReport.status)}
                       </span>
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium uppercase ${

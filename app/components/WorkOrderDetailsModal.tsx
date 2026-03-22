@@ -5,7 +5,8 @@ import { createPortal } from "react-dom";
 import Image from "next/image";
 import Link from "next/link";
 import SignatureCapture from "./SignatureCapture";
-import { formatUsCentralDateTime } from "@/lib/us-central-time";
+import { ModalLayer } from "@/app/components/ModalLayer";
+import { formatUsCentralDateTime, formatWallClockTime12Hour } from "@/lib/us-central-time";
 
 interface WorkOrder {
   id: string;
@@ -37,6 +38,8 @@ interface WorkOrder {
   work_summary: string | null;
   project_id: string | null;
   project_name?: string;
+  publication_status: "draft" | "published";
+  published_at?: string | null;
   created_by: string | null;
   creator_name?: string;
   created_at: string;
@@ -111,6 +114,11 @@ const STATUS_COLORS = {
   cancelled: "bg-gray-100 text-gray-700",
 };
 
+function formatWorkOrderStatusLabel(status: WorkOrder["work_completed"]) {
+  if (status === "pending") return "Approval Needed";
+  return status.replace("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 const SERVICE_TYPES = [
   { value: "maintenance", label: "Maintenance" },
   { value: "repair", label: "Repair" },
@@ -130,6 +138,7 @@ export default function WorkOrderDetailsModal({
 }: WorkOrderDetailsModalProps) {
   const [mounted, setMounted] = useState(false);
   const [workOrder, setWorkOrder] = useState(initialWorkOrder);
+  const isPublished = workOrder.publication_status === "published";
   const [materials, setMaterials] = useState<Material[]>([]);
   const [signatures, setSignatures] = useState<Signature[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -403,10 +412,7 @@ export default function WorkOrderDetailsModal({
   if (!mounted) return null;
 
   const modalContent = (
-    <div
-      className="fixed inset-0 bg-black/60 flex items-end md:items-center justify-center z-9999 p-0 md:p-4"
-      onClick={onClose}
-    >
+    <div className="tl-modal-backdrop tl-modal-backdrop--sheet bg-black/60" onClick={onClose}>
       <div
         className="tl-card w-full max-w-4xl h-svh md:h-auto md:max-h-[90vh] overflow-hidden flex flex-col rounded-none md:rounded-3xl shadow-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -427,7 +433,21 @@ export default function WorkOrderDetailsModal({
                 {workOrder.priority.charAt(0).toUpperCase() + workOrder.priority.slice(1)}
               </span>
               <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_COLORS[workOrder.work_completed]}`}>
-                {workOrder.work_completed.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                {formatWorkOrderStatusLabel(workOrder.work_completed)}
+              </span>
+              <span
+                className={`text-xs px-2.5 py-1 rounded-full font-medium uppercase tracking-wide ${
+                  isPublished ? "bg-slate-800 text-white" : "bg-amber-100 text-amber-700"
+                }`}
+                title={
+                  isPublished && workOrder.published_at
+                    ? `Published ${new Date(workOrder.published_at).toLocaleString()}`
+                    : isPublished
+                      ? "Published work order"
+                      : "Draft — not published to shared views yet"
+                }
+              >
+                {workOrder.publication_status}
               </span>
             </div>
             <p className="text-sm text-(--text)/70 mt-1">
@@ -525,7 +545,7 @@ export default function WorkOrderDetailsModal({
                   <div>
                     <p className="text-xs text-(--text)/60 uppercase tracking-wide">Time Received</p>
                     <p className="text-sm font-medium text-(--text) mt-1">
-                      {workOrder.time_received || "—"}
+                      {formatWallClockTime12Hour(workOrder.time_received) || "—"}
                     </p>
                   </div>
                   {workOrder.project_name && (
@@ -831,25 +851,60 @@ export default function WorkOrderDetailsModal({
 
       {/* Status Change Modal */}
       {showStatusChange && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-10000 p-4" onClick={() => setShowStatusChange(false)}>
+        <ModalLayer align="center" className="bg-black/50" onBackdropClick={() => setShowStatusChange(false)}>
           <div className="tl-card p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-(--text) mb-4">Change Status</h3>
+            <h3 className="text-lg font-semibold text-(--text)">Change Status</h3>
+            <p className="text-xs text-(--text)/60 mt-1 mb-4">
+              The outlined option is the current status. Pick another to save and close, or tap the current one to dismiss.
+            </p>
             <div className="space-y-2">
-              {(["pending", "in_progress", "completed", "cancelled"] as const).map((status) => (
-                <button
-                  key={status}
-                  onClick={() => handleStatusChange(status)}
-                  disabled={updating || workOrder.work_completed === status}
-                  className={`w-full px-4 py-3 rounded-xl text-left text-sm font-medium transition ${
-                    workOrder.work_completed === status
-                      ? "bg-(--bg) text-(--text)/50 cursor-not-allowed"
-                      : "hover:bg-(--bg) text-(--text)"
-                  }`}
-                >
-                  <span className={`inline-block w-3 h-3 rounded-full mr-3 ${STATUS_COLORS[status].replace("text-", "bg-").replace("-100", "-500").replace("-700", "-500")}`}></span>
-                  {status.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())}
-                </button>
-              ))}
+              {(["pending", "in_progress", "completed", "cancelled"] as const).map((status) => {
+                const isCurrent = workOrder.work_completed === status;
+                const dotClass = STATUS_COLORS[status]
+                  .replace("text-", "bg-")
+                  .replace("-100", "-500")
+                  .replace("-700", "-500");
+                return (
+                  <button
+                    type="button"
+                    key={status}
+                    onClick={() => {
+                      if (isCurrent) {
+                        setShowStatusChange(false);
+                        return;
+                      }
+                      void handleStatusChange(status);
+                    }}
+                    disabled={updating}
+                    aria-current={isCurrent ? "true" : undefined}
+                    className={`flex w-full items-center justify-between gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition border-2 ${
+                      isCurrent
+                        ? "border-(--ring) bg-(--bg) text-(--text) shadow-sm"
+                        : "border-transparent text-(--text) hover:bg-(--bg) hover:border-(--border)/40"
+                    } ${updating && !isCurrent ? "opacity-60" : ""}`}
+                  >
+                    <span className="flex min-w-0 items-center">
+                      <span className={`inline-block h-3 w-3 shrink-0 rounded-full mr-3 ${dotClass}`} aria-hidden />
+                      <span className="truncate">{formatWorkOrderStatusLabel(status)}</span>
+                      {isCurrent && (
+                        <span className="ml-2 shrink-0 rounded-md bg-(--ring)/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-(--ring)">
+                          Current
+                        </span>
+                      )}
+                    </span>
+                    {isCurrent && (
+                      <span
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-(--ring)/15 text-(--ring)"
+                        aria-hidden
+                      >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
             <button
               onClick={() => setShowStatusChange(false)}
@@ -858,12 +913,12 @@ export default function WorkOrderDetailsModal({
               Cancel
             </button>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {/* Edit Execution Modal */}
       {showEditModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-10000 p-0 md:p-4" onClick={() => setShowEditModal(false)}>
+        <ModalLayer align="sheet" className="bg-black/50" onBackdropClick={() => setShowEditModal(false)}>
           <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-(--text) mb-4">Edit Execution Details</h3>
             <form onSubmit={handleUpdateExecution} className="space-y-4">
@@ -950,12 +1005,12 @@ export default function WorkOrderDetailsModal({
               </div>
             </form>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {/* Add Material Modal */}
       {showAddMaterial && (
-        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-10000 p-0 md:p-4" onClick={() => setShowAddMaterial(false)}>
+        <ModalLayer align="sheet" className="bg-black/50" onBackdropClick={() => setShowAddMaterial(false)}>
           <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-(--text) mb-4">Add Material</h3>
             <form onSubmit={handleAddMaterial} className="space-y-4">
@@ -1032,12 +1087,12 @@ export default function WorkOrderDetailsModal({
               </div>
             </form>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {/* Signature Name Modal */}
       {showSignatureCapture && !signatureForm.signer_name && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-10000 p-4" onClick={() => setShowSignatureCapture(null)}>
+        <ModalLayer align="center" className="bg-black/50" onBackdropClick={() => setShowSignatureCapture(null)}>
           <div className="tl-card p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-(--text) mb-4">
               {showSignatureCapture === "tl_corp_rep" ? "TL Corp Representative" : "Building Representative"}
@@ -1089,7 +1144,7 @@ export default function WorkOrderDetailsModal({
               </div>
             </div>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {/* Signature Capture */}
@@ -1108,7 +1163,7 @@ export default function WorkOrderDetailsModal({
 
       {/* Invite Customer Modal */}
       {showInviteCustomer && (
-        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-10000 p-0 md:p-4" onClick={() => setShowInviteCustomer(false)}>
+        <ModalLayer align="sheet" className="bg-black/50" onBackdropClick={() => setShowInviteCustomer(false)}>
           <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-(--text) mb-4">Add Customer Contact</h3>
             <p className="text-sm text-(--text)/70 mb-4">
@@ -1158,12 +1213,12 @@ export default function WorkOrderDetailsModal({
               </div>
             </form>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-10000 p-4" onClick={() => setShowDeleteConfirm(false)}>
+        <ModalLayer align="center" className="bg-black/50" onBackdropClick={() => setShowDeleteConfirm(false)}>
           <div className="tl-card p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-(--text) mb-2">Delete Work Order</h3>
             <p className="text-sm text-(--text)/70 mb-4">
@@ -1186,7 +1241,7 @@ export default function WorkOrderDetailsModal({
               </button>
             </div>
           </div>
-        </div>
+        </ModalLayer>
       )}
     </div>
   );

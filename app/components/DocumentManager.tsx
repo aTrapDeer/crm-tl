@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { ModalLayer } from "@/app/components/ModalLayer";
 
 interface Document {
   id: string;
@@ -363,7 +364,7 @@ export default function DocumentManager({ userRole }: DocumentManagerProps) {
 
       {/* Upload Modal */}
       {showUploadModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-10000 p-4" onClick={() => setShowUploadModal(false)}>
+        <ModalLayer align="center" className="bg-black/50" onBackdropClick={() => setShowUploadModal(false)}>
           <div className="tl-card p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-(--text) mb-4">Add Document</h3>
             <form onSubmit={handleUpload} className="space-y-4">
@@ -434,12 +435,12 @@ export default function DocumentManager({ userRole }: DocumentManagerProps) {
               </div>
             </form>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {/* Share Modal */}
       {showShareModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-10000 p-4" onClick={() => setShowShareModal(null)}>
+        <ModalLayer align="center" className="bg-black/50" onBackdropClick={() => setShowShareModal(null)}>
           <div className="tl-card p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-(--text) mb-2">Share Document</h3>
             <p className="text-sm text-(--text)/70 mb-4">{showShareModal.display_name}</p>
@@ -525,7 +526,7 @@ export default function DocumentManager({ userRole }: DocumentManagerProps) {
               Close
             </button>
           </div>
-        </div>
+        </ModalLayer>
       )}
     </div>
   );

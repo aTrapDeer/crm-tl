@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import SignatureCapture from "@/app/components/SignatureCapture";
+import { ModalLayer } from "@/app/components/ModalLayer";
 import { formatUsCentralDateTime } from "@/lib/us-central-time";
 
 interface Project {
@@ -1677,8 +1678,11 @@ export default function ProjectPage() {
 
       {/* Add Task Modal */}
       {showAddTask && (
-        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
-          <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto">
+        <ModalLayer align="sheet" className="bg-black/50" onBackdropClick={() => setShowAddTask(false)}>
+          <div
+            className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-lg font-semibold text-(--text) mb-4">
               Add New Task
             </h3>
@@ -1727,13 +1731,16 @@ export default function ProjectPage() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {/* Add Image Modal */}
       {showAddImage && (
-        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
-          <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto">
+        <ModalLayer align="sheet" className="bg-black/50" onBackdropClick={() => setShowAddImage(false)}>
+          <div
+            className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-lg font-semibold text-(--text) mb-4">
               Add Project Photo
             </h3>
@@ -1805,13 +1812,16 @@ export default function ProjectPage() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {/* Add Update Modal */}
       {showAddUpdate && (
-        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
-          <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto">
+        <ModalLayer align="sheet" className="bg-black/50" onBackdropClick={() => setShowAddUpdate(false)}>
+          <div
+            className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-lg font-semibold text-(--text) mb-4">
               Add Project Update
             </h3>
@@ -1852,13 +1862,16 @@ export default function ProjectPage() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {/* Edit Project Modal */}
       {showEditProject && (
-        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
-          <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto">
+        <ModalLayer align="sheet" className="bg-black/50" onBackdropClick={() => setShowEditProject(false)}>
+          <div
+            className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-lg font-semibold text-(--text) mb-4">
               Edit Project
             </h3>
@@ -1991,13 +2004,23 @@ export default function ProjectPage() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {/* Invite Customer Modal */}
       {showInviteCustomer && (
-        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
-          <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto">
+        <ModalLayer
+          align="sheet"
+          className="bg-black/50"
+          onBackdropClick={() => {
+            setShowInviteCustomer(false);
+            setInviteEmail("");
+          }}
+        >
+          <div
+            className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-lg font-semibold text-(--text) mb-4">
               Invite Customer
             </h3>
@@ -2039,13 +2062,16 @@ export default function ProjectPage() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {/* Add Estimate Item Modal */}
       {showAddEstimateItem && (
-        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
-          <div className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto">
+        <ModalLayer align="sheet" className="bg-black/50" onBackdropClick={() => setShowAddEstimateItem(false)}>
+          <div
+            className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-lg font-semibold text-(--text) mb-4">
               Add Estimate Line Item
             </h3>
@@ -2160,13 +2186,16 @@ export default function ProjectPage() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {/* Image Viewer Modal */}
       {showImageViewer && (
-        <div className="fixed inset-0 bg-black/80 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
-          <div className="tl-card w-full max-w-3xl overflow-hidden rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh]">
+        <ModalLayer align="sheet" className="bg-black/80" onBackdropClick={() => setShowImageViewer(null)}>
+          <div
+            className="tl-card w-full max-w-3xl overflow-hidden rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="p-4 border-b border-(--border) flex items-center justify-between">
               <div>
                 <p className="font-medium text-(--text)">
@@ -2245,7 +2274,7 @@ export default function ProjectPage() {
               )}
             </div>
           </div>
-        </div>
+        </ModalLayer>
       )}
 
       {showSignatureCapture && currentUser && (

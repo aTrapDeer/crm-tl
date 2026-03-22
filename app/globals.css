@@ -175,6 +175,52 @@ h3 {
   box-shadow: 0 0 0 2px var(--tl-blue-500);
 }
 
+/* Full-screen overlays portaled to body: above dashboard chrome (header z-40, sidebar z-50) */
+.tl-modal-backdrop {
+  position: fixed;
+  z-index: 60000;
+  inset: 0;
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-left: max(1rem, env(safe-area-inset-left, 0px));
+  padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  padding-top: max(1rem, env(safe-area-inset-top, 0px));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+}
+
+.tl-modal-backdrop--center {
+  align-items: center;
+  justify-content: center;
+}
+
+.tl-modal-backdrop--sheet {
+  align-items: flex-end;
+  justify-content: center;
+}
+
+@media (min-width: 768px) {
+  .tl-modal-backdrop--sheet {
+    align-items: center;
+  }
+}
+
+.tl-modal-backdrop--sheet-sm {
+  align-items: flex-end;
+  justify-content: center;
+}
+
+@media (min-width: 640px) {
+  .tl-modal-backdrop--sheet-sm {
+    align-items: center;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 8px;
 }

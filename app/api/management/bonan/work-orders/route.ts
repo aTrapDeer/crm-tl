@@ -11,6 +11,7 @@ type WorkOrderServiceType =
   | "preventive"
   | "cleaning"
   | "other";
+type WorkOrderStatus = "pending" | "in_progress";
 
 function isValidIsoDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -33,6 +34,10 @@ function isServiceType(value: unknown): value is WorkOrderServiceType {
     value === "cleaning" ||
     value === "other"
   );
+}
+
+function isWorkOrderStatus(value: unknown): value is WorkOrderStatus {
+  return value === "pending" || value === "in_progress";
 }
 
 async function getAuthenticatedUser() {
@@ -89,6 +94,12 @@ export async function POST(request: Request) {
           : typeof body.assigned_to === "string"
             ? body.assigned_to
             : undefined,
+      work_completed:
+        user.role === "employee"
+          ? "in_progress"
+          : isWorkOrderStatus(body.work_completed)
+            ? body.work_completed
+            : "pending",
       scheduled_date:
         typeof body.scheduled_date === "string" && isValidIsoDate(body.scheduled_date)
           ? body.scheduled_date

@@ -308,7 +308,7 @@ export default function EditWorkOrderPage({ params }: { params: Promise<{ id: st
   }
 
   async function handlePublish() {
-    if (!workOrder || publishing || isPublished) return;
+    if (!workOrder || !isAdmin || publishing || isPublished) return;
 
     setPublishing(true);
     setError("");
@@ -439,7 +439,7 @@ export default function EditWorkOrderPage({ params }: { params: Promise<{ id: st
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <select value={form.work_completed} onChange={(event) => setForm({ ...form, work_completed: event.target.value as WorkOrder["work_completed"] })} className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)">
-                  <option value="pending">Pending</option>
+                  <option value="pending">Approval Needed</option>
                   <option value="in_progress">In Progress</option>
                   <option value="completed">Completed</option>
                   <option value="cancelled">Cancelled</option>
@@ -542,7 +542,7 @@ export default function EditWorkOrderPage({ params }: { params: Promise<{ id: st
                 <input type="time" value={form.time_out} onChange={(event) => setForm({ ...form, time_out: event.target.value })} placeholder="Time Out" className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)" />
                 <input type="number" step="0.01" min="0" value={form.total_labor_hours} onChange={(event) => setForm({ ...form, total_labor_hours: event.target.value })} placeholder="Total Labor Hours" className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)" />
                 <select value={form.work_completed} onChange={(event) => setForm({ ...form, work_completed: event.target.value as WorkOrder["work_completed"] })} className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)">
-                  <option value="pending">Pending</option>
+                  <option value="pending">Approval Needed</option>
                   <option value="in_progress">In Progress</option>
                   <option value="completed">Completed</option>
                   <option value="cancelled">Cancelled</option>
@@ -566,7 +566,7 @@ export default function EditWorkOrderPage({ params }: { params: Promise<{ id: st
               >
                 Back
               </Link>
-              {!isPublished && (
+              {isAdmin && !isPublished && (
                 <button
                   type="button"
                   onClick={() => void handlePublish()}

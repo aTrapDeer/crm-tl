@@ -70,6 +70,13 @@ export interface WorkOrderSignature {
   created_at: string;
 }
 
+export function canEmployeeViewWorkOrder(
+  userId: string,
+  workOrder: Pick<WorkOrder, "assigned_to" | "work_completed">
+): boolean {
+  return workOrder.assigned_to === userId || workOrder.work_completed === "in_progress";
+}
+
 function mapRowToWorkOrder(row: Record<string, unknown>): WorkOrder {
   return {
     id: row.id as string,
@@ -244,6 +251,10 @@ export async function createWorkOrder(data: {
   service_type?: WorkOrder["service_type"];
   description: string;
   assigned_to?: string;
+  work_completed?: WorkOrder["work_completed"];
+  status_note?: string;
+  status_updated_at?: string;
+  status_updated_by?: string;
   scheduled_date?: string;
   scheduled_time?: string;
   project_id?: string;
@@ -259,9 +270,10 @@ export async function createWorkOrder(data: {
     sql: `INSERT INTO work_orders (
             id, work_order_number, date, time_received, phone, email, company, department,
             location, unit, area, access_needed, preferred_entry_time,
-            priority, service_type, description, assigned_to, scheduled_date, scheduled_time,
+            priority, service_type, description, assigned_to, work_completed, status_note,
+            status_updated_at, status_updated_by, scheduled_date, scheduled_time,
             project_id, site, client_visible_revision, publication_status, published_at, created_by
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       data.work_order_number,
@@ -280,6 +292,10 @@ export async function createWorkOrder(data: {
       data.service_type || "maintenance",
       data.description,
       data.assigned_to || null,
+      data.work_completed || "pending",
+      data.status_note || null,
+      data.status_updated_at || null,
+      data.status_updated_by || null,
       data.scheduled_date || null,
       data.scheduled_time || null,
       data.project_id || null,

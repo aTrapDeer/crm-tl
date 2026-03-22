@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { getSession, getUserById } from "@/lib/auth";
 import { searchWorkOrders } from "@/lib/work-orders";
+import { isBonanClientVisibleWorkOrder } from "@/lib/bonan-visibility";
 import { userHasBonanClientMembership } from "@/lib/bonan-client";
 
 async function getAuthenticatedUser() {
@@ -24,10 +25,9 @@ export async function GET() {
       return Response.json({ error: "Bonan access denied" }, { status: 403 });
     }
 
-    const workOrders = await searchWorkOrders({
+    const workOrders = (await searchWorkOrders({
       site: "bonan_towers",
-      publication_status: "published",
-    });
+    })).filter(isBonanClientVisibleWorkOrder);
 
     return Response.json({ workOrders });
   } catch (error) {
