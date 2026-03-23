@@ -246,6 +246,12 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   }, [workOrder]);
 
   useEffect(() => {
+    if (materials.length > 0) {
+      setShowLegacyMaterials(true);
+    }
+  }, [materials.length]);
+
+  useEffect(() => {
     if (userRole !== "admin") return;
     async function fetchAdminData() {
       try {
@@ -826,15 +832,17 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
               <p className="text-2xl font-semibold text-(--text)">${combinedMaterialsTotal.toFixed(2)}</p>
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className={`grid grid-cols-1 gap-3 ${showLegacyMaterials ? "sm:grid-cols-2" : ""}`}>
             <div className="rounded-2xl border border-(--border)/20 bg-(--bg)/40 px-4 py-3">
               <p className="text-xs uppercase tracking-wide text-(--text)/45">Receipt Purchases</p>
               <p className="mt-1 text-lg font-semibold text-(--text)">${receiptMaterialsTotal.toFixed(2)}</p>
             </div>
-            <div className="rounded-2xl border border-(--border)/20 bg-(--bg)/40 px-4 py-3">
-              <p className="text-xs uppercase tracking-wide text-(--text)/45">Legacy Materials</p>
-              <p className="mt-1 text-lg font-semibold text-(--text)">${legacyMaterialsTotal.toFixed(2)}</p>
-            </div>
+            {showLegacyMaterials && (
+              <div className="rounded-2xl border border-(--border)/20 bg-(--bg)/40 px-4 py-3">
+                <p className="text-xs uppercase tracking-wide text-(--text)/45">Legacy Materials</p>
+                <p className="mt-1 text-lg font-semibold text-(--text)">${legacyMaterialsTotal.toFixed(2)}</p>
+              </div>
+            )}
           </div>
           <div className="border-t border-(--border)/20 pt-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
