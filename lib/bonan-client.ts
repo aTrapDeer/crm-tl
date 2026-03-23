@@ -307,6 +307,23 @@ export async function ensureBonanClientSchema(): Promise<void> {
       )
     `);
 
+    await turso.execute(`
+      CREATE TABLE IF NOT EXISTS material_purchases (
+        id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+        entity_type TEXT NOT NULL CHECK (entity_type IN ('work_order', 'incident_report')),
+        entity_id TEXT NOT NULL,
+        store_name TEXT NOT NULL,
+        description TEXT,
+        total_cost REAL NOT NULL DEFAULT 0,
+        receipt_filename TEXT NOT NULL,
+        receipt_s3_key TEXT,
+        receipt_s3_url TEXT,
+        purchased_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+
     await turso.execute("CREATE INDEX IF NOT EXISTS idx_bonan_client_memberships_user ON bonan_client_memberships(user_id)");
     await turso.execute("CREATE INDEX IF NOT EXISTS idx_bonan_client_memberships_site ON bonan_client_memberships(site)");
     await turso.execute("CREATE INDEX IF NOT EXISTS idx_bonan_client_invitations_email ON bonan_client_invitations(email)");
@@ -316,6 +333,8 @@ export async function ensureBonanClientSchema(): Promise<void> {
     await turso.execute("CREATE INDEX IF NOT EXISTS idx_bonan_change_requests_requester ON bonan_change_requests(requested_by)");
     await turso.execute("CREATE INDEX IF NOT EXISTS idx_bonan_change_requests_status ON bonan_change_requests(status)");
     await turso.execute("CREATE INDEX IF NOT EXISTS idx_bonan_change_request_edits_request ON bonan_change_request_edits(change_request_id)");
+    await turso.execute("CREATE INDEX IF NOT EXISTS idx_material_purchases_entity ON material_purchases(entity_type, entity_id)");
+    await turso.execute("CREATE INDEX IF NOT EXISTS idx_material_purchases_purchased_by ON material_purchases(purchased_by)");
 
     await turso.execute(`
       UPDATE work_orders

@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import SignatureCapture from "@/app/components/SignatureCapture";
 import EntityPhotoManager from "@/app/components/EntityPhotoManager";
+import MaterialPurchaseManager from "@/app/components/MaterialPurchaseManager";
 import { ModalLayer } from "@/app/components/ModalLayer";
 import { formatUsCentralDateTime, formatWallClockTime12Hour } from "@/lib/us-central-time";
 
@@ -131,6 +132,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   // Modal states
   const [showStatusChange, setShowStatusChange] = useState(false);
   const [showAddMaterial, setShowAddMaterial] = useState(false);
+  const [showLegacyMaterials, setShowLegacyMaterials] = useState(false);
   const [showSignatureCapture, setShowSignatureCapture] = useState<"tl_corp_rep" | "building_rep" | null>(null);
   const [signatureForm, setSignatureForm] = useState({ signer_name: "", signer_title: "" });
   const [showEditWorkOrder, setShowEditWorkOrder] = useState(false);
@@ -155,6 +157,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   const [updating, setUpdating] = useState(false);
   const [savingEdits, setSavingEdits] = useState(false);
   const [editError, setEditError] = useState("");
+  const [receiptMaterialsTotal, setReceiptMaterialsTotal] = useState(0);
   const [editForm, setEditForm] = useState({
     phone: "",
     email: "",
@@ -539,7 +542,8 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
     }
   }
 
-  const totalMaterialsCost = materials.reduce((sum, m) => sum + (m.total_cost || 0), 0);
+  const legacyMaterialsTotal = materials.reduce((sum, m) => sum + (m.total_cost || 0), 0);
+  const combinedMaterialsTotal = receiptMaterialsTotal + legacyMaterialsTotal;
   const tlCorpSignature = signatures.find((s) => s.signer_type === "tl_corp_rep");
   const buildingRepSignature = signatures.find((s) => s.signer_type === "building_rep");
   const isPublished = workOrder?.publication_status === "published";
@@ -558,7 +562,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   const canCaptureSignature = canEditWorkOrder;
   const sharedEditRestrictionMessage = "Only the assigned employee or an admin can make changes.";
   const materialActionTitle = canAddMaterial
-    ? "Add a material"
+    ? "Add a legacy material"
     : sharedEditRestrictionMessage;
   const signatureActionTitle = canCaptureSignature
     ? "Capture signature"
@@ -800,60 +804,113 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
           </div>
         </div>
 
-        {/* Materials */}
+        <MaterialPurchaseManager
+          endpoint={`/api/work-orders/${id}/material-purchases`}
+          title="Materials & Parts"
+          description="Track each store stop with the receipt photo and the final dollar amount so Bonan monthly reporting can total purchases automatically."
+          canManage={canAddMaterial}
+          lockedMessage={sharedEditRestrictionMessage}
+          onTotalChange={setReceiptMaterialsTotal}
+        />
+
         <div className="tl-card p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-(--text)">Materials & Parts</h2>
-            <button
-              onClick={() => setShowAddMaterial(true)}
-              disabled={!canAddMaterial}
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
-              title={materialActionTitle}
-            >
-              + Add Material
-            </button>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-(--text)">Materials Cost Summary</h2>
+              <p className="mt-1 text-sm text-(--text)/60">
+                Receipt purchases are the new primary flow. Legacy materials remain available if you still need the old itemized format.
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs uppercase tracking-wide text-(--text)/45">Total Materials Cost</p>
+              <p className="text-2xl font-semibold text-(--text)">${combinedMaterialsTotal.toFixed(2)}</p>
+            </div>
           </div>
-          {materials.length === 0 ? (
-            <p className="text-sm text-(--text)/60">No materials recorded</p>
-          ) : (
-            <>
-              <div className="space-y-2">
-                {materials.map((material) => (
-                  <div key={material.id} className="flex items-center justify-between p-3 rounded-lg bg-(--bg)">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-(--text)">{material.material_name}</p>
-                      <p className="text-xs text-(--text)/60">
-                        Qty: {material.quantity} {material.unit || ""}
-                        {material.unit_cost && ` @ $${material.unit_cost.toFixed(2)}`}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {material.total_cost && (
-                        <span className="text-sm font-medium text-(--text)">
-                          ${material.total_cost.toFixed(2)}
-                        </span>
-                      )}
-                      {userRole === "admin" && (
-                        <button
-                          onClick={() => handleDeleteMaterial(material.id)}
-                          className="text-red-400 hover:text-red-600 transition"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="flex justify-end pt-2 border-t border-(--border)">
-                <p className="text-sm font-semibold text-(--text)">
-                  Total: ${totalMaterialsCost.toFixed(2)}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-(--border)/20 bg-(--bg)/40 px-4 py-3">
+              <p className="text-xs uppercase tracking-wide text-(--text)/45">Receipt Purchases</p>
+              <p className="mt-1 text-lg font-semibold text-(--text)">${receiptMaterialsTotal.toFixed(2)}</p>
+            </div>
+            <div className="rounded-2xl border border-(--border)/20 bg-(--bg)/40 px-4 py-3">
+              <p className="text-xs uppercase tracking-wide text-(--text)/45">Legacy Materials</p>
+              <p className="mt-1 text-lg font-semibold text-(--text)">${legacyMaterialsTotal.toFixed(2)}</p>
+            </div>
+          </div>
+          <div className="border-t border-(--border)/20 pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-(--text)">Legacy Materials & Parts</p>
+                <p className="mt-1 text-xs text-(--text)/55">
+                  Optional backup for the old itemized entry system.
                 </p>
               </div>
-            </>
-          )}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowLegacyMaterials((current) => !current)}
+                  className="rounded-full border border-(--border)/30 px-4 py-2 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
+                >
+                  {showLegacyMaterials ? "Hide Legacy" : "Show Legacy"}
+                </button>
+                {showLegacyMaterials && (
+                  <button
+                    onClick={() => setShowAddMaterial(true)}
+                    disabled={!canAddMaterial}
+                    className="text-sm text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
+                    title={materialActionTitle}
+                  >
+                    + Add Legacy Material
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {showLegacyMaterials && (
+              <div className="mt-4 space-y-4">
+                {materials.length === 0 ? (
+                  <p className="text-sm text-(--text)/60">No legacy materials recorded.</p>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      {materials.map((material) => (
+                        <div key={material.id} className="flex items-center justify-between p-3 rounded-lg bg-(--bg)">
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-(--text)">{material.material_name}</p>
+                            <p className="text-xs text-(--text)/60">
+                              Qty: {material.quantity} {material.unit || ""}
+                              {material.unit_cost && ` @ $${material.unit_cost.toFixed(2)}`}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {material.total_cost && (
+                              <span className="text-sm font-medium text-(--text)">
+                                ${material.total_cost.toFixed(2)}
+                              </span>
+                            )}
+                            {canAddMaterial && (
+                              <button
+                                onClick={() => handleDeleteMaterial(material.id)}
+                                className="text-red-400 hover:text-red-600 transition"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex justify-end pt-2 border-t border-(--border)">
+                      <p className="text-sm font-semibold text-(--text)">
+                        Legacy Total: ${legacyMaterialsTotal.toFixed(2)}
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <EntityPhotoManager

@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import EntityPhotoManager from "@/app/components/EntityPhotoManager";
+import MaterialPurchaseManager from "@/app/components/MaterialPurchaseManager";
 import { formatUsCentralDateTime } from "@/lib/us-central-time";
 
 type IncidentReportStatus = "open" | "in_progress" | "closed";
@@ -68,6 +69,7 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
+  const [materialPurchasesTotal, setMaterialPurchasesTotal] = useState(0);
   const [form, setForm] = useState({
     report_date: "",
     incident_time: "",
@@ -423,6 +425,28 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
                 className={getInputClass(!isAdmin)}
               />
             </label>
+          </div>
+        </section>
+
+        <MaterialPurchaseManager
+          endpoint={`/api/incident-reports/${incidentReport.id}/material-purchases`}
+          title="Materials & Parts"
+          description="Track store receipts and material costs for this incident report so the monthly Bonan rollup includes the total automatically."
+          canManage={canEditMainFields}
+          onTotalChange={setMaterialPurchasesTotal}
+        />
+
+        <section className="rounded-xl border border-(--border)/20 bg-white px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-(--text)">Total Materials Cost</p>
+              <p className="mt-1 text-xs text-(--text)/55">
+                Combined receipt purchases saved on this incident report.
+              </p>
+            </div>
+            <p className="text-2xl font-semibold text-(--text)">
+              ${materialPurchasesTotal.toFixed(2)}
+            </p>
           </div>
         </section>
 

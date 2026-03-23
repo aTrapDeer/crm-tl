@@ -60,6 +60,12 @@ interface BonanCollectiveSummary {
     completed: number;
     cancelled: number;
   };
+  material_costs: {
+    total: number;
+    work_orders: number;
+    incident_reports: number;
+    legacy_work_orders: number;
+  };
 }
 
 type UserRole = "admin" | "employee" | "client";
@@ -458,7 +464,7 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
         </header>
 
         <section className="rounded-2xl border border-(--border)/20 bg-white/90 p-3 md:p-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-2">
             <div className="rounded-lg bg-slate-50 p-2 text-center">
               <Link href={`/dashboard/bonan/reports/${report.id}/related-items?focus=work-orders`} className="text-lg font-semibold text-blue-700 hover:underline">
                 {summary?.work_orders.total ?? 0}
@@ -482,6 +488,12 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
             <div className="rounded-lg bg-slate-50 p-2 text-center">
               <p className="text-lg font-semibold text-(--text)">{dailyCompletionPercent}</p>
               <p className="text-[10px] text-(--text)/55 uppercase tracking-wide">Completion</p>
+            </div>
+            <div className="rounded-lg bg-slate-50 p-2 text-center">
+              <p className="text-lg font-semibold text-(--text)">
+                ${(summary?.material_costs.total ?? 0).toFixed(2)}
+              </p>
+              <p className="text-[10px] text-(--text)/55 uppercase tracking-wide">Materials</p>
             </div>
             <div className="rounded-lg border border-(--border)/20 bg-slate-50 p-2 flex items-center justify-center gap-3">
               <Link href="/dashboard/bonan/weekly" className="text-xs font-semibold text-blue-700 hover:underline">Weekly</Link>

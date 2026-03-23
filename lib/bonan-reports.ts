@@ -86,6 +86,12 @@ export interface BonanCollectiveSummary {
     emergency: number;
     high: number;
   };
+  material_costs: {
+    total: number;
+    work_orders: number;
+    incident_reports: number;
+    legacy_work_orders: number;
+  };
 }
 
 export interface BonanReportFilters {
@@ -504,7 +510,15 @@ export async function getBonanCollectiveSummary(reportId: string): Promise<Bonan
 
   const period = getReportPeriod(report);
 
-  const [dailyReportsResult, weeklyReportsResult, incidentsResult, workOrdersResult] = await Promise.all([
+  const [
+    dailyReportsResult,
+    weeklyReportsResult,
+    incidentsResult,
+    workOrdersResult,
+    receiptWorkOrderCostsResult,
+    legacyWorkOrderCostsResult,
+    incidentMaterialCostsResult,
+  ] = await Promise.all([
     turso.execute({
       sql: `SELECT br.id,
                    br.report_date,
@@ -569,6 +583,59 @@ export async function getBonanCollectiveSummary(reportId: string): Promise<Bonan
             FROM linked_work_orders`,
       args: [period.start, period.end, period.start, period.end],
     }),
+    turso.execute({
+      sql: `WITH linked_work_orders AS (
+              SELECT wo.id
+              FROM bonan_reports br
+              INNER JOIN work_orders wo ON wo.id = br.work_order_id
+              WHERE br.site = 'bonan_towers'
+                AND br.report_date BETWEEN ? AND ?
+              UNION
+              SELECT wo.id
+              FROM bonan_report_work_orders brwo
+              INNER JOIN bonan_reports br ON br.id = brwo.bonan_report_id
+              INNER JOIN work_orders wo ON wo.id = brwo.work_order_id
+              WHERE br.site = 'bonan_towers'
+                AND br.report_date BETWEEN ? AND ?
+            )
+            SELECT COALESCE(SUM(mp.total_cost), 0) AS total
+            FROM linked_work_orders lwo
+            INNER JOIN material_purchases mp
+              ON mp.entity_type = 'work_order'
+             AND mp.entity_id = lwo.id`,
+      args: [period.start, period.end, period.start, period.end],
+    }),
+    turso.execute({
+      sql: `WITH linked_work_orders AS (
+              SELECT wo.id
+              FROM bonan_reports br
+              INNER JOIN work_orders wo ON wo.id = br.work_order_id
+              WHERE br.site = 'bonan_towers'
+                AND br.report_date BETWEEN ? AND ?
+              UNION
+              SELECT wo.id
+              FROM bonan_report_work_orders brwo
+              INNER JOIN bonan_reports br ON br.id = brwo.bonan_report_id
+              INNER JOIN work_orders wo ON wo.id = brwo.work_order_id
+              WHERE br.site = 'bonan_towers'
+                AND br.report_date BETWEEN ? AND ?
+            )
+            SELECT COALESCE(SUM(wom.total_cost), 0) AS total
+            FROM linked_work_orders lwo
+            INNER JOIN work_order_materials wom ON wom.work_order_id = lwo.id`,
+      args: [period.start, period.end, period.start, period.end],
+    }),
+    turso.execute({
+      sql: `SELECT COALESCE(SUM(mp.total_cost), 0) AS total
+            FROM incident_reports ir
+            INNER JOIN bonan_reports br ON br.id = ir.bonan_report_id
+            INNER JOIN material_purchases mp
+              ON mp.entity_type = 'incident_report'
+             AND mp.entity_id = ir.id
+            WHERE br.site = 'bonan_towers'
+              AND ir.report_date BETWEEN ? AND ?`,
+      args: [period.start, period.end],
+    }),
   ]);
 
   const dailyReports = dailyReportsResult.rows.map((row) => ({
@@ -595,6 +662,9 @@ export async function getBonanCollectiveSummary(reportId: string): Promise<Bonan
 
   const incidentsRow = incidentsResult.rows[0] || {};
   const workOrdersRow = workOrdersResult.rows[0] || {};
+  const receiptWorkOrderCosts = asNumber(receiptWorkOrderCostsResult.rows[0]?.total);
+  const legacyWorkOrderCosts = asNumber(legacyWorkOrderCostsResult.rows[0]?.total);
+  const incidentMaterialCosts = asNumber(incidentMaterialCostsResult.rows[0]?.total);
 
   return {
     report_id: report.id,
@@ -629,6 +699,12 @@ export async function getBonanCollectiveSummary(reportId: string): Promise<Bonan
       cancelled: asNumber(workOrdersRow.cancelled_count),
       emergency: asNumber(workOrdersRow.emergency_count),
       high: asNumber(workOrdersRow.high_count),
+    },
+    material_costs: {
+      total: receiptWorkOrderCosts + legacyWorkOrderCosts + incidentMaterialCosts,
+      work_orders: receiptWorkOrderCosts + legacyWorkOrderCosts,
+      incident_reports: incidentMaterialCosts,
+      legacy_work_orders: legacyWorkOrderCosts,
     },
   };
 }

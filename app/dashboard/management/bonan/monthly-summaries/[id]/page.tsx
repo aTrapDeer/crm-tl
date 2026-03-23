@@ -56,6 +56,12 @@ interface BonanCollectiveSummary {
     completed: number;
     cancelled: number;
   };
+  material_costs: {
+    total: number;
+    work_orders: number;
+    incident_reports: number;
+    legacy_work_orders: number;
+  };
 }
 
 type UserRole = "admin" | "employee" | "client";
@@ -322,7 +328,7 @@ export default function BonanMonthlySummaryDetailPage({ params }: { params: Prom
         </header>
 
         <section className="rounded-2xl border border-(--border)/20 bg-white/90 p-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-2">
             <div className="rounded-lg bg-slate-50 p-2 text-center">
               <Link href={`/dashboard/bonan/reports/${report.id}/related-items?focus=work-orders`} className="text-lg font-semibold text-blue-700 hover:underline">
                 {summary?.work_orders.total ?? 0}
@@ -346,6 +352,12 @@ export default function BonanMonthlySummaryDetailPage({ params }: { params: Prom
             <div className="rounded-lg bg-slate-50 p-2 text-center">
               <p className="text-lg font-semibold text-(--text)">{dailyCompletion}</p>
               <p className="text-[10px] text-(--text)/55 uppercase tracking-wide">Completion</p>
+            </div>
+            <div className="rounded-lg bg-slate-50 p-2 text-center">
+              <p className="text-lg font-semibold text-(--text)">
+                ${(summary?.material_costs.total ?? 0).toFixed(2)}
+              </p>
+              <p className="text-[10px] text-(--text)/55 uppercase tracking-wide">Materials</p>
             </div>
             <div className="rounded-lg border border-(--border)/20 bg-slate-50 p-2 text-center">
               <Link href="/dashboard/bonan/weekly" className="text-xs font-semibold text-blue-700 hover:underline">Weekly Review</Link>
@@ -475,6 +487,7 @@ export default function BonanMonthlySummaryDetailPage({ params }: { params: Prom
               <p><strong>Incident Reports Filed:</strong> {payload.collectiveSummary.incidentReportsFiled || String(summary?.incidents.total ?? 0)}</p>
               <p><strong>Daily Completion:</strong> {payload.collectiveSummary.dailyWalkthroughCompletion || dailyCompletion}</p>
               <p><strong>Monthly Checkup Completion:</strong> {payload.collectiveSummary.monthlyCheckupCompletion || "0"}</p>
+              <p><strong>Materials Purchased:</strong> ${(summary?.material_costs.total ?? 0).toFixed(2)}</p>
               <p className="pt-1"><strong>Notes:</strong> {payload.collectiveSummary.notes || "0"}</p>
             </div>
           </div>

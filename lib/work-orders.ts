@@ -374,6 +374,24 @@ export async function updateWorkOrder(
 }
 
 export async function deleteWorkOrder(id: string): Promise<void> {
+  await ensureBonanClientSchema();
+  await turso.execute({
+    sql: `UPDATE bonan_reports
+          SET work_order_id = NULL,
+              updated_at = datetime('now')
+          WHERE work_order_id = ?`,
+    args: [id],
+  });
+  await turso.execute({
+    sql: `DELETE FROM bonan_report_work_orders WHERE work_order_id = ?`,
+    args: [id],
+  });
+  await turso.execute({
+    sql: `DELETE FROM material_purchases
+          WHERE entity_type = 'work_order'
+            AND entity_id = ?`,
+    args: [id],
+  });
   await turso.execute({
     sql: `DELETE FROM work_orders WHERE id = ?`,
     args: [id],

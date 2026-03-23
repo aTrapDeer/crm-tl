@@ -219,7 +219,7 @@ export default function EmployeeDashboard() {
 
       <section className="tl-card p-4 md:p-5">
         <p className="text-xs uppercase tracking-wide text-(--text)/60">Quick Access</p>
-        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           <Link
             href="/dashboard/work-orders"
             className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-blue-900 hover:shadow-md transition"
@@ -233,6 +233,20 @@ export default function EmployeeDashboard() {
           >
             <p className="text-sm font-semibold">Incident Reports</p>
             <p className="text-xs text-red-900/80 mt-1">Review and complete incident documentation.</p>
+          </Link>
+          <Link
+            href="/dashboard/management/work-orders/new?site=bonan_towers&returnTo=/dashboard/employee"
+            className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-900 hover:shadow-md transition"
+          >
+            <p className="text-sm font-semibold">+ New Bonan Work Order</p>
+            <p className="text-xs text-emerald-900/80 mt-1">Start a Bonan work order right from the employee portal.</p>
+          </Link>
+          <Link
+            href="/dashboard/management/incident-reports/new?returnTo=/dashboard/employee"
+            className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 hover:shadow-md transition"
+          >
+            <p className="text-sm font-semibold">+ New Bonan Incident</p>
+            <p className="text-xs text-amber-900/80 mt-1">Create a Bonan incident report without opening a walkthrough first.</p>
           </Link>
         </div>
       </section>

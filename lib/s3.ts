@@ -60,10 +60,23 @@ export function generateEntityS3Key(
   entityId: string,
   filename: string
 ): string {
+  return generateTaggedEntityS3Key(entityType, entityId, null, filename);
+}
+
+export function generateTaggedEntityS3Key(
+  entityType: keyof typeof S3_KEY_PREFIXES,
+  entityId: string,
+  tag: string | null,
+  filename: string
+): string {
   const sanitizedEntityId = entityId.replace(/[^a-zA-Z0-9_-]/g, "_");
   const timestamp = Date.now();
+  const sanitizedTag = tag ? tag.replace(/[^a-zA-Z0-9/_-]/g, "_").replace(/^\/+|\/+$/g, "") : "";
   const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, "_");
-  return `${S3_KEY_PREFIXES[entityType]}/${sanitizedEntityId}/${timestamp}-${sanitizedFilename}`;
+  const baseKey = `${S3_KEY_PREFIXES[entityType]}/${sanitizedEntityId}`;
+  return sanitizedTag
+    ? `${baseKey}/${sanitizedTag}/${timestamp}-${sanitizedFilename}`
+    : `${baseKey}/${timestamp}-${sanitizedFilename}`;
 }
 
 /**
@@ -88,6 +101,17 @@ export async function uploadEntityFileToS3(
   fileBuffer: Buffer,
   contentType: string
 ): Promise<UploadResult> {
+  return uploadTaggedEntityFileToS3(entityType, entityId, null, filename, fileBuffer, contentType);
+}
+
+export async function uploadTaggedEntityFileToS3(
+  entityType: keyof typeof S3_KEY_PREFIXES,
+  entityId: string,
+  tag: string | null,
+  filename: string,
+  fileBuffer: Buffer,
+  contentType: string
+): Promise<UploadResult> {
   if (!isS3Configured()) {
     return {
       success: false,
@@ -96,7 +120,7 @@ export async function uploadEntityFileToS3(
     };
   }
 
-  const key = generateEntityS3Key(entityType, entityId, filename);
+  const key = generateTaggedEntityS3Key(entityType, entityId, tag, filename);
 
   try {
     await getS3Client().send(
