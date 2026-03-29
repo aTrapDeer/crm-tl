@@ -213,7 +213,7 @@ export default function EmployeeDashboard() {
           Employee Dashboard
         </h2>
         <p className="text-xs md:text-sm text-(--text) mt-1">
-          View projects, daily walkthroughs, and assigned work orders
+          View projects, daily walkthroughs, and work orders you can open and update
         </p>
       </div>
 
@@ -225,7 +225,7 @@ export default function EmployeeDashboard() {
             className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-blue-900 hover:shadow-md transition"
           >
             <p className="text-sm font-semibold">Work Orders</p>
-            <p className="text-xs text-blue-900/80 mt-1">Open assigned work and updates.</p>
+            <p className="text-xs text-blue-900/80 mt-1">Open any work order; you are assigned when you open it.</p>
           </Link>
           <Link
             href="/dashboard/incident-reports"
@@ -259,10 +259,10 @@ export default function EmployeeDashboard() {
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Operations</p>
           <h3 className="text-lg font-semibold text-blue-950 mt-2">Work Orders</h3>
           <p className="text-sm text-blue-900/80 mt-2">
-            Open and update your assigned work orders.
+            Open any work order; the list includes everything you can access and self-assign on open.
           </p>
           <p className="mt-3 inline-flex rounded-full bg-white/70 px-2.5 py-1 text-xs font-semibold text-blue-800">
-            {workOrderCount} assigned
+            {workOrderCount} total
           </p>
         </Link>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { formatUsCentralDateTime } from "@/lib/us-central-time";
 import { ModalLayer } from "@/app/components/ModalLayer";
 
@@ -26,6 +26,10 @@ interface EntityPhotoManagerProps {
   description?: string;
   canManage: boolean;
   lockedMessage?: string;
+  /** Override default labels (e.g. map `general` to "Material"). */
+  roleLabels?: Partial<Record<EntityPhotoRole, string>>;
+  /** If set, only these roles are shown and offered in the upload form (default: all). */
+  allowedRoles?: EntityPhotoRole[];
 }
 
 const PHOTO_ROLE_LABELS: Record<EntityPhotoRole, string> = {
@@ -33,8 +37,6 @@ const PHOTO_ROLE_LABELS: Record<EntityPhotoRole, string> = {
   after: "After",
   general: "General",
 };
-
-const PHOTO_ROLE_ORDER: EntityPhotoRole[] = ["before", "after", "general"];
 
 function groupPhotos(photos: EntityPhoto[]): Record<EntityPhotoRole, EntityPhoto[]> {
   return {
@@ -44,12 +46,16 @@ function groupPhotos(photos: EntityPhoto[]): Record<EntityPhotoRole, EntityPhoto
   };
 }
 
+const ALL_ROLES: EntityPhotoRole[] = ["before", "after", "general"];
+
 export default function EntityPhotoManager({
   endpoint,
   title,
   description,
   canManage,
   lockedMessage,
+  roleLabels,
+  allowedRoles,
 }: EntityPhotoManagerProps) {
   const [photos, setPhotos] = useState<EntityPhoto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,11 +63,23 @@ export default function EntityPhotoManager({
   const [error, setError] = useState("");
   const [viewerPhoto, setViewerPhoto] = useState<EntityPhoto | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const roleOrder = (allowedRoles?.length ? ALL_ROLES.filter((r) => allowedRoles.includes(r)) : ALL_ROLES) as EntityPhotoRole[];
   const [uploadForm, setUploadForm] = useState({
     photo_role: "before" as EntityPhotoRole,
     caption: "",
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const photoFileInputRef = useRef<HTMLInputElement>(null);
+  const photoFileInputId = useId();
+
+  const labels = { ...PHOTO_ROLE_LABELS, ...roleLabels };
+
+  function clearPhotoFile() {
+    setSelectedFile(null);
+    if (photoFileInputRef.current) {
+      photoFileInputRef.current.value = "";
+    }
+  }
 
   useEffect(() => {
     async function loadPhotos() {
@@ -112,7 +130,10 @@ export default function EntityPhotoManager({
     try {
       const formData = new FormData();
       formData.append("file", selectedFile);
-      formData.append("photo_role", uploadForm.photo_role);
+      formData.append(
+        "photo_role",
+        roleOrder.length === 1 ? roleOrder[0]! : uploadForm.photo_role
+      );
       formData.append("caption", uploadForm.caption);
 
       const res = await fetch(endpoint, {
@@ -126,8 +147,8 @@ export default function EntityPhotoManager({
       }
 
       setShowUploadModal(false);
-      setSelectedFile(null);
-      setUploadForm({ photo_role: "before", caption: "" });
+      clearPhotoFile();
+      setUploadForm({ photo_role: roleOrder[0] ?? "before", caption: "" });
       await refreshPhotos();
     } catch (uploadError) {
       console.error("Failed to upload entity photo:", uploadError);
@@ -164,7 +185,10 @@ export default function EntityPhotoManager({
     }
   }
 
-  const groupedPhotos = groupPhotos(photos);
+  const visiblePhotos = allowedRoles?.length
+    ? photos.filter((p) => allowedRoles.includes(p.photo_role))
+    : photos;
+  const groupedPhotos = groupPhotos(visiblePhotos);
 
   return (
     <section className="tl-card p-4 md:p-6 space-y-4">
@@ -181,7 +205,11 @@ export default function EntityPhotoManager({
         {canManage && (
           <button
             type="button"
-            onClick={() => setShowUploadModal(true)}
+            onClick={() => {
+              clearPhotoFile();
+              setUploadForm({ photo_role: roleOrder[0] ?? "before", caption: "" });
+              setShowUploadModal(true);
+            }}
             className="tl-btn px-4 py-2 text-sm"
           >
             + Add Photo
@@ -199,17 +227,17 @@ export default function EntityPhotoManager({
         <div className="flex items-center justify-center py-10">
           <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-(--text)" />
         </div>
-      ) : photos.length === 0 ? (
+      ) : visiblePhotos.length === 0 ? (
         <div className="rounded-xl border-2 border-dashed border-(--border)/40 px-4 py-10 text-center">
           <p className="text-sm text-(--text)/60">No photos uploaded yet.</p>
         </div>
       ) : (
         <div className="space-y-5">
-          {PHOTO_ROLE_ORDER.filter((role) => groupedPhotos[role].length > 0).map((role) => (
+          {roleOrder.filter((role) => groupedPhotos[role].length > 0).map((role) => (
             <div key={role} className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-(--text)">
-                  {PHOTO_ROLE_LABELS[role]} Photos ({groupedPhotos[role].length})
+                  {labels[role]} Photos ({groupedPhotos[role].length})
                 </h3>
               </div>
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
@@ -233,7 +261,7 @@ export default function EntityPhotoManager({
                       </div>
                     )}
                     <div className="absolute inset-x-0 top-0 flex items-center justify-between bg-black/55 px-2 py-1 text-[11px] font-semibold text-white">
-                      <span>{PHOTO_ROLE_LABELS[photo.photo_role]}</span>
+                      <span>{labels[photo.photo_role]}</span>
                       <span>{formatUsCentralDateTime(photo.captured_at)} CT</span>
                     </div>
                     <div className="absolute inset-x-0 bottom-0 bg-black/55 px-2 py-1 text-[11px] text-white">
@@ -256,7 +284,7 @@ export default function EntityPhotoManager({
           className="bg-black/50"
           onBackdropClick={() => {
             setShowUploadModal(false);
-            setSelectedFile(null);
+            clearPhotoFile();
           }}
         >
           <div
@@ -265,39 +293,69 @@ export default function EntityPhotoManager({
           >
             <h3 className="text-lg font-semibold text-(--text)">Upload Photo</h3>
             <form onSubmit={handleUpload} className="mt-4 space-y-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-(--text)">
-                  Photo Type
-                </label>
-                <select
-                  value={uploadForm.photo_role}
-                  onChange={(event) =>
-                    setUploadForm((current) => ({
-                      ...current,
-                      photo_role: event.target.value as EntityPhotoRole,
-                    }))
-                  }
-                  className="w-full rounded-xl border border-(--border) bg-(--bg) px-4 py-2.5 text-sm text-(--text)"
-                >
-                  <option value="before">Before</option>
-                  <option value="after">After</option>
-                  <option value="general">General</option>
-                </select>
-              </div>
+              {roleOrder.length > 1 ? (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-(--text)">Photo type</label>
+                  <select
+                    value={uploadForm.photo_role}
+                    onChange={(event) =>
+                      setUploadForm((current) => ({
+                        ...current,
+                        photo_role: event.target.value as EntityPhotoRole,
+                      }))
+                    }
+                    className="w-full rounded-xl border border-(--border) bg-(--bg) px-4 py-2.5 text-sm text-(--text)"
+                  >
+                    {roleOrder.map((role) => (
+                      <option key={role} value={role}>
+                        {labels[role]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <p className="text-sm text-(--text)/75">
+                  Adding a <span className="font-semibold text-(--text)">{labels[roleOrder[0] ?? "before"]}</span> photo.
+                </p>
+              )}
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-(--text)">
-                  Photo File
-                </label>
+                <span className="mb-1 block text-sm font-medium text-(--text)">Photo file</span>
+                <p className="mb-2 text-xs text-(--text)/55">
+                  Required — image from your device (JPG, PNG, or other common formats).
+                </p>
                 <input
+                  ref={photoFileInputRef}
+                  id={photoFileInputId}
                   type="file"
                   accept="image/*"
                   required
-                  onChange={(event) =>
-                    setSelectedFile(event.target.files?.[0] || null)
-                  }
-                  className="w-full rounded-xl border border-(--border) bg-(--bg) px-4 py-2.5 text-sm text-(--text)"
+                  className="sr-only"
+                  onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
                 />
+                <label
+                  htmlFor={photoFileInputId}
+                  className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-(--border) bg-(--bg) px-4 py-8 text-center transition hover:border-blue-400 hover:bg-blue-50/40"
+                >
+                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-blue-700" aria-hidden>
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                      />
+                    </svg>
+                  </span>
+                  <span className="text-sm font-semibold text-(--text)">Choose photo to upload</span>
+                  <span className="text-xs text-(--text)/55">Opens your camera or photo library on mobile</span>
+                </label>
+                {selectedFile ? (
+                  <p className="mt-2 text-sm text-(--text)/80">
+                    <span className="font-medium text-emerald-700">Selected:</span> {selectedFile.name}
+                  </p>
+                ) : (
+                  <p className="mt-2 text-xs text-amber-800/90">No file chosen yet — tap the area above.</p>
+                )}
               </div>
 
               <div>
@@ -318,16 +376,12 @@ export default function EntityPhotoManager({
                 />
               </div>
 
-              <p className="text-xs text-(--text)/50">
-                The system will save the photo in S3 and attach a US Central timestamp when it was uploaded.
-              </p>
-
               <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={() => {
                     setShowUploadModal(false);
-                    setSelectedFile(null);
+                    clearPhotoFile();
                   }}
                   className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
                 >
@@ -358,7 +412,7 @@ export default function EntityPhotoManager({
                   {viewerPhoto.caption || viewerPhoto.filename}
                 </p>
                 <p className="text-xs text-(--text)/60">
-                  {PHOTO_ROLE_LABELS[viewerPhoto.photo_role]} photo captured{" "}
+                  {labels[viewerPhoto.photo_role]} photo captured{" "}
                   {formatUsCentralDateTime(viewerPhoto.captured_at)} CT
                 </p>
               </div>

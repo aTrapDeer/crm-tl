@@ -71,10 +71,10 @@ export interface WorkOrderSignature {
 }
 
 export function canEmployeeViewWorkOrder(
-  userId: string,
-  workOrder: Pick<WorkOrder, "assigned_to" | "work_completed">
+  _userId: string,
+  _workOrder: Pick<WorkOrder, "assigned_to" | "work_completed">
 ): boolean {
-  return workOrder.assigned_to === userId || workOrder.work_completed === "in_progress";
+  return true;
 }
 
 function mapRowToWorkOrder(row: Record<string, unknown>): WorkOrder {

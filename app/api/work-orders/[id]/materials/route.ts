@@ -89,11 +89,6 @@ export async function POST(
     if (!workOrder) {
       return Response.json({ error: "Work order not found" }, { status: 404 });
     }
-    // Workers can only add materials to work orders assigned to them
-    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
-      return Response.json({ error: "Access denied" }, { status: 403 });
-    }
-
     const body = await request.json();
 
     if (!body.material_name) {
@@ -149,11 +144,6 @@ export async function DELETE(
     if (!workOrder) {
       return Response.json({ error: "Work order not found" }, { status: 404 });
     }
-    // Workers can only delete materials from work orders assigned to them
-    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
-      return Response.json({ error: "Access denied" }, { status: 403 });
-    }
-
     const body = await request.json();
 
     if (!body.material_id) {

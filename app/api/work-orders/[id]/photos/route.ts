@@ -74,9 +74,6 @@ export async function POST(
     if (!workOrder) {
       return Response.json({ error: "Work order not found" }, { status: 404 });
     }
-    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
-      return Response.json({ error: "Access denied" }, { status: 403 });
-    }
     const formData = await request.formData();
     const file = formData.get("file");
     if (!(file instanceof File)) {
@@ -137,9 +134,6 @@ export async function DELETE(
     const workOrder = await getWorkOrderById(id);
     if (!workOrder) {
       return Response.json({ error: "Work order not found" }, { status: 404 });
-    }
-    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
-      return Response.json({ error: "Access denied" }, { status: 403 });
     }
     const body = await request.json().catch(() => ({}));
     if (typeof body.photoId !== "string" || !body.photoId.trim()) {

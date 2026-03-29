@@ -73,10 +73,6 @@ export async function POST(
     if (!workOrder) {
       return Response.json({ error: "Work order not found" }, { status: 404 });
     }
-    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
-      return Response.json({ error: "Access denied" }, { status: 403 });
-    }
-
     const formData = await request.formData();
     const storeName = typeof formData.get("store_name") === "string" ? (formData.get("store_name") as string).trim() : "";
     const totalCost = parseCost(formData.get("total_cost"));
@@ -148,9 +144,6 @@ export async function DELETE(
     const workOrder = await getWorkOrderById(id);
     if (!workOrder) {
       return Response.json({ error: "Work order not found" }, { status: 404 });
-    }
-    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
-      return Response.json({ error: "Access denied" }, { status: 403 });
     }
 
     const body = await request.json().catch(() => ({}));

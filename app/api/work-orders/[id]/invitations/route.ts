@@ -4,6 +4,7 @@ import {
   getWorkOrderInvitations,
   createWorkOrderInvitation,
   deleteWorkOrderInvitation,
+  canEmployeeViewWorkOrder,
 } from "@/lib/work-orders";
 import { sendWorkOrderInvitationEmail } from "@/lib/email";
 import { cookies } from "next/headers";
@@ -41,8 +42,7 @@ export async function GET(
       return Response.json({ error: "Work order not found" }, { status: 404 });
     }
 
-    // Workers can only see invitations for work orders assigned to them
-    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
+    if (user.role === "employee" && !canEmployeeViewWorkOrder(user.id, workOrder)) {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
 
@@ -94,8 +94,7 @@ export async function POST(
       return Response.json({ error: "Work order not found" }, { status: 404 });
     }
 
-    // Workers can only invite for work orders assigned to them
-    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
+    if (user.role === "employee" && !canEmployeeViewWorkOrder(user.id, workOrder)) {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
 

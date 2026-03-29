@@ -89,11 +89,6 @@ export async function POST(
     if (!workOrder) {
       return Response.json({ error: "Work order not found" }, { status: 404 });
     }
-    // Employees can only add signatures to work orders assigned to them
-    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
-      return Response.json({ error: "Access denied" }, { status: 403 });
-    }
-
     const body = await request.json();
 
     if (!body.signer_type || !body.signer_name || !body.signature_data) {

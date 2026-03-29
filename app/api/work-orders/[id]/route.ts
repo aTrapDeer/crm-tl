@@ -89,12 +89,19 @@ export async function PATCH(
       return Response.json({ error: "Work order not found" }, { status: 404 });
     }
 
-    // Employees can only update work orders assigned to them
-    if (user.role === "employee" && workOrder.assigned_to !== user.id) {
-      return Response.json({ error: "Access denied" }, { status: 403 });
-    }
-
     const body = await request.json().catch(() => ({}));
+
+    if (user.role === "employee" && Object.prototype.hasOwnProperty.call(body, "assigned_to")) {
+      const raw = body.assigned_to;
+      const normalized =
+        raw === "" || raw === null || raw === undefined ? null : String(raw);
+      if (normalized !== null && normalized !== user.id) {
+        return Response.json(
+          { error: "Employees cannot assign work orders to another user." },
+          { status: 403 }
+        );
+      }
+    }
     const requestedPublicationStatus =
       body.publication_status === "draft" || body.publication_status === "published"
         ? body.publication_status
@@ -254,13 +261,6 @@ export async function DELETE(
     if (!workOrder) {
       return Response.json({ error: "Work order not found" }, { status: 404 });
     }
-    if (workOrder.publication_status === "published") {
-      return Response.json(
-        { error: "Published work orders are locked and cannot be deleted." },
-        { status: 409 }
-      );
-    }
-
     await deleteWorkOrder(id);
 
     return Response.json({ success: true });

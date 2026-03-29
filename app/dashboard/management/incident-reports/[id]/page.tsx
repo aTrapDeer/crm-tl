@@ -431,7 +431,8 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
         <MaterialPurchaseManager
           endpoint={`/api/incident-reports/${incidentReport.id}/material-purchases`}
           title="Materials & Parts"
-          description="Track store receipts and material costs for this incident report so the monthly Bonan rollup includes the total automatically."
+          description="Material photos, store receipts with totals, and optional notes for costs tied to this incident."
+          materialPhotosEndpoint={`/api/incident-reports/${incidentReport.id}/photos`}
           canManage={canEditMainFields}
           onTotalChange={setMaterialPurchasesTotal}
         />
@@ -452,8 +453,9 @@ export default function IncidentReportDetailPage({ params }: { params: Promise<{
 
         <EntityPhotoManager
           endpoint={`/api/incident-reports/${incidentReport.id}/photos`}
-          title="Before & After Photos"
-          description="Store incident-report photos in S3 with before/after grouping and upload timestamps."
+          title="Before & after photos"
+          description="Document the scene before and after any response or remediation."
+          allowedRoles={["before", "after"]}
           canManage={canManagePhotos}
           lockedMessage=""
         />

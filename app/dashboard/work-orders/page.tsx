@@ -99,7 +99,7 @@ export default function EmployeeWorkOrdersPage() {
           <div>
             <h1 className="text-2xl font-bold text-(--text)">Work Orders</h1>
             <p className="text-sm text-(--text)/60">
-              Assigned work orders, company-wide in-progress work, and Bonan-linked follow-up tasks.
+              All work orders you can open, update, and self-assign. Opening a work order assigns it to you.
             </p>
           </div>
           <div className="flex items-center gap-2">

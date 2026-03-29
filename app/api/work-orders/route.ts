@@ -4,7 +4,6 @@ import {
   createWorkOrder,
   generateWorkOrderNumber,
   searchWorkOrders,
-  canEmployeeViewWorkOrder,
   type WorkOrderFilters,
 } from "@/lib/work-orders";
 import { cookies } from "next/headers";
@@ -80,10 +79,7 @@ export async function GET(request: Request) {
     const loadedWorkOrders = hasFilters
       ? await searchWorkOrders(filters)
       : await getAllWorkOrders();
-    const workOrders =
-      user.role === "employee"
-        ? loadedWorkOrders.filter((workOrder) => canEmployeeViewWorkOrder(user.id, workOrder))
-        : loadedWorkOrders;
+    const workOrders = loadedWorkOrders;
 
     return Response.json({ workOrders });
   } catch (error) {

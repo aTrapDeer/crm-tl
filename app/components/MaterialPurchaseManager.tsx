@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useId, useState } from "react";
 import { ModalLayer } from "@/app/components/ModalLayer";
 import { formatUsCentralDateTime } from "@/lib/us-central-time";
 
@@ -15,6 +15,16 @@ interface MaterialPurchase {
   created_at: string;
 }
 
+interface MaterialPhoto {
+  id: string;
+  photo_role: string;
+  s3_url: string | null;
+  caption: string | null;
+  filename: string;
+  captured_at: string;
+  uploader_name?: string;
+}
+
 interface MaterialPurchaseManagerProps {
   endpoint: string;
   title?: string;
@@ -22,6 +32,8 @@ interface MaterialPurchaseManagerProps {
   canManage: boolean;
   lockedMessage?: string;
   onTotalChange?: (total: number) => void;
+  /** When set, shows material/supply photos (stored as photo role `general`) in this section. */
+  materialPhotosEndpoint?: string;
 }
 
 function formatCurrency(value: number): string {
@@ -38,6 +50,7 @@ export default function MaterialPurchaseManager({
   canManage,
   lockedMessage,
   onTotalChange,
+  materialPhotosEndpoint,
 }: MaterialPurchaseManagerProps) {
   const [purchases, setPurchases] = useState<MaterialPurchase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,11 +59,59 @@ export default function MaterialPurchaseManager({
   const [showAddModal, setShowAddModal] = useState(false);
   const [viewerPurchase, setViewerPurchase] = useState<MaterialPurchase | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  const [materialPhotos, setMaterialPhotos] = useState<MaterialPhoto[]>([]);
+  const [loadingMaterialPhotos, setLoadingMaterialPhotos] = useState(false);
+  const [materialPhotoError, setMaterialPhotoError] = useState("");
+  const [showMaterialPhotoModal, setShowMaterialPhotoModal] = useState(false);
+  const [materialPhotoFile, setMaterialPhotoFile] = useState<File | null>(null);
+  const [materialPhotoCaption, setMaterialPhotoCaption] = useState("");
+  const [uploadingMaterialPhoto, setUploadingMaterialPhoto] = useState(false);
+  const [viewerMaterialPhoto, setViewerMaterialPhoto] = useState<MaterialPhoto | null>(null);
+  const materialPhotoInputRef = useRef<HTMLInputElement>(null);
+  const materialPhotoInputId = useId();
   const [form, setForm] = useState({
     store_name: "",
     description: "",
     total_cost: "",
   });
+  const receiptFileInputRef = useRef<HTMLInputElement>(null);
+  const receiptFileInputId = useId();
+
+  function clearReceiptFile() {
+    setSelectedFile(null);
+    if (receiptFileInputRef.current) {
+      receiptFileInputRef.current.value = "";
+    }
+  }
+
+  function clearMaterialPhotoFile() {
+    setMaterialPhotoFile(null);
+    if (materialPhotoInputRef.current) {
+      materialPhotoInputRef.current.value = "";
+    }
+  }
+
+  const loadMaterialPhotos = useCallback(async () => {
+    if (!materialPhotosEndpoint) return;
+    setLoadingMaterialPhotos(true);
+    setMaterialPhotoError("");
+    try {
+      const res = await fetch(materialPhotosEndpoint);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMaterialPhotoError(data.error || "Failed to load material photos.");
+        return;
+      }
+      const list = (data.photos || []) as MaterialPhoto[];
+      setMaterialPhotos(list.filter((p) => p.photo_role === "general"));
+    } catch (fetchError) {
+      console.error("Failed to fetch material photos:", fetchError);
+      setMaterialPhotoError("Failed to load material photos.");
+    } finally {
+      setLoadingMaterialPhotos(false);
+    }
+  }, [materialPhotosEndpoint]);
 
   const loadPurchases = useCallback(async () => {
     setLoading(true);
@@ -73,6 +134,10 @@ export default function MaterialPurchaseManager({
   useEffect(() => {
     void loadPurchases();
   }, [loadPurchases]);
+
+  useEffect(() => {
+    void loadMaterialPhotos();
+  }, [loadMaterialPhotos]);
 
   const total = purchases.reduce((sum, purchase) => sum + (purchase.total_cost || 0), 0);
 
@@ -108,7 +173,7 @@ export default function MaterialPurchaseManager({
       }
 
       setForm({ store_name: "", description: "", total_cost: "" });
-      setSelectedFile(null);
+      clearReceiptFile();
       setShowAddModal(false);
       await loadPurchases();
     } catch (uploadError) {
@@ -116,6 +181,70 @@ export default function MaterialPurchaseManager({
       setError("Failed to save material purchase.");
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleMaterialPhotoSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!materialPhotosEndpoint || !materialPhotoFile) {
+      setMaterialPhotoError("Choose a photo to upload.");
+      return;
+    }
+
+    setUploadingMaterialPhoto(true);
+    setMaterialPhotoError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", materialPhotoFile);
+      formData.append("photo_role", "general");
+      formData.append("caption", materialPhotoCaption);
+
+      const res = await fetch(materialPhotosEndpoint, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMaterialPhotoError(data.error || "Failed to upload material photo.");
+        return;
+      }
+
+      setShowMaterialPhotoModal(false);
+      setMaterialPhotoCaption("");
+      clearMaterialPhotoFile();
+      await loadMaterialPhotos();
+    } catch (uploadError) {
+      console.error("Failed to upload material photo:", uploadError);
+      setMaterialPhotoError("Failed to upload material photo.");
+    } finally {
+      setUploadingMaterialPhoto(false);
+    }
+  }
+
+  async function handleDeleteMaterialPhoto(photoId: string) {
+    if (!canManage || !materialPhotosEndpoint) return;
+    if (!window.confirm("Delete this material photo?")) return;
+
+    setMaterialPhotoError("");
+    try {
+      const res = await fetch(materialPhotosEndpoint, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photoId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMaterialPhotoError(data.error || "Failed to delete photo.");
+        return;
+      }
+
+      setMaterialPhotos((current) => current.filter((p) => p.id !== photoId));
+      if (viewerMaterialPhoto?.id === photoId) {
+        setViewerMaterialPhoto(null);
+      }
+    } catch (deleteError) {
+      console.error("Failed to delete material photo:", deleteError);
+      setMaterialPhotoError("Failed to delete material photo.");
     }
   }
 
@@ -155,15 +284,76 @@ export default function MaterialPurchaseManager({
           {!canManage && lockedMessage && <p className="mt-2 text-xs text-(--text)/50">{lockedMessage}</p>}
         </div>
         {canManage && (
-          <button
-            type="button"
-            onClick={() => setShowAddModal(true)}
-            className="tl-btn px-4 py-2 text-sm"
-          >
-            + Add Store Receipt
-          </button>
+          <div className="flex flex-wrap gap-2">
+            {materialPhotosEndpoint && (
+              <button
+                type="button"
+                onClick={() => {
+                  clearMaterialPhotoFile();
+                  setMaterialPhotoCaption("");
+                  setMaterialPhotoError("");
+                  setShowMaterialPhotoModal(true);
+                }}
+                className="rounded-full border border-(--border)/40 bg-(--bg) px-4 py-2 text-sm font-medium text-(--text) hover:bg-(--bg)/80 transition"
+              >
+                + Add material photo
+              </button>
+            )}
+            <button type="button" onClick={() => setShowAddModal(true)} className="tl-btn px-4 py-2 text-sm">
+              + Add store receipt
+            </button>
+          </div>
         )}
       </div>
+
+      {materialPhotosEndpoint && (
+        <div className="rounded-2xl border border-(--border)/20 bg-(--bg)/30 p-4 md:p-5 space-y-3">
+          <h3 className="text-base font-semibold text-(--text)">Material photos</h3>
+          <p className="text-sm text-(--text)/60">
+            Parts, supplies, labels, or packaging. For the register receipt with the total, use <strong className="font-medium text-(--text)">Add store receipt</strong>.
+          </p>
+          {materialPhotoError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {materialPhotoError}
+            </div>
+          )}
+          {loadingMaterialPhotos ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-(--text)" />
+            </div>
+          ) : materialPhotos.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed border-(--border)/35 px-4 py-8 text-center">
+              <p className="text-sm text-(--text)/60">No material photos yet.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+              {materialPhotos.map((photo) => (
+                <button
+                  key={photo.id}
+                  type="button"
+                  onClick={() => setViewerMaterialPhoto(photo)}
+                  className="group relative aspect-square overflow-hidden rounded-xl bg-slate-100 text-left"
+                >
+                  {photo.s3_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={photo.s3_url}
+                      alt={photo.caption || photo.filename}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <span className="flex h-full items-center justify-center text-xs text-(--text)/50">No preview</span>
+                  )}
+                  <span className="absolute inset-x-0 bottom-0 bg-black/55 px-2 py-1 text-[11px] text-white truncate">
+                    {photo.caption || photo.filename}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -259,7 +449,7 @@ export default function MaterialPurchaseManager({
           onBackdropClick={() => {
             if (uploading) return;
             setShowAddModal(false);
-            setSelectedFile(null);
+            clearReceiptFile();
           }}
         >
           <div className="tl-card w-full max-w-lg p-6" onClick={(event) => event.stopPropagation()}>
@@ -291,16 +481,44 @@ export default function MaterialPurchaseManager({
                 />
               </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-4">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-(--text)">Receipt Photo</label>
+                  <span className="mb-1 block text-sm font-medium text-(--text)">Receipt photo</span>
+                  <p className="mb-2 text-xs text-(--text)/55">
+                    Required — upload a photo of the paper or digital receipt (JPG, PNG, or other images).
+                  </p>
                   <input
+                    ref={receiptFileInputRef}
+                    id={receiptFileInputId}
                     type="file"
                     accept="image/*"
                     required
+                    className="sr-only"
                     onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
-                    className="w-full rounded-xl border border-(--border) bg-(--bg) px-4 py-2.5 text-sm text-(--text)"
                   />
+                  <label
+                    htmlFor={receiptFileInputId}
+                    className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-(--border) bg-(--bg) px-4 py-8 text-center transition hover:border-blue-400 hover:bg-blue-50/40"
+                  >
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-blue-700" aria-hidden>
+                      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                        />
+                      </svg>
+                    </span>
+                    <span className="text-sm font-semibold text-(--text)">Choose receipt image</span>
+                    <span className="text-xs text-(--text)/55">Opens your camera or photo library on mobile</span>
+                  </label>
+                  {selectedFile ? (
+                    <p className="mt-2 text-sm text-(--text)/80">
+                      <span className="font-medium text-emerald-700">Selected:</span> {selectedFile.name}
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-xs text-amber-800/90">No file chosen yet — tap the area above.</p>
+                  )}
                 </div>
 
                 <div>
@@ -323,7 +541,7 @@ export default function MaterialPurchaseManager({
                   type="button"
                   onClick={() => {
                     setShowAddModal(false);
-                    setSelectedFile(null);
+                    clearReceiptFile();
                   }}
                   className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
                 >
@@ -338,6 +556,143 @@ export default function MaterialPurchaseManager({
                 </button>
               </div>
             </form>
+          </div>
+        </ModalLayer>
+      )}
+
+      {showMaterialPhotoModal && materialPhotosEndpoint && (
+        <ModalLayer
+          align="center"
+          className="bg-black/50"
+          onBackdropClick={() => {
+            if (uploadingMaterialPhoto) return;
+            setShowMaterialPhotoModal(false);
+            clearMaterialPhotoFile();
+            setMaterialPhotoCaption("");
+          }}
+        >
+          <div className="tl-card w-full max-w-md p-6" onClick={(event) => event.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-(--text)">Add material photo</h3>
+            <p className="mt-1 text-sm text-(--text)/60">Supply, parts, or jobsite documentation (not the store receipt).</p>
+            <form onSubmit={handleMaterialPhotoSubmit} className="mt-4 space-y-4">
+              <div>
+                <span className="mb-1 block text-sm font-medium text-(--text)">Photo file</span>
+                <p className="mb-2 text-xs text-(--text)/55">Required — JPG, PNG, or other image.</p>
+                <input
+                  ref={materialPhotoInputRef}
+                  id={materialPhotoInputId}
+                  type="file"
+                  accept="image/*"
+                  required
+                  className="sr-only"
+                  onChange={(event) => setMaterialPhotoFile(event.target.files?.[0] || null)}
+                />
+                <label
+                  htmlFor={materialPhotoInputId}
+                  className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-(--border) bg-(--bg) px-4 py-8 text-center transition hover:border-blue-400 hover:bg-blue-50/40"
+                >
+                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-blue-700" aria-hidden>
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                      />
+                    </svg>
+                  </span>
+                  <span className="text-sm font-semibold text-(--text)">Choose photo to upload</span>
+                  <span className="text-xs text-(--text)/55">Opens your camera or photo library on mobile</span>
+                </label>
+                {materialPhotoFile ? (
+                  <p className="mt-2 text-sm text-(--text)/80">
+                    <span className="font-medium text-emerald-700">Selected:</span> {materialPhotoFile.name}
+                  </p>
+                ) : (
+                  <p className="mt-2 text-xs text-amber-800/90">No file chosen yet — tap the area above.</p>
+                )}
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-(--text)">Caption</label>
+                <input
+                  type="text"
+                  value={materialPhotoCaption}
+                  onChange={(event) => setMaterialPhotoCaption(event.target.value)}
+                  placeholder="Optional (e.g. copper fittings, aisle 12)"
+                  className="w-full rounded-xl border border-(--border) bg-(--bg) px-4 py-2.5 text-sm text-(--text)"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMaterialPhotoModal(false);
+                    clearMaterialPhotoFile();
+                    setMaterialPhotoCaption("");
+                  }}
+                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={uploadingMaterialPhoto}
+                  className="flex-1 tl-btn px-4 py-2.5 text-sm disabled:opacity-50"
+                >
+                  {uploadingMaterialPhoto ? "Uploading..." : "Upload"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </ModalLayer>
+      )}
+
+      {viewerMaterialPhoto && (
+        <ModalLayer align="center" className="bg-black/70" onBackdropClick={() => setViewerMaterialPhoto(null)}>
+          <div
+            className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-(--border)/20 px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-(--text)">
+                  {viewerMaterialPhoto.caption || viewerMaterialPhoto.filename}
+                </p>
+                <p className="text-xs text-(--text)/60">
+                  Material photo · {formatUsCentralDateTime(viewerMaterialPhoto.captured_at)} CT
+                  {viewerMaterialPhoto.uploader_name ? ` · ${viewerMaterialPhoto.uploader_name}` : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteMaterialPhoto(viewerMaterialPhoto.id)}
+                    className="rounded-full border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition"
+                  >
+                    Delete
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setViewerMaterialPhoto(null)}
+                  className="rounded-full border border-(--border)/30 px-3 py-1.5 text-xs font-medium text-(--text) hover:bg-(--bg) transition"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="max-h-[70vh] overflow-auto bg-slate-100">
+              {viewerMaterialPhoto.s3_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={viewerMaterialPhoto.s3_url}
+                  alt={viewerMaterialPhoto.caption || viewerMaterialPhoto.filename}
+                  className="mx-auto max-h-[70vh] w-auto"
+                />
+              ) : (
+                <div className="flex h-80 items-center justify-center text-sm text-(--text)/50">No preview</div>
+              )}
+            </div>
           </div>
         </ModalLayer>
       )}

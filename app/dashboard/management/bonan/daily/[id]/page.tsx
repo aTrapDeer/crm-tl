@@ -169,6 +169,13 @@ function classNames(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
+function formatAssociatedWorkOrdersSummary(orders: AssociatedWorkOrder[]): string {
+  if (orders.length === 0) return "";
+  const labels = orders.map((row) => `WO #${row.work_order_number}`);
+  const n = orders.length;
+  return n === 1 ? `${labels[0]} (${n})` : `${labels.join(", ")} (${n})`;
+}
+
 function SectionActionIconButton({
   onClick,
   disabled,
@@ -257,7 +264,9 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
   const [reportSignatures, setReportSignatures] = useState<BonanReportSignature[]>([]);
   const [showReportSignatureCapture, setShowReportSignatureCapture] =
     useState<BonanReportSignatureScope | null>(null);
-  const [headerCollapsed, setHeaderCollapsed] = useState(false);
+  const [headerCollapsed, setHeaderCollapsed] = useState(true);
+  /** Work Orders | Incident Reports panel — collapsed on walkthrough steps, expanded on Fire Alarm + Review by default */
+  const [followUpSectionCollapsed, setFollowUpSectionCollapsed] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
   const [syncState, setSyncState] = useState<DraftSyncState>("idle");
   const [lastCachedAt, setLastCachedAt] = useState("");
@@ -281,6 +290,31 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
     [reportSignatures]
   );
 
+  const workOrdersCreatedDisplay = useMemo(() => {
+    const fromLinked = formatAssociatedWorkOrdersSummary(associatedWorkOrders);
+    if (fromLinked) return fromLinked;
+    return payload?.metadata.workOrdersCreated ?? "";
+  }, [associatedWorkOrders, payload?.metadata.workOrdersCreated]);
+
+  useEffect(() => {
+    if (associatedWorkOrders.length === 0) return;
+    const summary = formatAssociatedWorkOrdersSummary(associatedWorkOrders);
+    let didUpdate = false;
+    setPayload((current) => {
+      if (!current) return current;
+      if (current.metadata.workOrdersCreated === summary) return current;
+      didUpdate = true;
+      return {
+        ...current,
+        metadata: { ...current.metadata, workOrdersCreated: summary },
+      };
+    });
+    if (didUpdate) {
+      setDirty(true);
+      setSaveMessage("Unsaved changes");
+    }
+  }, [associatedWorkOrders]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const storedValue = window.localStorage.getItem("bonan-daily-header-collapsed");
@@ -298,6 +332,16 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
     if (typeof window === "undefined") return;
     window.localStorage.setItem("bonan-daily-header-collapsed", String(headerCollapsed));
   }, [headerCollapsed]);
+
+  useEffect(() => {
+    if (step < 3) {
+      setFollowUpSectionCollapsed(true);
+      setHeaderCollapsed(true);
+    } else {
+      setFollowUpSectionCollapsed(false);
+      setHeaderCollapsed(false);
+    }
+  }, [step]);
 
   const queueDraftForSync = useCallback(
     (draftPayload: DailyReportPayload) => {
@@ -1335,12 +1379,46 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
 
         {/* ── Associated Work Orders ── */}
         <section className="rounded-2xl border border-(--border)/20 bg-white/80 backdrop-blur-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-(--border)/10">
-            <h2 className="text-sm font-semibold text-(--text)">Work Orders | Incident Reports</h2>
-            <p className="text-[11px] text-(--text)/50 mt-0.5">Linked follow-up records for this daily walkthrough</p>
-          </div>
+          <button
+            type="button"
+            onClick={() => setFollowUpSectionCollapsed((previous) => !previous)}
+            className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-(--bg)/50 transition"
+            aria-expanded={!followUpSectionCollapsed}
+            aria-controls="bonan-daily-follow-up-panels"
+          >
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-(--text)">Work Orders | Incident Reports</h2>
+              <p className="text-[11px] text-(--text)/50 mt-0.5">
+                Linked follow-up records for this daily walkthrough
+              </p>
+              {followUpSectionCollapsed && (
+                <p className="text-[11px] text-(--text)/50 mt-0.5 truncate">
+                  {associatedWorkOrders.length} work order{associatedWorkOrders.length === 1 ? "" : "s"}
+                  {" · "}
+                  {associatedIncidentReports.length} incident
+                  {associatedIncidentReports.length === 1 ? "" : "s"}
+                </p>
+              )}
+            </div>
+            <svg
+              className={classNames(
+                "h-4 w-4 shrink-0 text-(--text)/40 transition-transform",
+                followUpSectionCollapsed ? "" : "rotate-180"
+              )}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-(--border)/10">
+          {!followUpSectionCollapsed && (
+            <div
+              id="bonan-daily-follow-up-panels"
+              className="grid grid-cols-1 md:grid-cols-2 border-t border-(--border)/10 divide-y md:divide-y-0 md:divide-x divide-(--border)/10"
+            >
             <div className="min-w-0">
               <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-(--border)/10">
                 <h3 className="text-xs font-semibold text-(--text)">
@@ -1449,6 +1527,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
               )}
             </div>
           </div>
+          )}
         </section>
 
         {/* ── Header Fields ── */}
@@ -1570,11 +1649,18 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                   <span className="font-medium text-(--text)/60">Work Orders Created (WO#)</span>
                   <input
                     type="text"
-                    value={payload.metadata.workOrdersCreated}
-                    onChange={(event) => updateMetadata("workOrdersCreated", event.target.value)}
+                    readOnly
+                    value={workOrdersCreatedDisplay}
+                    placeholder="None linked yet — use + New WO or create from a section"
                     disabled={isReadOnly}
-                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
+                    title="Filled from work orders linked to this daily walkthrough"
+                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 read-only:bg-(--bg)/80 disabled:opacity-60"
                   />
+                  {associatedWorkOrders.length > 0 && (
+                    <p className="text-[11px] text-(--text)/50">
+                      {associatedWorkOrders.length} linked work order{associatedWorkOrders.length === 1 ? "" : "s"} — list matches the Work Orders panel above.
+                    </p>
+                  )}
                 </label>
                 <div className="space-y-1 text-xs">
                   <span className="font-medium text-(--text)/60">Daily Walkthrough Signature</span>
