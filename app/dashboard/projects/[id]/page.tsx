@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -1242,14 +1243,16 @@ export default function ProjectPage() {
                   <div
                     key={image.id}
                     onClick={() => setShowImageViewer(image)}
-                    className="aspect-square rounded-xl bg-(--bg) overflow-hidden cursor-pointer relative group"
+                  className="aspect-square rounded-xl bg-(--bg) overflow-hidden cursor-pointer relative group"
                   >
                     {image.s3_url ? (
-                      <img
+                      <Image
                         src={image.s3_url}
                         alt={image.caption || image.filename}
-                        loading="lazy"
-                        className="h-full w-full object-cover"
+                        fill
+                        unoptimized
+                        sizes="(min-width: 768px) 25vw, (min-width: 640px) 33vw, 50vw"
+                        className="object-cover"
                       />
                     ) : (
                       <div className="absolute inset-0 flex flex-col items-center justify-center p-2">
@@ -1519,9 +1522,12 @@ export default function ProjectPage() {
                     <div className="mt-2">
                       <p className="text-sm font-medium text-(--text)">{adminSignature.signer_name}</p>
                       <p className="text-xs text-(--text)">{formatDateTime(adminSignature.signed_at)}</p>
-                      <img
+                      <Image
                         src={adminSignature.signature_data}
                         alt="Admin signature"
+                        width={224}
+                        height={56}
+                        unoptimized
                         className="mt-2 h-14 rounded border border-(--border) bg-white p-1"
                       />
                     </div>
@@ -1544,9 +1550,12 @@ export default function ProjectPage() {
                     <div className="mt-2">
                       <p className="text-sm font-medium text-(--text)">{clientSignature.signer_name}</p>
                       <p className="text-xs text-(--text)">{formatDateTime(clientSignature.signed_at)}</p>
-                      <img
+                      <Image
                         src={clientSignature.signature_data}
                         alt="Client signature"
+                        width={224}
+                        height={56}
+                        unoptimized
                         className="mt-2 h-14 rounded border border-(--border) bg-white p-1"
                       />
                     </div>
@@ -2228,9 +2237,12 @@ export default function ProjectPage() {
             </div>
             <div className="aspect-video bg-(--bg) flex items-center justify-center">
               {showImageViewer.s3_url ? (
-                <img
+                <Image
                   src={showImageViewer.s3_url}
                   alt={showImageViewer.caption || showImageViewer.filename}
+                  width={1600}
+                  height={900}
+                  unoptimized
                   className="h-full w-full object-contain bg-black"
                 />
               ) : (

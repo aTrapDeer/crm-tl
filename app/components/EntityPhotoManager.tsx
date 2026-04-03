@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useId, useRef, useState } from "react";
 import { formatUsCentralDateTime } from "@/lib/us-central-time";
 import { ModalLayer } from "@/app/components/ModalLayer";
@@ -249,11 +250,13 @@ export default function EntityPhotoManager({
                     className="group relative aspect-square overflow-hidden rounded-xl bg-(--bg) text-left"
                   >
                     {photo.s3_url ? (
-                      <img
+                      <Image
                         src={photo.s3_url}
                         alt={photo.caption || photo.filename}
-                        className="h-full w-full object-cover"
-                        loading="lazy"
+                        fill
+                        unoptimized
+                        sizes="(min-width: 1280px) 25vw, (min-width: 768px) 33vw, 50vw"
+                        className="object-cover"
                       />
                     ) : (
                       <div className="flex h-full items-center justify-center text-sm text-(--text)/50">
@@ -437,9 +440,12 @@ export default function EntityPhotoManager({
             </div>
             <div className="max-h-[70vh] overflow-auto bg-slate-100">
               {viewerPhoto.s3_url ? (
-                <img
+                <Image
                   src={viewerPhoto.s3_url}
                   alt={viewerPhoto.caption || viewerPhoto.filename}
+                  width={1600}
+                  height={1200}
+                  unoptimized
                   className="mx-auto max-h-[70vh] w-auto"
                 />
               ) : (

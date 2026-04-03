@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
@@ -1079,11 +1080,13 @@ export default function ProjectDetailsModal({
                         className="aspect-square rounded-lg bg-(--bg) overflow-hidden cursor-pointer relative group"
                       >
                         {image.s3_url ? (
-                          <img
+                          <Image
                             src={image.s3_url}
                             alt={image.caption || image.filename}
-                            loading="lazy"
-                            className="h-full w-full object-cover"
+                            fill
+                            unoptimized
+                            sizes="(min-width: 640px) 33vw, 50vw"
+                            className="object-cover"
                           />
                         ) : (
                           <div className="absolute inset-0 flex flex-col items-center justify-center p-2">
@@ -1736,9 +1739,12 @@ export default function ProjectDetailsModal({
             </div>
             <div className="aspect-video bg-(--bg) flex items-center justify-center">
               {showImageViewer.s3_url ? (
-                <img
+                <Image
                   src={showImageViewer.s3_url}
                   alt={showImageViewer.caption || showImageViewer.filename}
+                  width={1600}
+                  height={900}
+                  unoptimized
                   className="h-full w-full object-contain bg-black"
                 />
               ) : (

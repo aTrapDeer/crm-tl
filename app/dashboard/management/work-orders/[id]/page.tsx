@@ -320,8 +320,11 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   }, [userRole, fetchWorkOrder, fetchMaterials, fetchSignatures]);
 
   useEffect(() => {
-    if (userRole !== "employee" || !currentUserId || !workOrder) return;
-    if (workOrder.assigned_to === currentUserId) return;
+    const workOrderId = workOrder?.id;
+    const assignedTo = workOrder?.assigned_to;
+
+    if (userRole !== "employee" || !currentUserId || !workOrderId) return;
+    if (assignedTo === currentUserId) return;
 
     let cancelled = false;
     void (async () => {
@@ -343,7 +346,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
     return () => {
       cancelled = true;
     };
-  }, [userRole, currentUserId, workOrder?.id, workOrder?.assigned_to, id]);
+  }, [userRole, currentUserId, workOrder, id]);
 
   async function handleStatusChange(newStatus: WorkOrder["work_completed"]) {
     if (!workOrder) return;

@@ -71,9 +71,11 @@ export interface WorkOrderSignature {
 }
 
 export function canEmployeeViewWorkOrder(
-  _userId: string,
-  _workOrder: Pick<WorkOrder, "assigned_to" | "work_completed">
+  userId: string,
+  workOrder: Pick<WorkOrder, "assigned_to" | "work_completed">
 ): boolean {
+  void userId;
+  void workOrder;
   return true;
 }
 

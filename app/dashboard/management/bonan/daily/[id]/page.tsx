@@ -1,6 +1,7 @@
 
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
@@ -1666,9 +1667,12 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                   <span className="font-medium text-(--text)/60">Daily Walkthrough Signature</span>
                   {dailyWalkthroughSignature ? (
                     <div className="rounded-lg border border-(--border)/30 bg-white p-3">
-                      <img
+                      <Image
                         src={dailyWalkthroughSignature.signature_data}
                         alt="Daily walkthrough signature"
+                        width={320}
+                        height={96}
+                        unoptimized
                         className="h-24 w-auto max-w-full object-contain"
                       />
                       <p className="mt-2 text-sm font-medium text-(--text)">
@@ -2933,9 +2937,12 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                   <span className="font-medium text-(--text)/60">Fire Alarm Signature</span>
                   {fireAlarmSignature ? (
                     <div className="rounded-lg border border-(--border)/30 bg-white p-3">
-                      <img
+                      <Image
                         src={fireAlarmSignature.signature_data}
                         alt="Fire alarm signature"
+                        width={320}
+                        height={96}
+                        unoptimized
                         className="h-24 w-auto max-w-full object-contain"
                       />
                       <p className="mt-2 text-sm font-medium text-(--text)">
@@ -3516,4 +3523,3 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
     </div>
   );
 }
-
