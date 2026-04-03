@@ -111,10 +111,19 @@ export default function BonanPeriodReportList({
   const reportDetailPathBase = detailPathBase || `/dashboard/bonan/${reportType}`;
 
   function getDisplayPeriod(reportDate: string): string {
+    const formatDate = (dateStr: string, options: Intl.DateTimeFormatOptions) => {
+      const [year, month, day] = dateStr.split("-");
+      const date = new Date(parseInt(year), parseInt(month) - 1, day ? parseInt(day) : 1);
+      return date.toLocaleDateString("en-US", options);
+    };
+
     if (reportType === "weekly") {
-      return `${getWeekStartSunday(reportDate)} to ${getWeekEndSaturday(reportDate)}`;
+      const start = getWeekStartSunday(reportDate);
+      const end = getWeekEndSaturday(reportDate);
+      return `${formatDate(start, { month: "short", day: "numeric", year: "numeric" })} - ${formatDate(end, { month: "short", day: "numeric", year: "numeric" })}`;
     }
-    return getMonthKey(reportDate);
+    
+    return formatDate(reportDate, { month: "long", year: "numeric" });
   }
 
   function normalizeInputPeriodDate() {

@@ -40,6 +40,120 @@ export default function BonanDashboardPage() {
     );
   }
 
+  if (userRole === "client") {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        {/* Back Button */}
+        <div className="mx-auto w-full max-w-5xl px-4 pt-6">
+          <button
+            onClick={() => router.push("/dashboard/client")}
+            className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors"
+          >
+            <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Dashboard
+          </button>
+        </div>
+
+        <div className="mx-auto w-full max-w-5xl px-4 py-8 md:py-12 space-y-8">
+          {/* Header */}
+          <div className="text-center mb-12">
+            <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-lg mb-6">
+              <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            </div>
+            <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-3">Bonan Towers Hub</h1>
+            <p className="text-lg text-slate-600 max-w-2xl mx-auto">
+              Welcome to your client dashboard. Select a category below to view your reports and logs.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Work Orders & Incidents */}
+            <div className="group rounded-3xl border border-slate-200 bg-white p-8 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all">
+              <div className="h-14 w-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-6 ring-1 ring-blue-100 group-hover:scale-110 transition-transform">
+                <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900 mb-3">Work Orders & Incidents</h2>
+              <p className="text-slate-600 mb-8">
+                Review published work orders, track incident reports, and sign off on revisions.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <Link href="/dashboard/bonan/work-orders" className="flex items-center justify-center rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 border border-slate-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 transition-colors">
+                  Work Orders
+                </Link>
+                <Link href="/dashboard/bonan/incidents" className="flex items-center justify-center rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 border border-slate-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 transition-colors">
+                  Incidents
+                </Link>
+              </div>
+            </div>
+
+            {/* Daily Logs */}
+            <Link href="/dashboard/bonan/daily" className="group rounded-3xl border border-slate-200 bg-white p-8 shadow-sm hover:shadow-xl hover:border-indigo-200 transition-all flex flex-col">
+              <div className="h-14 w-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-6 ring-1 ring-indigo-100 group-hover:scale-110 transition-transform">
+                <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900 mb-3">Daily Logs</h2>
+              <p className="text-slate-600 flex-1">
+                View daily walkthroughs, checklist entries, and shift follow-up records.
+              </p>
+              <div className="mt-8 flex items-center text-indigo-600 font-semibold group-hover:translate-x-1 transition-transform">
+                View Daily Logs
+                <svg className="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                </svg>
+              </div>
+            </Link>
+
+            {/* Weekly Logs */}
+            <Link href="/dashboard/bonan/weekly" className="group rounded-3xl border border-slate-200 bg-white p-8 shadow-sm hover:shadow-xl hover:border-teal-200 transition-all flex flex-col">
+              <div className="h-14 w-14 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center mb-6 ring-1 ring-teal-100 group-hover:scale-110 transition-transform">
+                <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900 mb-3">Weekly Logs</h2>
+              <p className="text-slate-600 flex-1">
+                Review weekly systems logs, detailed checks, and linked daily rollups.
+              </p>
+              <div className="mt-8 flex items-center text-teal-600 font-semibold group-hover:translate-x-1 transition-transform">
+                View Weekly Logs
+                <svg className="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                </svg>
+              </div>
+            </Link>
+
+            {/* Monthly Logs */}
+            <Link href="/dashboard/bonan/monthly-summaries" className="group rounded-3xl border border-slate-200 bg-white p-8 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all flex flex-col">
+              <div className="h-14 w-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-6 ring-1 ring-blue-100 group-hover:scale-110 transition-transform">
+                <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900 mb-3">Monthly Logs</h2>
+              <p className="text-slate-600 flex-1">
+                Access comprehensive month-wide summaries integrating all prior activity.
+              </p>
+              <div className="mt-8 flex items-center text-blue-600 font-semibold group-hover:translate-x-1 transition-transform">
+                View Monthly Logs
+                <svg className="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                </svg>
+              </div>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const showChecklistWorkflows = userRole !== "client";
   const showReviewWorkflows = userRole !== "employee";
   const monthlyLogsHref = userRole === "client"
