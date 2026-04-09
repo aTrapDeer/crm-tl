@@ -52,6 +52,13 @@ function formatWorkOrderStatusLabel(status: WorkOrder["work_completed"]) {
   return status.replace("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function formatPriorityLabel(priority: WorkOrder["priority"]) {
+  if (priority === "emergency") return "Board Approval Level";
+  if (priority === "high") return "Priority - Immediate";
+  if (priority === "normal") return "Priority - Moderate";
+  return "Priority - Low";
+}
+
 const SERVICE_TYPES = [
   { value: "maintenance", label: "Maintenance" },
   { value: "repair", label: "Repair" },
@@ -198,10 +205,10 @@ export default function WorkOrderListView({
             className="px-3 py-2 rounded-lg border border-(--border) bg-(--bg) text-(--text) text-sm focus:outline-none focus:ring-2 focus:ring-(--ring)"
           >
             <option value="">All Priority</option>
-            <option value="emergency">Emergency</option>
-            <option value="high">High</option>
-            <option value="normal">Normal</option>
-            <option value="low">Low</option>
+            <option value="emergency">Board Approval Level</option>
+            <option value="high">Priority - Immediate</option>
+            <option value="normal">Priority - Moderate</option>
+            <option value="low">Priority - Low</option>
           </select>
 
           <select
@@ -228,8 +235,8 @@ export default function WorkOrderListView({
           >
             <option value="date-desc">Newest First</option>
             <option value="date-asc">Oldest First</option>
-            <option value="priority-asc">Priority (High to Low)</option>
-            <option value="priority-desc">Priority (Low to High)</option>
+            <option value="priority-asc">Priority (Board Approval to Low)</option>
+            <option value="priority-desc">Priority (Low to Board Approval)</option>
             <option value="status-asc">Status</option>
           </select>
 
@@ -287,7 +294,7 @@ export default function WorkOrderListView({
                     <span
                       className={`text-xs px-2 py-0.5 rounded-full font-medium ${PRIORITY_COLORS[workOrder.priority]}`}
                     >
-                      {workOrder.priority.charAt(0).toUpperCase() + workOrder.priority.slice(1)}
+                      {formatPriorityLabel(workOrder.priority)}
                     </span>
                     <span
                       className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[workOrder.work_completed]}`}

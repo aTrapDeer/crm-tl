@@ -24,10 +24,10 @@ interface BonanQuickCreatePageFormProps {
 }
 
 const WORK_ORDER_PRIORITIES: Array<{ value: WorkOrderPriority; label: string }> = [
-  { value: "emergency", label: "Emergency" },
-  { value: "high", label: "High" },
-  { value: "normal", label: "Normal" },
-  { value: "low", label: "Low" },
+  { value: "emergency", label: "Board Approval Level" },
+  { value: "high", label: "Priority - Immediate" },
+  { value: "normal", label: "Priority - Moderate" },
+  { value: "low", label: "Priority - Low" },
 ];
 
 const SERVICE_TYPES: Array<{ value: WorkOrderServiceType; label: string }> = [

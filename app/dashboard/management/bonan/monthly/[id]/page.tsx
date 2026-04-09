@@ -59,6 +59,10 @@ interface BonanCollectiveSummary {
     in_progress: number;
     completed: number;
     cancelled: number;
+    emergency: number;
+    high: number;
+    normal: number;
+    low: number;
   };
   material_costs: {
     total: number;
@@ -85,12 +89,50 @@ function countRowsWithValues<T extends object>(
   return rows.filter((row) => keys.some((key) => hasText(row[key] as string | null | undefined))).length;
 }
 
-function getDeficiencyLevelBucket(level: string): "1" | "2" | "3" | "4" | null {
+function getDeficiencyPriorityBucket(level: string): "1" | "2" | "3" | "4" | null {
   const normalized = level.trim().toLowerCase();
-  if (normalized === "1" || normalized === "l1" || normalized === "level 1") return "1";
-  if (normalized === "2" || normalized === "l2" || normalized === "level 2") return "2";
-  if (normalized === "3" || normalized === "l3" || normalized === "level 3") return "3";
-  if (normalized === "4" || normalized === "l4" || normalized === "level 4") return "4";
+  if (
+    normalized === "1" ||
+    normalized === "l1" ||
+    normalized === "level 1" ||
+    normalized === "priority - low" ||
+    normalized === "priority low" ||
+    normalized === "low"
+  ) {
+    return "1";
+  }
+  if (
+    normalized === "2" ||
+    normalized === "l2" ||
+    normalized === "level 2" ||
+    normalized === "priority - moderate" ||
+    normalized === "priority moderate" ||
+    normalized === "moderate" ||
+    normalized === "normal"
+  ) {
+    return "2";
+  }
+  if (
+    normalized === "3" ||
+    normalized === "l3" ||
+    normalized === "level 3" ||
+    normalized === "priority - immediate" ||
+    normalized === "priority immediate" ||
+    normalized === "immediate" ||
+    normalized === "high"
+  ) {
+    return "3";
+  }
+  if (
+    normalized === "4" ||
+    normalized === "l4" ||
+    normalized === "level 4" ||
+    normalized === "board approval level" ||
+    normalized === "board approval" ||
+    normalized === "emergency"
+  ) {
+    return "4";
+  }
   return null;
 }
 
@@ -102,6 +144,72 @@ function statusClass(status: BonanReportStatus): string {
   return status === "submitted"
     ? "bg-green-100 text-green-700"
     : "bg-amber-100 text-amber-700";
+}
+
+const FIRE_GAUGE_OPTIONS = ["Green", "Yellow", "Red"] as const;
+const FIRE_PASS_FAIL_OPTIONS = ["Pass", "Fail"] as const;
+const FIRE_YES_NO_OPTIONS = ["Yes", "No"] as const;
+const DEFICIENCY_PRIORITY_OPTIONS = [
+  "Priority - Low",
+  "Priority - Moderate",
+  "Priority - Immediate",
+  "Board Approval Level",
+] as const;
+
+const SECTION_TONES = {
+  overview: {
+    shell: "border-slate-300/60 bg-linear-to-br from-white via-slate-50 to-slate-100/80 shadow-sm",
+    header: "border-slate-300/60 bg-slate-900 text-white",
+  },
+  chain: {
+    shell: "border-blue-200/80 bg-linear-to-br from-blue-50/90 via-white to-sky-50/80 shadow-sm",
+    header: "border-blue-300/50 bg-blue-900 text-blue-50",
+  },
+  fire: {
+    shell: "border-emerald-200/90 bg-linear-to-br from-emerald-50/90 via-white to-green-50/70 shadow-sm",
+    header: "border-emerald-300/50 bg-emerald-900 text-emerald-50",
+  },
+  emergency: {
+    shell: "border-amber-200/90 bg-linear-to-br from-amber-50/90 via-white to-yellow-50/70 shadow-sm",
+    header: "border-amber-300/50 bg-amber-900 text-amber-50",
+  },
+  deficiency: {
+    shell: "border-rose-200/90 bg-linear-to-br from-rose-50/90 via-white to-orange-50/70 shadow-sm",
+    header: "border-rose-300/50 bg-rose-900 text-rose-50",
+  },
+  elevator: {
+    shell: "border-cyan-200/90 bg-linear-to-br from-cyan-50/90 via-white to-sky-50/70 shadow-sm",
+    header: "border-cyan-300/50 bg-cyan-900 text-cyan-50",
+  },
+  closeout: {
+    shell: "border-indigo-200/90 bg-linear-to-br from-indigo-50/90 via-white to-slate-50/70 shadow-sm",
+    header: "border-indigo-300/50 bg-indigo-900 text-indigo-50",
+  },
+  outlook: {
+    shell: "border-violet-200/80 bg-linear-to-br from-fuchsia-50/80 via-white to-violet-50/80 shadow-sm",
+    header: "border-violet-300/50 bg-violet-900 text-violet-50",
+  },
+} as const;
+
+function getPriorityCounts(
+  summary: BonanCollectiveSummary | null,
+  payload: MonthlyReportPayload
+) {
+  const fallback = payload.deficiencyRegister.rows.reduce(
+    (counts, row) => {
+      const bucket = getDeficiencyPriorityBucket(row.level);
+      if (bucket) counts[bucket] += 1;
+      return counts;
+    },
+    { "1": 0, "2": 0, "3": 0, "4": 0 }
+  );
+
+  return {
+    low: summary?.work_orders.low ?? fallback["1"],
+    moderate: summary?.work_orders.normal ?? fallback["2"],
+    immediate: summary?.work_orders.high ?? fallback["3"],
+    boardApproval: summary?.work_orders.emergency ?? fallback["4"],
+  };
 }
 
 export default function BonanMonthlyReportEditorPage({ params }: { params: Promise<{ id: string }> }) {
@@ -326,6 +434,17 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
     }));
   }
 
+  function updateBoardApprovalSignature(signature: string) {
+    updatePayload((current) => ({
+      ...current,
+      deficiencyRegister: {
+        ...current.deficiencyRegister,
+        ownerExecutiveReview: signature,
+        ownerExecutiveDate: signature.trim() ? `${formatUsCentralDateTime(new Date())} CT` : "",
+      },
+    }));
+  }
+
   const dailyCompletionPercent = useMemo(() => {
     if (!summary || summary.daily_reports.due === 0) return "0%";
     return `${Math.round((summary.daily_reports.submitted / summary.daily_reports.due) * 100)}%`;
@@ -344,15 +463,7 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
         notableEvents: "0",
       };
     }
-
-    const levelCounts = payload.deficiencyRegister.rows.reduce(
-      (counts, row) => {
-        const bucket = getDeficiencyLevelBucket(row.level);
-        if (bucket) counts[bucket] += 1;
-        return counts;
-      },
-      { "1": 0, "2": 0, "3": 0, "4": 0 }
-    );
+    const priorityCounts = getPriorityCounts(summary, payload);
 
     const openedFallback = summary?.work_orders.total ?? countRowsWithValues(payload.workOrdersOpened, [
       "workOrderNumber",
@@ -393,20 +504,79 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
       level1Count:
         payload.summaryMetrics.level1Count ||
         payload.deficiencyRegister.level1 ||
-        String(levelCounts["1"]),
+        String(priorityCounts.low),
       level2Count:
         payload.summaryMetrics.level2Count ||
         payload.deficiencyRegister.level2 ||
-        String(levelCounts["2"]),
+        String(priorityCounts.moderate),
       level3Count:
         payload.summaryMetrics.level3Count ||
         payload.deficiencyRegister.level3 ||
-        String(levelCounts["3"]),
+        String(priorityCounts.immediate),
       level4Count:
         payload.summaryMetrics.level4Count ||
         payload.deficiencyRegister.level4 ||
-        String(levelCounts["4"]),
+        String(priorityCounts.boardApproval),
       notableEvents: payload.summaryMetrics.notableEvents || String(notableEventsFallback),
+    };
+  }, [payload, summary]);
+
+  const resolvedDeficiencyMetrics = useMemo(() => {
+    if (!payload) {
+      return {
+        totalOpenStart: "0",
+        newThisMonth: "0",
+        closedThisMonth: "0",
+        openEnd: "0",
+        level1: "0",
+        level2: "0",
+        level3: "0",
+        level4: "0",
+      };
+    }
+
+    const priorityCounts = getPriorityCounts(summary, payload);
+    const totalOpenStartFallback = countRowsWithValues(payload.agingOpenWorkOrders, [
+      "workOrderNumber",
+      "description",
+      "area",
+      "owner",
+      "status",
+    ]);
+    const newThisMonthFallback = summary?.work_orders.total ?? countRowsWithValues(payload.workOrdersOpened, [
+      "workOrderNumber",
+      "description",
+      "area",
+      "owner",
+      "status",
+    ]);
+    const closedThisMonthFallback = summary?.work_orders.completed ?? countRowsWithValues(payload.workOrdersClosed, [
+      "workOrderNumber",
+      "description",
+      "area",
+      "owner",
+      "status",
+    ]);
+    const openEndFallback =
+      summary?.work_orders.pending !== undefined && summary?.work_orders.in_progress !== undefined
+        ? summary.work_orders.pending + summary.work_orders.in_progress
+        : countRowsWithValues(payload.agingOpenWorkOrders, [
+            "workOrderNumber",
+            "description",
+            "area",
+            "owner",
+            "status",
+          ]);
+
+    return {
+      totalOpenStart: payload.deficiencyRegister.totalOpenStart || String(totalOpenStartFallback),
+      newThisMonth: payload.deficiencyRegister.newThisMonth || String(newThisMonthFallback),
+      closedThisMonth: payload.deficiencyRegister.closedThisMonth || String(closedThisMonthFallback),
+      openEnd: payload.deficiencyRegister.openEnd || String(openEndFallback),
+      level1: payload.deficiencyRegister.level1 || String(priorityCounts.low),
+      level2: payload.deficiencyRegister.level2 || String(priorityCounts.moderate),
+      level3: payload.deficiencyRegister.level3 || String(priorityCounts.immediate),
+      level4: payload.deficiencyRegister.level4 || String(priorityCounts.boardApproval),
     };
   }, [payload, summary]);
 
@@ -463,7 +633,7 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
           )}
         </header>
 
-        <section className="rounded-2xl border border-(--border)/20 bg-white/90 p-3 md:p-4 space-y-3">
+        <section className={classNames("rounded-2xl border p-3 md:p-4 space-y-3", SECTION_TONES.overview.shell)}>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-2">
             <div className="rounded-lg bg-slate-50 p-2 text-center">
               <Link href={`/dashboard/bonan/reports/${report.id}/related-items?focus=work-orders`} className="text-lg font-semibold text-blue-700 hover:underline">
@@ -502,9 +672,10 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
           </div>
         </section>
 
-        <section className="rounded-2xl border border-(--border)/20 bg-white/90 overflow-hidden">
-          <div className="px-3 md:px-4 py-2.5 border-b border-(--border)/15">
-            <h2 className="text-sm md:text-base font-semibold text-(--text)">Weekly to Monthly Hyperlinked Chain</h2>
+        <section className={classNames("rounded-2xl border overflow-hidden", SECTION_TONES.chain.shell)}>
+          <div className={classNames("px-3 md:px-4 py-2.5 border-b", SECTION_TONES.chain.header)}>
+            <h2 className="text-sm md:text-base font-bold">Weekly to Monthly Hyperlinked Chain</h2>
+            <p className="mt-0.5 text-[11px] font-medium text-white/75">Quick navigation across the monthly reporting chain.</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-xs">
@@ -544,9 +715,10 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
           </div>
         </section>
 
-        <section className="rounded-2xl border border-(--border)/20 bg-white/90 overflow-hidden">
-          <div className="px-3 md:px-4 py-2.5 border-b border-(--border)/15">
-            <h2 className="text-sm md:text-base font-semibold text-(--text)">Daily Reports Linked to This Month</h2>
+        <section className={classNames("rounded-2xl border overflow-hidden", SECTION_TONES.chain.shell)}>
+          <div className={classNames("px-3 md:px-4 py-2.5 border-b", SECTION_TONES.chain.header)}>
+            <h2 className="text-sm md:text-base font-bold">Daily Reports Linked to This Month</h2>
+            <p className="mt-0.5 text-[11px] font-medium text-white/75">Scan daily coverage and jump directly into the source report.</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-xs">
@@ -587,9 +759,41 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
           </div>
         </section>
 
-        <section className="rounded-2xl border border-(--border)/20 bg-white/90 overflow-hidden">
-          <div className="px-3 md:px-4 py-2.5 border-b border-(--border)/15">
-            <h2 className="text-sm md:text-base font-semibold text-(--text)">Monthly - Fire Extinguisher Visual Inspection Log</h2>
+        <section className={classNames("rounded-2xl border overflow-hidden", SECTION_TONES.outlook.shell)}>
+          <div className={classNames("px-3 md:px-4 py-2.5 border-b", SECTION_TONES.outlook.header)}>
+            <h2 className="text-sm md:text-base font-bold">Monthly Recommendations & Upcoming</h2>
+            <p className="mt-0.5 text-[11px] font-medium text-white/75">Shared guidance and near-term items everyone should see quickly.</p>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 p-3 md:p-4">
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-(--text)/60">Recommendations</p>
+              <textarea
+                rows={5}
+                value={payload.sharedOutlook.recommendations}
+                onChange={(event) => updatePayload((current) => ({ ...current, sharedOutlook: { ...current.sharedOutlook, recommendations: event.target.value } }))}
+                disabled={isReadOnly}
+                placeholder="Shared recommendations for operations, safety, or follow-up."
+                className="w-full rounded-xl border border-(--border)/35 bg-white/90 px-3 py-2 text-sm disabled:bg-slate-50"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-(--text)/60">Upcoming</p>
+              <textarea
+                rows={5}
+                value={payload.sharedOutlook.upcoming}
+                onChange={(event) => updatePayload((current) => ({ ...current, sharedOutlook: { ...current.sharedOutlook, upcoming: event.target.value } }))}
+                disabled={isReadOnly}
+                placeholder="Upcoming work, inspections, deadlines, or expected follow-up."
+                className="w-full rounded-xl border border-(--border)/35 bg-white/90 px-3 py-2 text-sm disabled:bg-slate-50"
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className={classNames("rounded-2xl border overflow-hidden", SECTION_TONES.fire.shell)}>
+          <div className={classNames("px-3 md:px-4 py-2.5 border-b", SECTION_TONES.fire.header)}>
+            <h2 className="text-sm md:text-base font-bold">Monthly - Fire Extinguisher Visual Inspection Log</h2>
+            <p className="mt-0.5 text-[11px] font-medium text-white/75">Life-safety extinguisher status and visual inspection trail.</p>
           </div>
           <div className="p-3 md:p-4 grid grid-cols-1 md:grid-cols-4 gap-2 text-xs border-b border-(--border)/15">
             <input value={payload.fireExtinguisherLog.monthYear} onChange={(event) => updatePayload((current) => ({ ...current, fireExtinguisherLog: { ...current.fireExtinguisherLog, monthYear: event.target.value } }))} disabled={isReadOnly} placeholder="Month / Year" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
@@ -602,10 +806,10 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
               <thead className="bg-slate-100/70 text-(--text)/65">
                 <tr>
                   <th className="px-2.5 py-2 text-left font-semibold">Extinguisher ID / Location</th>
-                  <th className="px-2.5 py-2 text-left font-semibold">Gauge (Y/N)</th>
-                  <th className="px-2.5 py-2 text-left font-semibold">Pin/Seal (Y/N)</th>
-                  <th className="px-2.5 py-2 text-left font-semibold">Accessible (Y/N)</th>
-                  <th className="px-2.5 py-2 text-left font-semibold">Condition (O/D)</th>
+                  <th className="px-2.5 py-2 text-left font-semibold">Gauge</th>
+                  <th className="px-2.5 py-2 text-left font-semibold">Pin Seal</th>
+                  <th className="px-2.5 py-2 text-left font-semibold">Accessible</th>
+                  <th className="px-2.5 py-2 text-left font-semibold">Condition (P/F)</th>
                   <th className="px-2.5 py-2 text-left font-semibold">Init.</th>
                   <th className="px-2.5 py-2 text-left font-semibold">Notes / WO#</th>
                 </tr>
@@ -614,10 +818,38 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
                 {payload.fireExtinguisherLog.rows.map((row, rowIndex) => (
                   <tr key={`fire-${rowIndex}`}>
                     <td className="px-2.5 py-1.5"><input value={row.extinguisherIdLocation} onChange={(event) => updateFireRow(rowIndex, "extinguisherIdLocation", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
-                    <td className="px-2.5 py-1.5"><input value={row.gauge} onChange={(event) => updateFireRow(rowIndex, "gauge", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
-                    <td className="px-2.5 py-1.5"><input value={row.pinSeal} onChange={(event) => updateFireRow(rowIndex, "pinSeal", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
-                    <td className="px-2.5 py-1.5"><input value={row.accessible} onChange={(event) => updateFireRow(rowIndex, "accessible", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
-                    <td className="px-2.5 py-1.5"><input value={row.condition} onChange={(event) => updateFireRow(rowIndex, "condition", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
+                    <td className="px-2.5 py-1.5">
+                      <select value={row.gauge} onChange={(event) => updateFireRow(rowIndex, "gauge", event.target.value as MonthlyFireExtinguisherRow["gauge"])} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50">
+                        <option value="">Select gauge</option>
+                        {FIRE_GAUGE_OPTIONS.map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-2.5 py-1.5">
+                      <select value={row.pinSeal} onChange={(event) => updateFireRow(rowIndex, "pinSeal", event.target.value as MonthlyFireExtinguisherRow["pinSeal"])} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50">
+                        <option value="">Select status</option>
+                        {FIRE_PASS_FAIL_OPTIONS.map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-2.5 py-1.5">
+                      <select value={row.accessible} onChange={(event) => updateFireRow(rowIndex, "accessible", event.target.value as MonthlyFireExtinguisherRow["accessible"])} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50">
+                        <option value="">Select access</option>
+                        {FIRE_YES_NO_OPTIONS.map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-2.5 py-1.5">
+                      <select value={row.condition} onChange={(event) => updateFireRow(rowIndex, "condition", event.target.value as MonthlyFireExtinguisherRow["condition"])} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50">
+                        <option value="">Select condition</option>
+                        {FIRE_PASS_FAIL_OPTIONS.map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </td>
                     <td className="px-2.5 py-1.5"><input value={row.initials} onChange={(event) => updateFireRow(rowIndex, "initials", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
                     <td className="px-2.5 py-1.5"><input value={row.notesWorkOrder} onChange={(event) => updateFireRow(rowIndex, "notesWorkOrder", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
                   </tr>
@@ -627,9 +859,10 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
           </div>
         </section>
 
-        <section className="rounded-2xl border border-(--border)/20 bg-white/90 overflow-hidden">
-          <div className="px-3 md:px-4 py-2.5 border-b border-(--border)/15">
-            <h2 className="text-sm md:text-base font-semibold text-(--text)">Monthly - Emergency Lighting & Exit Sign Test Log</h2>
+        <section className={classNames("rounded-2xl border overflow-hidden", SECTION_TONES.emergency.shell)}>
+          <div className={classNames("px-3 md:px-4 py-2.5 border-b", SECTION_TONES.emergency.header)}>
+            <h2 className="text-sm md:text-base font-bold">Monthly - Emergency Lighting & Exit Sign Test Log</h2>
+            <p className="mt-0.5 text-[11px] font-medium text-white/75">Emergency egress readiness and corrective action visibility.</p>
           </div>
           <div className="p-3 md:p-4 grid grid-cols-1 md:grid-cols-4 gap-2 text-xs border-b border-(--border)/15">
             <input value={payload.emergencyLightingLog.monthYear} onChange={(event) => updatePayload((current) => ({ ...current, emergencyLightingLog: { ...current.emergencyLightingLog, monthYear: event.target.value } }))} disabled={isReadOnly} placeholder="Month / Year" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
@@ -638,12 +871,19 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
             <input value={payload.emergencyLightingLog.signature} onChange={(event) => updatePayload((current) => ({ ...current, emergencyLightingLog: { ...current.emergencyLightingLog, signature: event.target.value } }))} disabled={isReadOnly} placeholder="Signature" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[920px] text-xs">
+            <table className="w-full min-w-[980px] table-fixed text-xs">
+              <colgroup>
+                <col className="w-[152px]" />
+                <col className="w-[240px]" />
+                <col className="w-[152px]" />
+                <col className="w-[280px]" />
+                <col className="w-[96px]" />
+              </colgroup>
               <thead className="bg-slate-100/70 text-(--text)/65">
                 <tr>
                   <th className="px-2.5 py-2 text-left font-semibold">Date</th>
                   <th className="px-2.5 py-2 text-left font-semibold">Area / Device</th>
-                  <th className="px-2.5 py-2 text-left font-semibold">Condition (Good/Bad)</th>
+                  <th className="px-2.5 py-2 text-left font-semibold">Condition (P/F)</th>
                   <th className="px-2.5 py-2 text-left font-semibold">Corrective Action / WO#</th>
                   <th className="px-2.5 py-2 text-left font-semibold">Init.</th>
                 </tr>
@@ -651,15 +891,17 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
               <tbody className="divide-y divide-(--border)/12">
                 {payload.emergencyLightingLog.rows.map((row, rowIndex) => (
                   <tr key={`light-${rowIndex}`}>
-                    <td className="px-2.5 py-1.5"><input type="date" value={row.date} onChange={(event) => updateEmergencyRow(rowIndex, "date", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
-                    <td className="px-2.5 py-1.5"><input value={row.areaDevice} onChange={(event) => updateEmergencyRow(rowIndex, "areaDevice", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
+                    <td className="px-2.5 py-1.5"><input type="date" value={row.date} onChange={(event) => updateEmergencyRow(rowIndex, "date", event.target.value)} disabled={isReadOnly} className="w-full min-w-[9.5rem] rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
+                    <td className="px-2.5 py-1.5"><input value={row.areaDevice} onChange={(event) => updateEmergencyRow(rowIndex, "areaDevice", event.target.value)} disabled={isReadOnly} className="w-full min-w-[15rem] rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
                     <td className="px-2.5 py-1.5">
-                      <select value={row.condition} onChange={(event) => updateEmergencyRow(rowIndex, "condition", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50">
-                        <option value="Good">Good</option>
-                        <option value="Bad">Bad</option>
+                      <select value={row.condition} onChange={(event) => updateEmergencyRow(rowIndex, "condition", event.target.value as MonthlyEmergencyLightingRow["condition"])} disabled={isReadOnly} className="w-full min-w-[9.5rem] rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50">
+                        <option value="">Select condition</option>
+                        {FIRE_PASS_FAIL_OPTIONS.map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
                       </select>
                     </td>
-                    <td className="px-2.5 py-1.5"><input value={row.correctiveActionWorkOrder} onChange={(event) => updateEmergencyRow(rowIndex, "correctiveActionWorkOrder", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
+                    <td className="px-2.5 py-1.5"><input value={row.correctiveActionWorkOrder} onChange={(event) => updateEmergencyRow(rowIndex, "correctiveActionWorkOrder", event.target.value)} disabled={isReadOnly} className="w-full min-w-[17.5rem] rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
                     <td className="px-2.5 py-1.5"><input value={row.initials} onChange={(event) => updateEmergencyRow(rowIndex, "initials", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
                   </tr>
                 ))}
@@ -668,26 +910,27 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
           </div>
         </section>
 
-        <section className="rounded-2xl border border-(--border)/20 bg-white/90 overflow-hidden">
-          <div className="px-3 md:px-4 py-2.5 border-b border-(--border)/15">
-            <h2 className="text-sm md:text-base font-semibold text-(--text)">Monthly Deficiency Register & Open Work Orders</h2>
+        <section className={classNames("rounded-2xl border overflow-hidden", SECTION_TONES.deficiency.shell)}>
+          <div className={classNames("px-3 md:px-4 py-2.5 border-b", SECTION_TONES.deficiency.header)}>
+            <h2 className="text-sm md:text-base font-bold">Monthly Deficiency Register & Open Work Orders</h2>
+            <p className="mt-0.5 text-[11px] font-medium text-white/75">Priority rollup tied to linked work orders and board-approval tracking.</p>
           </div>
           <div className="p-3 md:p-4 space-y-2 text-xs border-b border-(--border)/15">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
               <input value={payload.deficiencyRegister.monthYear} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, monthYear: event.target.value } }))} disabled={isReadOnly} placeholder="Month / Year" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
-              <input value={payload.deficiencyRegister.preparedBy} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, preparedBy: event.target.value } }))} disabled={isReadOnly} placeholder="Prepared By" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
+              <input value={payload.deficiencyRegister.preparedBy} disabled placeholder="Prepared By" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
               <input value={payload.deficiencyRegister.supervisorReview} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, supervisorReview: event.target.value } }))} disabled={isReadOnly} placeholder="Supervisor Review" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
               <input value={payload.deficiencyRegister.signature} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, signature: event.target.value } }))} disabled={isReadOnly} placeholder="Signature" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-8 gap-2">
-              <input value={payload.deficiencyRegister.totalOpenStart} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, totalOpenStart: event.target.value } }))} disabled={isReadOnly} placeholder="Total Open (Start)" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
-              <input value={payload.deficiencyRegister.newThisMonth} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, newThisMonth: event.target.value } }))} disabled={isReadOnly} placeholder="New This Month" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
-              <input value={payload.deficiencyRegister.closedThisMonth} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, closedThisMonth: event.target.value } }))} disabled={isReadOnly} placeholder="Closed This Month" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
-              <input value={payload.deficiencyRegister.openEnd} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, openEnd: event.target.value } }))} disabled={isReadOnly} placeholder="Open (End)" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
-              <input value={payload.deficiencyRegister.level1} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, level1: event.target.value } }))} disabled={isReadOnly} placeholder="Level 1" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
-              <input value={payload.deficiencyRegister.level2} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, level2: event.target.value } }))} disabled={isReadOnly} placeholder="Level 2" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
-              <input value={payload.deficiencyRegister.level3} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, level3: event.target.value } }))} disabled={isReadOnly} placeholder="Level 3" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
-              <input value={payload.deficiencyRegister.level4} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, level4: event.target.value } }))} disabled={isReadOnly} placeholder="Level 4" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
+              <input value={resolvedDeficiencyMetrics.totalOpenStart} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, totalOpenStart: event.target.value } }))} disabled={isReadOnly} placeholder="Total Open (Start)" className="rounded border border-(--border)/35 bg-white/90 px-2 py-1.5 disabled:bg-slate-50" />
+              <input value={resolvedDeficiencyMetrics.newThisMonth} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, newThisMonth: event.target.value } }))} disabled={isReadOnly} placeholder="New This Month" className="rounded border border-(--border)/35 bg-white/90 px-2 py-1.5 disabled:bg-slate-50" />
+              <input value={resolvedDeficiencyMetrics.closedThisMonth} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, closedThisMonth: event.target.value } }))} disabled={isReadOnly} placeholder="Closed This Month" className="rounded border border-(--border)/35 bg-white/90 px-2 py-1.5 disabled:bg-slate-50" />
+              <input value={resolvedDeficiencyMetrics.openEnd} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, openEnd: event.target.value } }))} disabled={isReadOnly} placeholder="Open (End)" className="rounded border border-(--border)/35 bg-white/90 px-2 py-1.5 disabled:bg-slate-50" />
+              <input value={resolvedDeficiencyMetrics.level1} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, level1: event.target.value } }))} disabled={isReadOnly} placeholder="Priority - Low" className="rounded border border-(--border)/35 bg-white/90 px-2 py-1.5 disabled:bg-slate-50" />
+              <input value={resolvedDeficiencyMetrics.level2} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, level2: event.target.value } }))} disabled={isReadOnly} placeholder="Priority - Moderate" className="rounded border border-(--border)/35 bg-white/90 px-2 py-1.5 disabled:bg-slate-50" />
+              <input value={resolvedDeficiencyMetrics.level3} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, level3: event.target.value } }))} disabled={isReadOnly} placeholder="Priority - Immediate" className="rounded border border-(--border)/35 bg-white/90 px-2 py-1.5 disabled:bg-slate-50" />
+              <input value={resolvedDeficiencyMetrics.level4} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, level4: event.target.value } }))} disabled={isReadOnly} placeholder="Board Approval Level" className="rounded border border-(--border)/35 bg-white/90 px-2 py-1.5 disabled:bg-slate-50" />
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -695,7 +938,7 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
               <thead className="bg-slate-100/70 text-(--text)/65">
                 <tr>
                   <th className="px-2.5 py-2 text-left font-semibold">WO#</th>
-                  <th className="px-2.5 py-2 text-left font-semibold">Lvl</th>
+                  <th className="px-2.5 py-2 text-left font-semibold">Priority</th>
                   <th className="px-2.5 py-2 text-left font-semibold">Opened</th>
                   <th className="px-2.5 py-2 text-left font-semibold">Area/Location</th>
                   <th className="px-2.5 py-2 text-left font-semibold">Description / Next Action</th>
@@ -707,7 +950,14 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
                 {payload.deficiencyRegister.rows.map((row, rowIndex) => (
                   <tr key={`def-${rowIndex}`}>
                     <td className="px-2.5 py-1.5"><input value={row.workOrderNumber} onChange={(event) => updateDeficiencyRow(rowIndex, "workOrderNumber", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
-                    <td className="px-2.5 py-1.5"><input value={row.level} onChange={(event) => updateDeficiencyRow(rowIndex, "level", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
+                    <td className="px-2.5 py-1.5">
+                      <select value={row.level} onChange={(event) => updateDeficiencyRow(rowIndex, "level", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50">
+                        <option value="">Select priority</option>
+                        {DEFICIENCY_PRIORITY_OPTIONS.map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </td>
                     <td className="px-2.5 py-1.5"><input value={row.opened} onChange={(event) => updateDeficiencyRow(rowIndex, "opened", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
                     <td className="px-2.5 py-1.5"><input value={row.areaLocation} onChange={(event) => updateDeficiencyRow(rowIndex, "areaLocation", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
                     <td className="px-2.5 py-1.5"><input value={row.descriptionNextAction} onChange={(event) => updateDeficiencyRow(rowIndex, "descriptionNextAction", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
@@ -719,17 +969,18 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
             </table>
           </div>
           <div className="p-3 md:p-4 space-y-2 text-xs border-t border-(--border)/15">
-            <textarea rows={3} value={payload.deficiencyRegister.managementNotes} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, managementNotes: event.target.value } }))} disabled={isReadOnly} placeholder="Management Notes / Risk Controls Implemented" className="w-full rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <input value={payload.deficiencyRegister.ownerExecutiveReview} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, ownerExecutiveReview: event.target.value } }))} disabled={isReadOnly} placeholder="Owner/Executive Review" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
-              <input value={payload.deficiencyRegister.ownerExecutiveDate} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, ownerExecutiveDate: event.target.value } }))} disabled={isReadOnly} placeholder="Date" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
+            <textarea rows={3} value={payload.deficiencyRegister.managementNotes} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, managementNotes: event.target.value } }))} disabled={isReadOnly} placeholder="Management Recommendation Notes" className="w-full rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
+            <div className="grid grid-cols-1 gap-2 md:max-w-md">
+              <input value={payload.deficiencyRegister.ownerExecutiveReview} onChange={(event) => updateBoardApprovalSignature(event.target.value)} disabled={isReadOnly} placeholder="Board Approval Signature" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
+              <input value={payload.deficiencyRegister.ownerExecutiveDate} readOnly disabled placeholder="Board Approval Date & Time" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
             </div>
           </div>
         </section>
 
-        <section className="rounded-2xl border border-(--border)/20 bg-white/90 overflow-hidden">
-          <div className="px-3 md:px-4 py-2.5 border-b border-(--border)/15">
-            <h2 className="text-sm md:text-base font-semibold text-(--text)">Elevator Monthly Compliance & Functional Log</h2>
+        <section className={classNames("rounded-2xl border overflow-hidden", SECTION_TONES.elevator.shell)}>
+          <div className={classNames("px-3 md:px-4 py-2.5 border-b", SECTION_TONES.elevator.header)}>
+            <h2 className="text-sm md:text-base font-bold">Elevator Monthly Compliance & Functional Log</h2>
+            <p className="mt-0.5 text-[11px] font-medium text-white/75">Permit and functionality status for the monthly elevator checks.</p>
           </div>
           <div className="p-3 md:p-4 grid grid-cols-1 md:grid-cols-4 gap-2 text-xs border-b border-(--border)/15">
             <input value={payload.elevatorComplianceLog.monthYear} onChange={(event) => updatePayload((current) => ({ ...current, elevatorComplianceLog: { ...current.elevatorComplianceLog, monthYear: event.target.value } }))} disabled={isReadOnly} placeholder="Month / Year" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
@@ -742,11 +993,11 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
               <thead className="bg-slate-100/70 text-(--text)/65">
                 <tr>
                   <th className="px-2.5 py-2 text-left font-semibold">Elevator</th>
-                  <th className="px-2.5 py-2 text-left font-semibold">Permit (Y/N)</th>
-                  <th className="px-2.5 py-2 text-left font-semibold">Ride/Doors (O/D)</th>
-                  <th className="px-2.5 py-2 text-left font-semibold">Alarm (Y/N)</th>
+                  <th className="px-2.5 py-2 text-left font-semibold">Permit (Yes/No)</th>
+                  <th className="px-2.5 py-2 text-left font-semibold">Ride/Doors (P/F)</th>
+                  <th className="px-2.5 py-2 text-left font-semibold">Alarm (P/F)</th>
                   <th className="px-2.5 py-2 text-left font-semibold">Phone (P/F)</th>
-                  <th className="px-2.5 py-2 text-left font-semibold">Cab (O/D)</th>
+                  <th className="px-2.5 py-2 text-left font-semibold">Cab (P/F)</th>
                   <th className="px-2.5 py-2 text-left font-semibold">Notes/WO#</th>
                 </tr>
               </thead>
@@ -754,11 +1005,46 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
                 {payload.elevatorComplianceLog.rows.map((row, rowIndex) => (
                   <tr key={`elev-${rowIndex}`}>
                     <td className="px-2.5 py-1.5">{row.elevator}</td>
-                    <td className="px-2.5 py-1.5"><input value={row.permit} onChange={(event) => updateElevatorRow(rowIndex, "permit", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
-                    <td className="px-2.5 py-1.5"><input value={row.rideDoors} onChange={(event) => updateElevatorRow(rowIndex, "rideDoors", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
-                    <td className="px-2.5 py-1.5"><input value={row.alarm} onChange={(event) => updateElevatorRow(rowIndex, "alarm", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
-                    <td className="px-2.5 py-1.5"><input value={row.phone} onChange={(event) => updateElevatorRow(rowIndex, "phone", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
-                    <td className="px-2.5 py-1.5"><input value={row.cab} onChange={(event) => updateElevatorRow(rowIndex, "cab", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
+                    <td className="px-2.5 py-1.5">
+                      <select value={row.permit} onChange={(event) => updateElevatorRow(rowIndex, "permit", event.target.value as MonthlyElevatorComplianceRow["permit"])} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50">
+                        <option value="">Select permit</option>
+                        {FIRE_YES_NO_OPTIONS.map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-2.5 py-1.5">
+                      <select value={row.rideDoors} onChange={(event) => updateElevatorRow(rowIndex, "rideDoors", event.target.value as MonthlyElevatorComplianceRow["rideDoors"])} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50">
+                        <option value="">Select status</option>
+                        {FIRE_PASS_FAIL_OPTIONS.map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-2.5 py-1.5">
+                      <select value={row.alarm} onChange={(event) => updateElevatorRow(rowIndex, "alarm", event.target.value as MonthlyElevatorComplianceRow["alarm"])} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50">
+                        <option value="">Select status</option>
+                        {FIRE_PASS_FAIL_OPTIONS.map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-2.5 py-1.5">
+                      <select value={row.phone} onChange={(event) => updateElevatorRow(rowIndex, "phone", event.target.value as MonthlyElevatorComplianceRow["phone"])} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50">
+                        <option value="">Select status</option>
+                        {FIRE_PASS_FAIL_OPTIONS.map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-2.5 py-1.5">
+                      <select value={row.cab} onChange={(event) => updateElevatorRow(rowIndex, "cab", event.target.value as MonthlyElevatorComplianceRow["cab"])} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50">
+                        <option value="">Select status</option>
+                        {FIRE_PASS_FAIL_OPTIONS.map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </td>
                     <td className="px-2.5 py-1.5"><input value={row.notesWorkOrder} onChange={(event) => updateElevatorRow(rowIndex, "notesWorkOrder", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
                   </tr>
                 ))}
@@ -766,17 +1052,18 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
             </table>
           </div>
           <div className="p-3 md:p-4 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs border-t border-(--border)/15">
-            <input value={payload.elevatorComplianceLog.northCar1Expiration} onChange={(event) => updatePayload((current) => ({ ...current, elevatorComplianceLog: { ...current.elevatorComplianceLog, northCar1Expiration: event.target.value } }))} disabled={isReadOnly} placeholder="North Car 1 Expiration" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
-            <input value={payload.elevatorComplianceLog.northCar2Expiration} onChange={(event) => updatePayload((current) => ({ ...current, elevatorComplianceLog: { ...current.elevatorComplianceLog, northCar2Expiration: event.target.value } }))} disabled={isReadOnly} placeholder="North Car 2 Expiration" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
-            <input value={payload.elevatorComplianceLog.southCar1Expiration} onChange={(event) => updatePayload((current) => ({ ...current, elevatorComplianceLog: { ...current.elevatorComplianceLog, southCar1Expiration: event.target.value } }))} disabled={isReadOnly} placeholder="South Car 1 Expiration" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
-            <input value={payload.elevatorComplianceLog.southCar2Expiration} onChange={(event) => updatePayload((current) => ({ ...current, elevatorComplianceLog: { ...current.elevatorComplianceLog, southCar2Expiration: event.target.value } }))} disabled={isReadOnly} placeholder="South Car 2 Expiration" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
+            <input value={payload.elevatorComplianceLog.northCarAExpiration} onChange={(event) => updatePayload((current) => ({ ...current, elevatorComplianceLog: { ...current.elevatorComplianceLog, northCarAExpiration: event.target.value } }))} disabled={isReadOnly} placeholder="North Car A Expiration" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
+            <input value={payload.elevatorComplianceLog.northCarBExpiration} onChange={(event) => updatePayload((current) => ({ ...current, elevatorComplianceLog: { ...current.elevatorComplianceLog, northCarBExpiration: event.target.value } }))} disabled={isReadOnly} placeholder="North Car B Expiration" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
+            <input value={payload.elevatorComplianceLog.southCarAExpiration} onChange={(event) => updatePayload((current) => ({ ...current, elevatorComplianceLog: { ...current.elevatorComplianceLog, southCarAExpiration: event.target.value } }))} disabled={isReadOnly} placeholder="South Car A Expiration" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
+            <input value={payload.elevatorComplianceLog.southCarBExpiration} onChange={(event) => updatePayload((current) => ({ ...current, elevatorComplianceLog: { ...current.elevatorComplianceLog, southCarBExpiration: event.target.value } }))} disabled={isReadOnly} placeholder="South Car B Expiration" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
             <textarea value={payload.elevatorComplianceLog.notesCorrectiveActions} onChange={(event) => updatePayload((current) => ({ ...current, elevatorComplianceLog: { ...current.elevatorComplianceLog, notesCorrectiveActions: event.target.value } }))} disabled={isReadOnly} placeholder="Notes / Corrective Actions" className="md:col-span-2 rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" rows={3} />
           </div>
         </section>
 
-        <section className="rounded-2xl border border-(--border)/20 bg-white/90 overflow-hidden">
-          <div className="px-3 md:px-4 py-2.5 border-b border-(--border)/15">
-            <h2 className="text-sm md:text-base font-semibold text-(--text)">Monthly Closeout & Filing Certification</h2>
+        <section className={classNames("rounded-2xl border overflow-hidden", SECTION_TONES.closeout.shell)}>
+          <div className={classNames("px-3 md:px-4 py-2.5 border-b", SECTION_TONES.closeout.header)}>
+            <h2 className="text-sm md:text-base font-bold">Monthly Closeout & Filing Certification</h2>
+            <p className="mt-0.5 text-[11px] font-medium text-white/75">Month-end metrics, signoff, and operational closeout.</p>
           </div>
           <div className="p-3 md:p-4 space-y-2 text-xs border-b border-(--border)/15">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
@@ -820,10 +1107,10 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
                   ["totalWorkOrdersOpened", "Total Work Orders Opened"],
                   ["totalWorkOrdersClosed", "Total Work Orders Closed"],
                   ["workOrdersRemainingOpen", "Work Orders Remaining Open (end of month)"],
-                  ["level1Count", "Level 1 Count"],
-                  ["level2Count", "Level 2 Count"],
-                  ["level3Count", "Level 3 Count"],
-                  ["level4Count", "Level 4 Count"],
+                  ["level1Count", "Priority - Low"],
+                  ["level2Count", "Priority - Moderate"],
+                  ["level3Count", "Priority - Immediate"],
+                  ["level4Count", "Board Approval Level"],
                   ["notableEvents", "Notable Events / Incidents"],
                 ] as const).map(([field, label]) => (
                   <tr key={field}>

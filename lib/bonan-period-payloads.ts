@@ -8,6 +8,13 @@ import {
 } from "./us-central-time";
 
 export type DashboardStatus = "" | "green" | "yellow" | "red";
+export type MonthlyFireExtinguisherGauge = "" | "Green" | "Yellow" | "Red";
+export type MonthlyFireExtinguisherPassFail = "" | "Pass" | "Fail";
+export type MonthlyFireExtinguisherYesNo = "" | "Yes" | "No";
+export type MonthlyElevatorPermit = "" | "Yes" | "No";
+export type MonthlyElevatorPassFail = "" | "Pass" | "Fail";
+
+const TL_CORP_PREPARED_BY = "TL Corp";
 
 export interface PriorityWatchRow {
   reference: string;
@@ -163,10 +170,10 @@ export interface MonthlyExceptionRow {
 
 export interface MonthlyFireExtinguisherRow {
   extinguisherIdLocation: string;
-  gauge: string;
-  pinSeal: string;
-  accessible: string;
-  condition: string;
+  gauge: MonthlyFireExtinguisherGauge;
+  pinSeal: MonthlyFireExtinguisherPassFail;
+  accessible: MonthlyFireExtinguisherYesNo;
+  condition: MonthlyFireExtinguisherPassFail;
   initials: string;
   notesWorkOrder: string;
 }
@@ -174,7 +181,7 @@ export interface MonthlyFireExtinguisherRow {
 export interface MonthlyEmergencyLightingRow {
   date: string;
   areaDevice: string;
-  condition: string;
+  condition: MonthlyFireExtinguisherPassFail;
   correctiveActionWorkOrder: string;
   initials: string;
 }
@@ -191,11 +198,11 @@ export interface MonthlyDeficiencyRegisterRow {
 
 export interface MonthlyElevatorComplianceRow {
   elevator: string;
-  permit: string;
-  rideDoors: string;
-  alarm: string;
-  phone: string;
-  cab: string;
+  permit: MonthlyElevatorPermit;
+  rideDoors: MonthlyElevatorPassFail;
+  alarm: MonthlyElevatorPassFail;
+  phone: MonthlyElevatorPassFail;
+  cab: MonthlyElevatorPassFail;
   notesWorkOrder: string;
 }
 
@@ -278,10 +285,10 @@ export interface MonthlyReportPayload {
     vendorServiceDate: string;
     workOrderNumber: string;
     rows: MonthlyElevatorComplianceRow[];
-    northCar1Expiration: string;
-    northCar2Expiration: string;
-    southCar1Expiration: string;
-    southCar2Expiration: string;
+    northCarAExpiration: string;
+    northCarBExpiration: string;
+    southCarAExpiration: string;
+    southCarBExpiration: string;
     notesCorrectiveActions: string;
   };
   closeoutCertification: {
@@ -297,6 +304,10 @@ export interface MonthlyReportPayload {
     certifiedDate: string;
     reviewedAcceptedSignature: string;
     reviewedAcceptedDate: string;
+  };
+  sharedOutlook: {
+    recommendations: string;
+    upcoming: string;
   };
   summaryMetrics: {
     totalWorkOrdersOpened: string;
@@ -348,6 +359,66 @@ function asDashboardStatus(value: unknown): DashboardStatus {
   return value === "green" || value === "yellow" || value === "red" || value === ""
     ? value
     : "";
+}
+
+function normalizeChoice(value: unknown): string {
+  return asString(value).trim().toLowerCase();
+}
+
+export function normalizeMonthlyFireExtinguisherGauge(value: unknown): MonthlyFireExtinguisherGauge {
+  const normalized = normalizeChoice(value);
+  if (!normalized) return "";
+  if (normalized === "green" || normalized === "g" || normalized === "y" || normalized === "yes") return "Green";
+  if (normalized === "yellow") return "Yellow";
+  if (normalized === "red" || normalized === "r" || normalized === "n" || normalized === "no") return "Red";
+  return "";
+}
+
+export function normalizeMonthlyFireExtinguisherPassFail(value: unknown): MonthlyFireExtinguisherPassFail {
+  const normalized = normalizeChoice(value);
+  if (!normalized) return "";
+  if (
+    normalized === "pass" ||
+    normalized === "p" ||
+    normalized === "y" ||
+    normalized === "yes" ||
+    normalized === "o" ||
+    normalized === "ok" ||
+    normalized === "good"
+  ) {
+    return "Pass";
+  }
+  if (
+    normalized === "fail" ||
+    normalized === "f" ||
+    normalized === "n" ||
+    normalized === "no" ||
+    normalized === "d" ||
+    normalized === "deficient" ||
+    normalized === "bad"
+  ) {
+    return "Fail";
+  }
+  return "";
+}
+
+export function normalizeMonthlyFireExtinguisherYesNo(value: unknown): MonthlyFireExtinguisherYesNo {
+  const normalized = normalizeChoice(value);
+  if (!normalized) return "";
+  if (normalized === "yes" || normalized === "y" || normalized === "true") return "Yes";
+  if (normalized === "no" || normalized === "n" || normalized === "false") return "No";
+  return "";
+}
+
+function normalizeMonthlyElevatorName(value: unknown, fallback: string): string {
+  const raw = asString(value).trim();
+  const normalized = raw.toLowerCase();
+  if (!normalized) return fallback;
+  if (normalized === "north car 1") return "North Car A";
+  if (normalized === "north car 2") return "North Car B";
+  if (normalized === "south car 1") return "South Car A";
+  if (normalized === "south car 2") return "South Car B";
+  return raw;
 }
 
 function makePriorityWatchRow(): PriorityWatchRow {
@@ -461,7 +532,7 @@ function makeMonthlyEmergencyLightingRow(): MonthlyEmergencyLightingRow {
   return {
     date: "",
     areaDevice: "",
-    condition: "Good",
+    condition: "",
     correctiveActionWorkOrder: "",
     initials: "",
   };
@@ -770,7 +841,7 @@ export function createDefaultMonthlyReportPayload(baseDate = getUsCentralDate())
     },
     deficiencyRegister: {
       monthYear: monthKey,
-      preparedBy: "",
+      preparedBy: TL_CORP_PREPARED_BY,
       supervisorReview: "",
       signature: "",
       totalOpenStart: "",
@@ -792,15 +863,15 @@ export function createDefaultMonthlyReportPayload(baseDate = getUsCentralDate())
       vendorServiceDate: "",
       workOrderNumber: "",
       rows: [
-        makeMonthlyElevatorComplianceRow("North Car 1"),
-        makeMonthlyElevatorComplianceRow("North Car 2"),
-        makeMonthlyElevatorComplianceRow("South Car 1"),
-        makeMonthlyElevatorComplianceRow("South Car 2"),
+        makeMonthlyElevatorComplianceRow("North Car A"),
+        makeMonthlyElevatorComplianceRow("North Car B"),
+        makeMonthlyElevatorComplianceRow("South Car A"),
+        makeMonthlyElevatorComplianceRow("South Car B"),
       ],
-      northCar1Expiration: "",
-      northCar2Expiration: "",
-      southCar1Expiration: "",
-      southCar2Expiration: "",
+      northCarAExpiration: "",
+      northCarBExpiration: "",
+      southCarAExpiration: "",
+      southCarBExpiration: "",
       notesCorrectiveActions: "",
     },
     closeoutCertification: {
@@ -816,6 +887,10 @@ export function createDefaultMonthlyReportPayload(baseDate = getUsCentralDate())
       certifiedDate: "",
       reviewedAcceptedSignature: "",
       reviewedAcceptedDate: "",
+    },
+    sharedOutlook: {
+      recommendations: "",
+      upcoming: "",
     },
     summaryMetrics: {
       totalWorkOrdersOpened: "",
@@ -937,10 +1012,10 @@ export function normalizeMonthlyReportPayload(input: unknown, fallbackDate = get
         defaults.fireExtinguisherLog.rows,
         (row) => ({
           extinguisherIdLocation: asString(row.extinguisherIdLocation),
-          gauge: asString(row.gauge),
-          pinSeal: asString(row.pinSeal),
-          accessible: asString(row.accessible),
-          condition: asString(row.condition),
+          gauge: normalizeMonthlyFireExtinguisherGauge(row.gauge),
+          pinSeal: normalizeMonthlyFireExtinguisherPassFail(row.pinSeal),
+          accessible: normalizeMonthlyFireExtinguisherYesNo(row.accessible),
+          condition: normalizeMonthlyFireExtinguisherPassFail(row.condition),
           initials: asString(row.initials),
           notesWorkOrder: asString(row.notesWorkOrder),
         })
@@ -957,7 +1032,7 @@ export function normalizeMonthlyReportPayload(input: unknown, fallbackDate = get
         (row) => ({
           date: asString(row.date),
           areaDevice: asString(row.areaDevice),
-          condition: asString(row.condition || row.passFail) || "Good",
+          condition: normalizeMonthlyFireExtinguisherPassFail(row.condition ?? row.passFail),
           correctiveActionWorkOrder: asString(row.correctiveActionWorkOrder),
           initials: asString(row.initials),
         })
@@ -965,7 +1040,7 @@ export function normalizeMonthlyReportPayload(input: unknown, fallbackDate = get
     },
     deficiencyRegister: {
       monthYear: asString((payload.deficiencyRegister as Record<string, unknown> | undefined)?.monthYear) || defaults.deficiencyRegister.monthYear,
-      preparedBy: asString((payload.deficiencyRegister as Record<string, unknown> | undefined)?.preparedBy),
+      preparedBy: TL_CORP_PREPARED_BY,
       supervisorReview: asString((payload.deficiencyRegister as Record<string, unknown> | undefined)?.supervisorReview),
       signature: asString((payload.deficiencyRegister as Record<string, unknown> | undefined)?.signature),
       totalOpenStart: asString((payload.deficiencyRegister as Record<string, unknown> | undefined)?.totalOpenStart),
@@ -1002,19 +1077,27 @@ export function normalizeMonthlyReportPayload(input: unknown, fallbackDate = get
         (payload.elevatorComplianceLog as Record<string, unknown> | undefined)?.rows,
         defaults.elevatorComplianceLog.rows,
         (row, fallback) => ({
-          elevator: asString(row.elevator) || fallback.elevator,
-          permit: asString(row.permit),
-          rideDoors: asString(row.rideDoors),
-          alarm: asString(row.alarm),
-          phone: asString(row.phone),
-          cab: asString(row.cab),
+          elevator: normalizeMonthlyElevatorName(row.elevator, fallback.elevator),
+          permit: normalizeMonthlyFireExtinguisherYesNo(row.permit),
+          rideDoors: normalizeMonthlyFireExtinguisherPassFail(row.rideDoors),
+          alarm: normalizeMonthlyFireExtinguisherPassFail(row.alarm),
+          phone: normalizeMonthlyFireExtinguisherPassFail(row.phone),
+          cab: normalizeMonthlyFireExtinguisherPassFail(row.cab),
           notesWorkOrder: asString(row.notesWorkOrder),
         })
       ),
-      northCar1Expiration: asString((payload.elevatorComplianceLog as Record<string, unknown> | undefined)?.northCar1Expiration),
-      northCar2Expiration: asString((payload.elevatorComplianceLog as Record<string, unknown> | undefined)?.northCar2Expiration),
-      southCar1Expiration: asString((payload.elevatorComplianceLog as Record<string, unknown> | undefined)?.southCar1Expiration),
-      southCar2Expiration: asString((payload.elevatorComplianceLog as Record<string, unknown> | undefined)?.southCar2Expiration),
+      northCarAExpiration:
+        asString((payload.elevatorComplianceLog as Record<string, unknown> | undefined)?.northCarAExpiration) ||
+        asString((payload.elevatorComplianceLog as Record<string, unknown> | undefined)?.northCar1Expiration),
+      northCarBExpiration:
+        asString((payload.elevatorComplianceLog as Record<string, unknown> | undefined)?.northCarBExpiration) ||
+        asString((payload.elevatorComplianceLog as Record<string, unknown> | undefined)?.northCar2Expiration),
+      southCarAExpiration:
+        asString((payload.elevatorComplianceLog as Record<string, unknown> | undefined)?.southCarAExpiration) ||
+        asString((payload.elevatorComplianceLog as Record<string, unknown> | undefined)?.southCar1Expiration),
+      southCarBExpiration:
+        asString((payload.elevatorComplianceLog as Record<string, unknown> | undefined)?.southCarBExpiration) ||
+        asString((payload.elevatorComplianceLog as Record<string, unknown> | undefined)?.southCar2Expiration),
       notesCorrectiveActions: asString((payload.elevatorComplianceLog as Record<string, unknown> | undefined)?.notesCorrectiveActions),
     },
     closeoutCertification: {
@@ -1030,6 +1113,10 @@ export function normalizeMonthlyReportPayload(input: unknown, fallbackDate = get
       certifiedDate: asString((payload.closeoutCertification as Record<string, unknown> | undefined)?.certifiedDate),
       reviewedAcceptedSignature: asString((payload.closeoutCertification as Record<string, unknown> | undefined)?.reviewedAcceptedSignature),
       reviewedAcceptedDate: asString((payload.closeoutCertification as Record<string, unknown> | undefined)?.reviewedAcceptedDate),
+    },
+    sharedOutlook: {
+      recommendations: asString((payload.sharedOutlook as Record<string, unknown> | undefined)?.recommendations),
+      upcoming: asString((payload.sharedOutlook as Record<string, unknown> | undefined)?.upcoming),
     },
     summaryMetrics: {
       totalWorkOrdersOpened: asString((payload.summaryMetrics as Record<string, unknown> | undefined)?.totalWorkOrdersOpened),

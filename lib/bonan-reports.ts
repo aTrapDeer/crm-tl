@@ -85,6 +85,8 @@ export interface BonanCollectiveSummary {
     cancelled: number;
     emergency: number;
     high: number;
+    normal: number;
+    low: number;
   };
   material_costs: {
     total: number;
@@ -579,7 +581,9 @@ export async function getBonanCollectiveSummary(reportId: string): Promise<Bonan
               SUM(CASE WHEN work_completed = 'completed' THEN 1 ELSE 0 END) as completed_count,
               SUM(CASE WHEN work_completed = 'cancelled' THEN 1 ELSE 0 END) as cancelled_count,
               SUM(CASE WHEN priority = 'emergency' THEN 1 ELSE 0 END) as emergency_count,
-              SUM(CASE WHEN priority = 'high' THEN 1 ELSE 0 END) as high_count
+              SUM(CASE WHEN priority = 'high' THEN 1 ELSE 0 END) as high_count,
+              SUM(CASE WHEN priority = 'normal' THEN 1 ELSE 0 END) as normal_count,
+              SUM(CASE WHEN priority = 'low' THEN 1 ELSE 0 END) as low_count
             FROM linked_work_orders`,
       args: [period.start, period.end, period.start, period.end],
     }),
@@ -699,6 +703,8 @@ export async function getBonanCollectiveSummary(reportId: string): Promise<Bonan
       cancelled: asNumber(workOrdersRow.cancelled_count),
       emergency: asNumber(workOrdersRow.emergency_count),
       high: asNumber(workOrdersRow.high_count),
+      normal: asNumber(workOrdersRow.normal_count),
+      low: asNumber(workOrdersRow.low_count),
     },
     material_costs: {
       total: receiptWorkOrderCosts + legacyWorkOrderCosts + incidentMaterialCosts,

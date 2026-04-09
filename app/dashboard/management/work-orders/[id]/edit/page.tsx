@@ -485,10 +485,10 @@ export default function EditWorkOrderPage({ params }: { params: Promise<{ id: st
                 <h2 className="text-lg font-semibold text-(--text)">Work Details</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value as WorkOrder["priority"] })} className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)">
-                    <option value="emergency">Emergency</option>
-                    <option value="high">High</option>
-                    <option value="normal">Normal</option>
-                    <option value="low">Low</option>
+                      <option value="emergency">Board Approval Level</option>
+                      <option value="high">Priority - Immediate</option>
+                      <option value="normal">Priority - Moderate</option>
+                      <option value="low">Priority - Low</option>
                   </select>
                   <select value={form.service_type} onChange={(event) => setForm({ ...form, service_type: event.target.value as WorkOrder["service_type"] })} className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)">
                     {SERVICE_TYPES.map((type) => (

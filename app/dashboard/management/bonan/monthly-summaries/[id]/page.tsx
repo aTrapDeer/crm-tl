@@ -55,6 +55,10 @@ interface BonanCollectiveSummary {
     in_progress: number;
     completed: number;
     cancelled: number;
+    emergency: number;
+    high: number;
+    normal: number;
+    low: number;
   };
   material_costs: {
     total: number;
@@ -81,13 +85,31 @@ function countRowsWithValues<T extends object>(
   return rows.filter((row) => keys.some((key) => hasText(row[key] as string | null | undefined))).length;
 }
 
-function getDeficiencyLevelBucket(level: string): "1" | "2" | "3" | "4" | null {
+function getDeficiencyPriorityBucket(level: string): "1" | "2" | "3" | "4" | null {
   const normalized = level.trim().toLowerCase();
-  if (normalized === "1" || normalized === "l1" || normalized === "level 1") return "1";
-  if (normalized === "2" || normalized === "l2" || normalized === "level 2") return "2";
-  if (normalized === "3" || normalized === "l3" || normalized === "level 3") return "3";
-  if (normalized === "4" || normalized === "l4" || normalized === "level 4") return "4";
+  if (normalized === "1" || normalized === "l1" || normalized === "level 1" || normalized === "priority - low" || normalized === "low") return "1";
+  if (normalized === "2" || normalized === "l2" || normalized === "level 2" || normalized === "priority - moderate" || normalized === "moderate" || normalized === "normal") return "2";
+  if (normalized === "3" || normalized === "l3" || normalized === "level 3" || normalized === "priority - immediate" || normalized === "immediate" || normalized === "high") return "3";
+  if (normalized === "4" || normalized === "l4" || normalized === "level 4" || normalized === "board approval level" || normalized === "board approval" || normalized === "emergency") return "4";
   return null;
+}
+
+function getPriorityCounts(summary: BonanCollectiveSummary | null, payload: MonthlyReportPayload) {
+  const fallback = payload.deficiencyRegister.rows.reduce(
+    (counts, row) => {
+      const bucket = getDeficiencyPriorityBucket(row.level);
+      if (bucket) counts[bucket] += 1;
+      return counts;
+    },
+    { "1": 0, "2": 0, "3": 0, "4": 0 }
+  );
+
+  return {
+    low: summary?.work_orders.low ?? fallback["1"],
+    moderate: summary?.work_orders.normal ?? fallback["2"],
+    immediate: summary?.work_orders.high ?? fallback["3"],
+    boardApproval: summary?.work_orders.emergency ?? fallback["4"],
+  };
 }
 
 function statusClass(status: BonanReportStatus): string {
@@ -196,14 +218,7 @@ export default function BonanMonthlySummaryDetailPage({ params }: { params: Prom
       };
     }
 
-    const levelCounts = payload.deficiencyRegister.rows.reduce(
-      (counts, row) => {
-        const bucket = getDeficiencyLevelBucket(row.level);
-        if (bucket) counts[bucket] += 1;
-        return counts;
-      },
-      { "1": 0, "2": 0, "3": 0, "4": 0 }
-    );
+    const priorityCounts = getPriorityCounts(summary, payload);
 
     const openedFallback = summary?.work_orders.total ?? countRowsWithValues(payload.workOrdersOpened, [
       "workOrderNumber",
@@ -244,19 +259,19 @@ export default function BonanMonthlySummaryDetailPage({ params }: { params: Prom
       level1Count:
         payload.summaryMetrics.level1Count ||
         payload.deficiencyRegister.level1 ||
-        String(levelCounts["1"]),
+        String(priorityCounts.low),
       level2Count:
         payload.summaryMetrics.level2Count ||
         payload.deficiencyRegister.level2 ||
-        String(levelCounts["2"]),
+        String(priorityCounts.moderate),
       level3Count:
         payload.summaryMetrics.level3Count ||
         payload.deficiencyRegister.level3 ||
-        String(levelCounts["3"]),
+        String(priorityCounts.immediate),
       level4Count:
         payload.summaryMetrics.level4Count ||
         payload.deficiencyRegister.level4 ||
-        String(levelCounts["4"]),
+        String(priorityCounts.boardApproval),
       notableEvents: payload.summaryMetrics.notableEvents || String(notableEventsFallback),
     };
   }, [payload, summary]);
@@ -376,15 +391,34 @@ export default function BonanMonthlySummaryDetailPage({ params }: { params: Prom
               "metadata.constructionMgmtReview": payload.metadata.constructionMgmtReview || "",
               "collectiveSummary.notes": payload.collectiveSummary.notes || "",
               "closeoutCertification.preparedBy": payload.closeoutCertification.preparedBy || "",
+              "sharedOutlook.recommendations": payload.sharedOutlook.recommendations || "",
+              "sharedOutlook.upcoming": payload.sharedOutlook.upcoming || "",
             }}
             fieldOptions={[
               { value: "metadata.propertyManagerReview", label: "Property Manager Review" },
               { value: "metadata.constructionMgmtReview", label: "Construction Review" },
               { value: "collectiveSummary.notes", label: "Collective Summary Notes" },
               { value: "closeoutCertification.preparedBy", label: "Closeout Prepared By" },
+              { value: "sharedOutlook.recommendations", label: "Recommendations" },
+              { value: "sharedOutlook.upcoming", label: "Upcoming" },
             ]}
           />
         )}
+
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="rounded-2xl border border-(--border)/20 bg-white/90 p-3">
+            <h2 className="text-sm font-semibold text-(--text)">Recommendations</h2>
+            <p className="mt-2 text-xs leading-6 text-(--text)/75 whitespace-pre-wrap">
+              {payload.sharedOutlook.recommendations || "-"}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-(--border)/20 bg-white/90 p-3">
+            <h2 className="text-sm font-semibold text-(--text)">Upcoming</h2>
+            <p className="mt-2 text-xs leading-6 text-(--text)/75 whitespace-pre-wrap">
+              {payload.sharedOutlook.upcoming || "-"}
+            </p>
+          </div>
+        </section>
 
         <section className="rounded-2xl border border-(--border)/20 bg-white/90 overflow-hidden">
           <div className="px-3 py-2.5 border-b border-(--border)/15">
@@ -503,10 +537,10 @@ export default function BonanMonthlySummaryDetailPage({ params }: { params: Prom
               <p><strong>Total WO Opened:</strong> {resolvedSummaryMetrics.totalWorkOrdersOpened}</p>
               <p><strong>Total WO Closed:</strong> {resolvedSummaryMetrics.totalWorkOrdersClosed}</p>
               <p><strong>WO Remaining Open:</strong> {resolvedSummaryMetrics.workOrdersRemainingOpen}</p>
-              <p><strong>Level 1 Count:</strong> {resolvedSummaryMetrics.level1Count}</p>
-              <p><strong>Level 2 Count:</strong> {resolvedSummaryMetrics.level2Count}</p>
-              <p><strong>Level 3 Count:</strong> {resolvedSummaryMetrics.level3Count}</p>
-              <p><strong>Level 4 Count:</strong> {resolvedSummaryMetrics.level4Count}</p>
+              <p><strong>Priority - Low:</strong> {resolvedSummaryMetrics.level1Count}</p>
+              <p><strong>Priority - Moderate:</strong> {resolvedSummaryMetrics.level2Count}</p>
+              <p><strong>Priority - Immediate:</strong> {resolvedSummaryMetrics.level3Count}</p>
+              <p><strong>Board Approval Level:</strong> {resolvedSummaryMetrics.level4Count}</p>
               <p><strong>Notable Events:</strong> {resolvedSummaryMetrics.notableEvents}</p>
             </div>
           </div>

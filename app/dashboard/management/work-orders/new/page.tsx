@@ -12,7 +12,6 @@ interface User {
   role: string;
   email: string;
 }
-
 interface Project {
   id: string;
   name: string;
@@ -316,10 +315,10 @@ export default function NewWorkOrderPage() {
                   required
                   className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
                 >
-                  <option value="emergency">🔴 Emergency</option>
-                  <option value="high">🟠 High</option>
-                  <option value="normal">🔵 Normal</option>
-                  <option value="low">⚪ Low</option>
+                  <option value="emergency">Board Approval Level</option>
+                  <option value="high">Priority - Immediate</option>
+                  <option value="normal">Priority - Moderate</option>
+                  <option value="low">Priority - Low</option>
                 </select>
               </div>
               <div>
@@ -432,4 +431,5 @@ export default function NewWorkOrderPage() {
     </div>
   );
 }
+
 
