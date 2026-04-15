@@ -402,6 +402,24 @@ CREATE TABLE IF NOT EXISTS bonan_client_approvals (
 
 CREATE INDEX IF NOT EXISTS idx_bonan_client_approvals_entity ON bonan_client_approvals(entity_type, entity_id);
 
+CREATE TABLE IF NOT EXISTS bonan_client_decisions (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  site TEXT NOT NULL DEFAULT 'bonan_towers' CHECK (site IN ('bonan_towers')),
+  entity_type TEXT NOT NULL CHECK (entity_type IN ('bonan_report', 'work_order', 'incident_report')),
+  entity_id TEXT NOT NULL,
+  entity_revision INTEGER NOT NULL DEFAULT 1,
+  decision_status TEXT NOT NULL CHECK (decision_status IN ('approved', 'denied')),
+  responded_by_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  responder_name TEXT NOT NULL,
+  response_date TEXT NOT NULL,
+  responded_at TEXT NOT NULL DEFAULT (datetime('now')),
+  note TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(entity_type, entity_id, responded_by_user_id, entity_revision)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bonan_client_decisions_entity ON bonan_client_decisions(entity_type, entity_id);
+
 CREATE TABLE IF NOT EXISTS bonan_change_requests (
   id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
   site TEXT NOT NULL DEFAULT 'bonan_towers' CHECK (site IN ('bonan_towers')),

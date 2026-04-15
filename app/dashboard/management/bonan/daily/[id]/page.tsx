@@ -21,6 +21,12 @@ import {
   formatUsCentralTime,
   getUsCentralDate,
 } from "@/lib/us-central-time";
+import {
+  formatBonanTemperatureValue,
+  normalizeBonanMainShutoffCondition,
+  normalizeBonanPsiInput,
+  normalizeBonanTemperatureInput,
+} from "@/lib/bonan-daily-formatting";
 import BonanClientReportReview from "@/app/components/BonanClientReportReview";
 import { ModalLayer } from "@/app/components/ModalLayer";
 
@@ -238,6 +244,49 @@ function YesNoOptions() {
       <option value="Yes">Yes</option>
       <option value="No">No</option>
     </>
+  );
+}
+
+function UnitSuffixInput({
+  value,
+  onChange,
+  unit,
+  disabled,
+  placeholder,
+  className = "",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  unit: "temperature" | "psi";
+  disabled?: boolean;
+  placeholder?: string;
+  className?: string;
+}) {
+  const normalizedValue =
+    unit === "temperature"
+      ? normalizeBonanTemperatureInput(value)
+      : normalizeBonanPsiInput(value);
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={normalizedValue}
+        onChange={(event) =>
+          onChange(
+            unit === "temperature"
+              ? normalizeBonanTemperatureInput(event.target.value)
+              : normalizeBonanPsiInput(event.target.value)
+          )
+        }
+        disabled={disabled}
+        placeholder={placeholder}
+        className={`w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 pr-11 text-xs disabled:bg-slate-50 ${className}`.trim()}
+      />
+      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[11px] font-semibold text-(--text)/45">
+        {unit === "temperature" ? "°F" : "PSI"}
+      </span>
+    </div>
   );
 }
 
@@ -2005,8 +2054,8 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                       sectionKey: "critical-systems",
                       sectionName: "Critical Systems & Life Safety",
                       details:
-                        `Pump Room: ${payload.temperatures.pumpRoom || "n/a"}, Boiler Room: ${payload.temperatures.boilerRoom || "n/a"}, ` +
-                        `Atrium: ${payload.temperatures.atrium || "n/a"}.`,
+                        `Pump Room: ${formatBonanTemperatureValue(payload.temperatures.pumpRoom) || "n/a"}, Boiler Room: ${formatBonanTemperatureValue(payload.temperatures.boilerRoom) || "n/a"}, ` +
+                        `Atrium: ${formatBonanTemperatureValue(payload.temperatures.atrium) || "n/a"}.`,
                     })
                   }
                   disabled={creatingAssociatedWorkOrder || creatingAssociatedIncidentReport}
@@ -2020,48 +2069,48 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
               </div>
               <div className="px-4 py-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <label className="min-w-0 space-y-1 text-xs">
-                  <span className="font-medium text-(--text)/60">Pump Room (F)</span>
-                  <input
-                    type="text"
+                  <span className="font-medium text-(--text)/60">Pump Room</span>
+                  <UnitSuffixInput
                     value={payload.temperatures.pumpRoom}
-                    onChange={(event) =>
+                    onChange={(value) =>
                       updatePayload((current) => ({
                         ...current,
-                        temperatures: { ...current.temperatures, pumpRoom: event.target.value },
+                        temperatures: { ...current.temperatures, pumpRoom: value },
                       }))
                     }
+                    unit="temperature"
                     disabled={isReadOnly}
-                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) text-center font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
+                    className="rounded-lg border-(--border)/40 bg-(--bg) px-3 py-2.5 text-center text-sm font-semibold text-(--text) focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-60"
                   />
                 </label>
                 <label className="min-w-0 space-y-1 text-xs">
-                  <span className="font-medium text-(--text)/60">Boiler Room (F)</span>
-                  <input
-                    type="text"
+                  <span className="font-medium text-(--text)/60">Boiler Room</span>
+                  <UnitSuffixInput
                     value={payload.temperatures.boilerRoom}
-                    onChange={(event) =>
+                    onChange={(value) =>
                       updatePayload((current) => ({
                         ...current,
-                        temperatures: { ...current.temperatures, boilerRoom: event.target.value },
+                        temperatures: { ...current.temperatures, boilerRoom: value },
                       }))
                     }
+                    unit="temperature"
                     disabled={isReadOnly}
-                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) text-center font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
+                    className="rounded-lg border-(--border)/40 bg-(--bg) px-3 py-2.5 text-center text-sm font-semibold text-(--text) focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-60"
                   />
                 </label>
                 <label className="min-w-0 space-y-1 text-xs">
-                  <span className="font-medium text-(--text)/60">Atrium (F)</span>
-                  <input
-                    type="text"
+                  <span className="font-medium text-(--text)/60">Atrium</span>
+                  <UnitSuffixInput
                     value={payload.temperatures.atrium}
-                    onChange={(event) =>
+                    onChange={(value) =>
                       updatePayload((current) => ({
                         ...current,
-                        temperatures: { ...current.temperatures, atrium: event.target.value },
+                        temperatures: { ...current.temperatures, atrium: value },
                       }))
                     }
+                    unit="temperature"
                     disabled={isReadOnly}
-                    className="w-full rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) text-center font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
+                    className="rounded-lg border-(--border)/40 bg-(--bg) px-3 py-2.5 text-center text-sm font-semibold text-(--text) focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-60"
                   />
                 </label>
               </div>
@@ -2121,15 +2170,18 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                         onChange={(event) =>
                           updateCriticalWaterStructuralChecks((checks) => ({
                             ...checks,
-                            buildingMainShutoff: { ...checks.buildingMainShutoff, valveCondition: event.target.value },
+                            buildingMainShutoff: {
+                              ...checks.buildingMainShutoff,
+                              valveCondition: normalizeBonanMainShutoffCondition(event.target.value),
+                            },
                           }))
                         }
                         disabled={isReadOnly}
                         className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50"
                       >
                         <option value="">Select</option>
-                        <option value="Check">Check</option>
-                        <option value="X">X</option>
+                        <option value="check">✅</option>
+                        <option value="x">❌</option>
                       </select>
                     </label>
                     <label className="space-y-1 text-xs">
@@ -2290,24 +2342,24 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                             <span className="font-medium text-(--text)/60">SH1 / SH2 / SH3 / DHW Temps</span>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
                               {(["sh1Temp", "sh2Temp", "sh3Temp", "dhwTemp"] as const).map((field) => (
-                                <input
+                                <UnitSuffixInput
                                   key={`${boiler.key}-${field}`}
                                   value={payload.criticalWaterStructuralChecks.boilerRoom[boiler.key][field]}
-                                  onChange={(event) =>
+                                  onChange={(value) =>
                                     updateCriticalWaterStructuralChecks((checks) => ({
                                       ...checks,
                                       boilerRoom: {
                                         ...checks.boilerRoom,
                                         [boiler.key]: {
                                           ...checks.boilerRoom[boiler.key],
-                                          [field]: event.target.value,
+                                          [field]: value,
                                         },
                                       },
                                     }))
                                   }
+                                  unit="temperature"
                                   disabled={isReadOnly}
                                   placeholder={field === "dhwTemp" ? "DHW" : field.replace("Temp", "").toUpperCase()}
-                                  className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50"
                                 />
                               ))}
                             </div>
@@ -2318,30 +2370,30 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                   </div>
                   <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
                     <label className="space-y-1 text-xs">
-                      <span className="font-medium text-(--text)/60">Gauge Left Suction PSI</span>
-                      <input value={payload.criticalWaterStructuralChecks.boilerRoom.gaugeLeftSuctionPsi} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, gaugeLeftSuctionPsi: event.target.value } }))} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50" />
+                      <span className="font-medium text-(--text)/60">Gauge Left Suction</span>
+                      <UnitSuffixInput value={payload.criticalWaterStructuralChecks.boilerRoom.gaugeLeftSuctionPsi} onChange={(value) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, gaugeLeftSuctionPsi: value } }))} unit="psi" disabled={isReadOnly} />
                     </label>
                     <label className="space-y-1 text-xs">
-                      <span className="font-medium text-(--text)/60">Gauge Right Discharge PSI</span>
-                      <input value={payload.criticalWaterStructuralChecks.boilerRoom.gaugeRightDischargePsi} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, gaugeRightDischargePsi: event.target.value } }))} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50" />
+                      <span className="font-medium text-(--text)/60">Gauge Right Suction</span>
+                      <UnitSuffixInput value={payload.criticalWaterStructuralChecks.boilerRoom.gaugeRightDischargePsi} onChange={(value) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, gaugeRightDischargePsi: value } }))} unit="psi" disabled={isReadOnly} />
                     </label>
                     <label className="space-y-1 text-xs">
-                      <span className="font-medium text-(--text)/60">Pump 1 Suction / Discharge PSI</span>
+                      <span className="font-medium text-(--text)/60">Pump 1 Suction / Discharge</span>
                       <div className="grid grid-cols-2 gap-1">
-                        <input value={payload.criticalWaterStructuralChecks.boilerRoom.pump1SuctionPsi} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, pump1SuctionPsi: event.target.value } }))} disabled={isReadOnly} placeholder="Suction" className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50" />
-                        <input value={payload.criticalWaterStructuralChecks.boilerRoom.pump1DischargePsi} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, pump1DischargePsi: event.target.value } }))} disabled={isReadOnly} placeholder="Discharge" className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50" />
+                        <UnitSuffixInput value={payload.criticalWaterStructuralChecks.boilerRoom.pump1SuctionPsi} onChange={(value) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, pump1SuctionPsi: value } }))} unit="psi" disabled={isReadOnly} placeholder="Suction" />
+                        <UnitSuffixInput value={payload.criticalWaterStructuralChecks.boilerRoom.pump1DischargePsi} onChange={(value) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, pump1DischargePsi: value } }))} unit="psi" disabled={isReadOnly} placeholder="Discharge" />
                       </div>
                     </label>
                     <label className="space-y-1 text-xs">
-                      <span className="font-medium text-(--text)/60">Pump 2 Suction / Discharge PSI</span>
+                      <span className="font-medium text-(--text)/60">Pump 2 Suction / Discharge</span>
                       <div className="grid grid-cols-2 gap-1">
-                        <input value={payload.criticalWaterStructuralChecks.boilerRoom.pump2SuctionPsi} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, pump2SuctionPsi: event.target.value } }))} disabled={isReadOnly} placeholder="Suction" className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50" />
-                        <input value={payload.criticalWaterStructuralChecks.boilerRoom.pump2DischargePsi} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, pump2DischargePsi: event.target.value } }))} disabled={isReadOnly} placeholder="Discharge" className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50" />
+                        <UnitSuffixInput value={payload.criticalWaterStructuralChecks.boilerRoom.pump2SuctionPsi} onChange={(value) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, pump2SuctionPsi: value } }))} unit="psi" disabled={isReadOnly} placeholder="Suction" />
+                        <UnitSuffixInput value={payload.criticalWaterStructuralChecks.boilerRoom.pump2DischargePsi} onChange={(value) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, pump2DischargePsi: value } }))} unit="psi" disabled={isReadOnly} placeholder="Discharge" />
                       </div>
                     </label>
                     <label className="space-y-1 text-xs">
-                      <span className="font-medium text-(--text)/60">Air Compressor PSI</span>
-                      <input value={payload.criticalWaterStructuralChecks.boilerRoom.airCompressorPsi} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, airCompressorPsi: event.target.value } }))} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50" />
+                      <span className="font-medium text-(--text)/60">Air Compressor</span>
+                      <UnitSuffixInput value={payload.criticalWaterStructuralChecks.boilerRoom.airCompressorPsi} onChange={(value) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, boilerRoom: { ...checks.boilerRoom, airCompressorPsi: value } }))} unit="psi" disabled={isReadOnly} />
                     </label>
                     <label className="space-y-1 text-xs">
                       <span className="font-medium text-(--text)/60">Floor Drain Clear</span>
@@ -2367,11 +2419,11 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                     </label>
                     <label className="space-y-1 text-xs">
                       <span className="font-medium text-(--text)/60">Pressure Reading 1</span>
-                      <input value={payload.criticalWaterStructuralChecks.pumpRoom.pressureReading1} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, pumpRoom: { ...checks.pumpRoom, pressureReading1: event.target.value } }))} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50" />
+                      <UnitSuffixInput value={payload.criticalWaterStructuralChecks.pumpRoom.pressureReading1} onChange={(value) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, pumpRoom: { ...checks.pumpRoom, pressureReading1: value } }))} unit="psi" disabled={isReadOnly} />
                     </label>
                     <label className="space-y-1 text-xs">
                       <span className="font-medium text-(--text)/60">Pressure Reading 2</span>
-                      <input value={payload.criticalWaterStructuralChecks.pumpRoom.pressureReading2} onChange={(event) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, pumpRoom: { ...checks.pumpRoom, pressureReading2: event.target.value } }))} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50" />
+                      <UnitSuffixInput value={payload.criticalWaterStructuralChecks.pumpRoom.pressureReading2} onChange={(value) => updateCriticalWaterStructuralChecks((checks) => ({ ...checks, pumpRoom: { ...checks.pumpRoom, pressureReading2: value } }))} unit="psi" disabled={isReadOnly} />
                     </label>
                     <label className="space-y-1 text-xs">
                       <span className="font-medium text-(--text)/60">Domestic Water Lines</span>

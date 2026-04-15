@@ -35,33 +35,6 @@ export default function ClientDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Projects Button */}
-        <button
-          onClick={() => router.push("/dashboard/client/projects")}
-          className="group relative flex flex-col items-start p-8 rounded-3xl border border-(--border) bg-(--bg) shadow-sm hover:shadow-xl transition-all duration-300 text-left overflow-hidden"
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-          
-          <div className="flex-none w-14 h-14 min-w-[56px] min-h-[56px] rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
-          </div>
-
-          <h3 className="text-2xl font-bold text-(--text) mb-3">Projects & Documents</h3>
-          <p className="text-(--text)/70">
-            View your active projects, track progress, and access shared documents and files.
-          </p>
-          
-          <div className="mt-8 flex items-center text-blue-600 font-medium">
-            Open Projects
-            <svg className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-            </svg>
-          </div>
-        </button>
-
-        {/* Bonan Towers Button */}
         {hasBonan && (
           <button
             onClick={() => router.push("/dashboard/bonan")}
@@ -89,6 +62,31 @@ export default function ClientDashboard() {
             </div>
           </button>
         )}
+
+        <button
+          onClick={() => router.push("/dashboard/client/projects")}
+          className="group relative flex flex-col items-start p-8 rounded-3xl border border-(--border) bg-(--bg) shadow-sm hover:shadow-xl transition-all duration-300 text-left overflow-hidden"
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+
+          <div className="flex-none w-14 h-14 min-w-[56px] min-h-[56px] rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+          </div>
+
+          <h3 className="text-2xl font-bold text-(--text) mb-3">Projects & Documents</h3>
+          <p className="text-(--text)/70">
+            View your active projects, track progress, and access shared documents and files.
+          </p>
+
+          <div className="mt-8 flex items-center text-blue-600 font-medium">
+            Open Projects
+            <svg className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+            </svg>
+          </div>
+        </button>
       </div>
     </div>
   );

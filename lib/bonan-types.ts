@@ -1,4 +1,5 @@
 import { getUsCentralDate, getUsCentralTimeHHMM } from "./us-central-time";
+import { normalizeBonanMainShutoffCondition } from "./bonan-daily-formatting";
 
 export type BonanSite = "bonan_towers";
 export type BonanReportType = "daily" | "weekly" | "monthly";
@@ -492,7 +493,7 @@ export function normalizeDailyReportPayload(input: unknown): DailyReportPayload 
     criticalWaterStructuralChecks: {
       buildingMainShutoff: {
         locationFound: asString(buildingMainShutoffInput.locationFound),
-        valveCondition: asString(buildingMainShutoffInput.valveCondition),
+        valveCondition: normalizeBonanMainShutoffCondition(asString(buildingMainShutoffInput.valveCondition)),
         accessible: asString(buildingMainShutoffInput.accessible),
         signageIntact: asString(buildingMainShutoffInput.signageIntact),
         leaks: asString(buildingMainShutoffInput.leaks),

@@ -2,7 +2,10 @@ import { cookies } from "next/headers";
 import { getSession, getUserById } from "@/lib/auth";
 import { searchIncidentReports } from "@/lib/incident-reports";
 import { isBonanClientVisibleIncidentReport } from "@/lib/bonan-visibility";
-import { userHasBonanClientMembership } from "@/lib/bonan-client";
+import {
+  getBonanClientDecisionsForEntities,
+  userHasBonanClientMembership,
+} from "@/lib/bonan-client";
 
 async function getAuthenticatedUser() {
   const cookieStore = await cookies();
@@ -28,7 +31,23 @@ export async function GET() {
     const incidentReports = (await searchIncidentReports({
       site: "bonan_towers",
     })).filter(isBonanClientVisibleIncidentReport);
-    return Response.json({ incidentReports });
+
+    const decisions = await getBonanClientDecisionsForEntities(
+      "incident_report",
+      incidentReports.map((incidentReport) => incidentReport.id)
+    );
+
+    const incidentReportsWithDecisions = incidentReports.map((incidentReport) => ({
+      ...incidentReport,
+      client_decision:
+        decisions.find(
+          (decision) =>
+            decision.entity_id === incidentReport.id &&
+            decision.entity_revision === incidentReport.client_visible_revision
+        ) || null,
+    }));
+
+    return Response.json({ incidentReports: incidentReportsWithDecisions });
   } catch (error) {
     console.error("Error fetching Bonan client incidents:", error);
     return Response.json({ error: "Failed to fetch Bonan incidents" }, { status: 500 });

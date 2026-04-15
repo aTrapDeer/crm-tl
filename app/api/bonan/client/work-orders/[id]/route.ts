@@ -2,7 +2,10 @@ import { cookies } from "next/headers";
 import { getSession, getUserById } from "@/lib/auth";
 import { getWorkOrderById } from "@/lib/work-orders";
 import { isBonanClientVisibleWorkOrder } from "@/lib/bonan-visibility";
-import { userHasBonanClientMembership } from "@/lib/bonan-client";
+import {
+  getBonanCurrentClientDecision,
+  userHasBonanClientMembership,
+} from "@/lib/bonan-client";
 
 async function getAuthenticatedUser() {
   const cookieStore = await cookies();
@@ -34,7 +37,18 @@ export async function GET(
       return Response.json({ error: "Bonan work order not found" }, { status: 404 });
     }
 
-    return Response.json({ workOrder });
+    const currentDecision = await getBonanCurrentClientDecision(
+      "work_order",
+      workOrder.id,
+      workOrder.client_visible_revision
+    );
+
+    return Response.json({
+      workOrder: {
+        ...workOrder,
+        client_decision: currentDecision,
+      },
+    });
   } catch (error) {
     console.error("Error fetching Bonan client work order:", error);
     return Response.json({ error: "Failed to fetch Bonan work order" }, { status: 500 });

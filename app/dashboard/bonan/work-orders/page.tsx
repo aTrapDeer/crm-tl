@@ -3,6 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { formatUsCentralDateTime } from "@/lib/us-central-time";
+
+interface ClientDecision {
+  decision_status: "approved" | "denied";
+  responded_at: string;
+}
 
 interface WorkOrder {
   id: string;
@@ -12,6 +18,7 @@ interface WorkOrder {
   location: string | null;
   description: string;
   work_completed: "pending" | "in_progress" | "completed" | "cancelled";
+  client_decision: ClientDecision | null;
 }
 
 function formatWorkOrderStatusLabel(status: WorkOrder["work_completed"]) {
@@ -90,10 +97,29 @@ export default function BonanClientWorkOrdersPage() {
                     <p className="text-xs text-(--text)/55 mt-2">
                       {[workOrder.date, workOrder.location, workOrder.area].filter(Boolean).join(" - ")}
                     </p>
+                    {workOrder.client_decision ? (
+                      <p className="mt-2 text-xs text-(--text)/55">
+                        {workOrder.client_decision.decision_status === "approved" ? "Client approved" : "Client denied"}{" "}
+                        {formatUsCentralDateTime(workOrder.client_decision.responded_at)} CT
+                      </p>
+                    ) : null}
                   </div>
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 capitalize">
-                    {formatWorkOrderStatusLabel(workOrder.work_completed)}
-                  </span>
+                  <div className="flex flex-col items-end gap-2">
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 capitalize">
+                      {formatWorkOrderStatusLabel(workOrder.work_completed)}
+                    </span>
+                    {workOrder.client_decision ? (
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                          workOrder.client_decision.decision_status === "approved"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-red-100 text-red-700"
+                        }`}
+                      >
+                        {workOrder.client_decision.decision_status === "approved" ? "Client approved" : "Client denied"}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               </Link>
             ))}

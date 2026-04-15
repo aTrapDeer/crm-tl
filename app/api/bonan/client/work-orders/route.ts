@@ -2,7 +2,10 @@ import { cookies } from "next/headers";
 import { getSession, getUserById } from "@/lib/auth";
 import { searchWorkOrders } from "@/lib/work-orders";
 import { isBonanClientVisibleWorkOrder } from "@/lib/bonan-visibility";
-import { userHasBonanClientMembership } from "@/lib/bonan-client";
+import {
+  getBonanClientDecisionsForEntities,
+  userHasBonanClientMembership,
+} from "@/lib/bonan-client";
 
 async function getAuthenticatedUser() {
   const cookieStore = await cookies();
@@ -29,7 +32,22 @@ export async function GET() {
       site: "bonan_towers",
     })).filter(isBonanClientVisibleWorkOrder);
 
-    return Response.json({ workOrders });
+    const decisions = await getBonanClientDecisionsForEntities(
+      "work_order",
+      workOrders.map((workOrder) => workOrder.id)
+    );
+
+    const workOrdersWithDecisions = workOrders.map((workOrder) => ({
+      ...workOrder,
+      client_decision:
+        decisions.find(
+          (decision) =>
+            decision.entity_id === workOrder.id &&
+            decision.entity_revision === workOrder.client_visible_revision
+        ) || null,
+    }));
+
+    return Response.json({ workOrders: workOrdersWithDecisions });
   } catch (error) {
     console.error("Error fetching Bonan client work orders:", error);
     return Response.json({ error: "Failed to fetch Bonan work orders" }, { status: 500 });

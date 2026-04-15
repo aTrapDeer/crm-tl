@@ -531,6 +531,69 @@ export async function sendBonanApprovalSignatureNotification(data: {
   });
 }
 
+export async function sendBonanClientDecisionNotification(data: {
+  entityType: "work_order" | "incident_report";
+  entityId: string;
+  entityLabel: string;
+  decisionStatus: "approved" | "denied";
+  responderName: string;
+  responseDate: string;
+  note?: string | null;
+}): Promise<boolean> {
+  const adminEmails = await getAdminEmails();
+  if (adminEmails.length === 0) return true;
+
+  const isApproved = data.decisionStatus === "approved";
+  const accentColor = isApproved ? "#16a34a" : "#dc2626";
+  const accentBg = isApproved ? "#16a34a15" : "#dc262615";
+  const actionLabel = isApproved ? "Client Approved" : "Client Denied";
+  const entityPath =
+    data.entityType === "work_order"
+      ? `/dashboard/management/work-orders/${data.entityId}`
+      : `/dashboard/management/incident-reports/${data.entityId}`;
+
+  const content = `
+    <div style="background-color: ${accentBg}; border-left: 4px solid ${accentColor}; padding: 16px; border-radius: 0 12px 12px 0; margin-bottom: 24px;">
+      <p style="margin: 0; color: ${accentColor}; font-size: 14px; font-weight: 600; text-transform: uppercase;">
+        ${actionLabel}
+      </p>
+    </div>
+    <h2 style="margin: 0 0 16px; color: #01224f; font-size: 20px; font-weight: 600;">
+      ${data.entityLabel}
+    </h2>
+    <p style="margin: 0 0 16px; color: #0d3e8d; font-size: 16px; line-height: 1.6;">
+      <strong>${data.responderName}</strong> marked this ${data.entityType.replace("_", " ")} as <strong>${data.decisionStatus}</strong>.
+    </p>
+    <p style="margin: 0 0 24px; color: #6b7280; font-size: 14px;">
+      Response date: <strong>${data.responseDate}</strong><br />
+      Logged at: <strong>${formatUsCentralDateTime(new Date())} CT</strong>
+    </p>
+    ${data.note ? `
+    <div style="background-color: #f7f8fb; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+      <p style="margin: 0 0 8px; color: #6b7280; font-size: 12px; text-transform: uppercase;">Client Note</p>
+      <p style="margin: 0; color: #01224f; font-size: 14px; line-height: 1.5;">
+        ${data.note}
+      </p>
+    </div>
+    ` : ""}
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td align="center">
+          <a href="${APP_URL}${entityPath}" style="display: inline-block; padding: 14px 28px; background-color: #01224f; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 12px;">
+            Review Item
+          </a>
+        </td>
+      </tr>
+    </table>
+  `;
+
+  return sendEmail({
+    to: adminEmails,
+    subject: `[Bonan Client ${isApproved ? "Approved" : "Denied"}] ${data.entityLabel}`,
+    html: getEmailTemplate(content, `Bonan Client ${isApproved ? "Approved" : "Denied"}`),
+  });
+}
+
 export async function sendIncidentReportStatusNotification(data: {
   incidentReportId: string;
   reportNumber: string;

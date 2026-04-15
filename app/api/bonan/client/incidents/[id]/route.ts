@@ -2,7 +2,10 @@ import { cookies } from "next/headers";
 import { getSession, getUserById } from "@/lib/auth";
 import { getIncidentReportById } from "@/lib/incident-reports";
 import { isBonanClientVisibleIncidentReport } from "@/lib/bonan-visibility";
-import { userHasBonanClientMembership } from "@/lib/bonan-client";
+import {
+  getBonanCurrentClientDecision,
+  userHasBonanClientMembership,
+} from "@/lib/bonan-client";
 
 async function getAuthenticatedUser() {
   const cookieStore = await cookies();
@@ -34,7 +37,18 @@ export async function GET(
       return Response.json({ error: "Bonan incident report not found" }, { status: 404 });
     }
 
-    return Response.json({ incidentReport });
+    const currentDecision = await getBonanCurrentClientDecision(
+      "incident_report",
+      incidentReport.id,
+      incidentReport.client_visible_revision
+    );
+
+    return Response.json({
+      incidentReport: {
+        ...incidentReport,
+        client_decision: currentDecision,
+      },
+    });
   } catch (error) {
     console.error("Error fetching Bonan client incident report:", error);
     return Response.json({ error: "Failed to fetch Bonan incident report" }, { status: 500 });

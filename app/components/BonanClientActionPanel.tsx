@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { formatUsCentralDateTime } from "@/lib/us-central-time";
 import SignatureCapture from "./SignatureCapture";
 
 type BonanEntityType = "bonan_report" | "work_order" | "incident_report";
+type DecisionStatus = "approved" | "denied";
 
 interface FieldOption {
   value: string;
@@ -19,6 +21,16 @@ interface Approval {
   approved_at: string;
 }
 
+interface Decision {
+  id: string;
+  entity_revision: number;
+  decision_status: DecisionStatus;
+  responder_name: string;
+  response_date: string;
+  responded_at: string;
+  note: string | null;
+}
+
 interface ChangeRequest {
   id: string;
   requested_area: string;
@@ -27,6 +39,19 @@ interface ChangeRequest {
   status: "pending" | "grant_approved" | "changes_submitted" | "applied" | "rejected" | "expired";
   admin_notes: string | null;
   created_at: string;
+}
+
+const CHANGE_REQUEST_STATUS_LABELS: Record<ChangeRequest["status"], string> = {
+  pending: "Pending review",
+  grant_approved: "Correction window approved",
+  changes_submitted: "Corrections submitted",
+  applied: "Corrections applied",
+  rejected: "Correction request denied",
+  expired: "Correction window expired",
+};
+
+function formatDecisionLabel(status: DecisionStatus) {
+  return status === "approved" ? "Client Approved" : "Client Denied";
 }
 
 export default function BonanClientActionPanel({
@@ -42,10 +67,13 @@ export default function BonanClientActionPanel({
   fieldOptions: FieldOption[];
   currentFieldValues?: Record<string, string>;
 }) {
+  const isDecisionFlow = entityType === "work_order" || entityType === "incident_report";
   const [currentRevision, setCurrentRevision] = useState(1);
   const [approvals, setApprovals] = useState<Approval[]>([]);
+  const [decisions, setDecisions] = useState<Decision[]>([]);
   const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
   const [showApprovalCapture, setShowApprovalCapture] = useState(false);
+  const [showDecisionForm, setShowDecisionForm] = useState<DecisionStatus | null>(null);
   const [showRequestForm, setShowRequestForm] = useState(false);
   const [showApprovedEdits, setShowApprovedEdits] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -55,6 +83,10 @@ export default function BonanClientActionPanel({
   const [approvalForm, setApprovalForm] = useState({
     signer_name: "",
     approval_date: new Date().toISOString().slice(0, 10),
+  });
+  const [decisionForm, setDecisionForm] = useState({
+    response_date: new Date().toISOString().slice(0, 10),
+    note: "",
   });
   const [requestForm, setRequestForm] = useState({
     requested_area: defaultArea,
@@ -66,16 +98,28 @@ export default function BonanClientActionPanel({
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [approvalRes, requestRes] = await Promise.all([
-        fetch(`/api/bonan/approvals?entity_type=${entityType}&entity_id=${entityId}`),
+      const requests = [
         fetch(`/api/bonan/change-requests?entity_type=${entityType}&entity_id=${entityId}`),
-      ]);
-      const approvalData = await approvalRes.json().catch(() => ({}));
+      ];
+
+      if (isDecisionFlow) {
+        requests.unshift(fetch(`/api/bonan/client-decisions?entity_type=${entityType}&entity_id=${entityId}`));
+      } else {
+        requests.unshift(fetch(`/api/bonan/approvals?entity_type=${entityType}&entity_id=${entityId}`));
+      }
+
+      const [primaryRes, requestRes] = await Promise.all(requests);
+      const primaryData = await primaryRes.json().catch(() => ({}));
       const requestData = await requestRes.json().catch(() => ({}));
 
-      if (approvalRes.ok) {
-        setApprovals(approvalData.approvals || []);
-        setCurrentRevision(approvalData.currentRevision || 1);
+      if (primaryRes.ok) {
+        if (isDecisionFlow) {
+          setDecisions(primaryData.decisions || []);
+          setCurrentRevision(primaryData.currentRevision || 1);
+        } else {
+          setApprovals(primaryData.approvals || []);
+          setCurrentRevision(primaryData.currentRevision || 1);
+        }
       }
       if (requestRes.ok) {
         setChangeRequests(requestData.changeRequests || []);
@@ -85,7 +129,7 @@ export default function BonanClientActionPanel({
     } finally {
       setLoading(false);
     }
-  }, [entityId, entityType]);
+  }, [entityId, entityType, isDecisionFlow]);
 
   useEffect(() => {
     void loadData();
@@ -94,6 +138,10 @@ export default function BonanClientActionPanel({
   const currentApproval = useMemo(
     () => approvals.find((approval) => approval.approved_revision === currentRevision),
     [approvals, currentRevision]
+  );
+  const currentDecision = useMemo(
+    () => decisions.find((decision) => decision.entity_revision === currentRevision),
+    [currentRevision, decisions]
   );
   const activeGrantedRequest = useMemo(
     () => changeRequests.find((request) => request.status === "grant_approved"),
@@ -140,6 +188,49 @@ export default function BonanClientActionPanel({
     } catch (saveError) {
       console.error("Failed to save Bonan approval:", saveError);
       setError("Failed to record approval.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleSubmitDecision() {
+    if (!showDecisionForm) return;
+
+    setSubmitting(true);
+    setError("");
+    setFeedback("");
+    try {
+      const res = await fetch("/api/bonan/client-decisions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entity_type: entityType,
+          entity_id: entityId,
+          decision_status: showDecisionForm,
+          response_date: decisionForm.response_date,
+          note: decisionForm.note,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || `Failed to mark this item as ${showDecisionForm}.`);
+        return;
+      }
+
+      setFeedback(
+        showDecisionForm === "approved"
+          ? "Client approval recorded and admins notified."
+          : "Client denial recorded and admins notified."
+      );
+      setShowDecisionForm(null);
+      setDecisionForm({
+        response_date: new Date().toISOString().slice(0, 10),
+        note: "",
+      });
+      await loadData();
+    } catch (submitError) {
+      console.error("Failed to save Bonan client decision:", submitError);
+      setError(`Failed to mark this item as ${showDecisionForm}.`);
     } finally {
       setSubmitting(false);
     }
@@ -217,20 +308,44 @@ export default function BonanClientActionPanel({
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
             Final Step
           </p>
-          <h2 className="mt-1 text-lg font-semibold text-slate-900">Approval and correction requests</h2>
+          <h2 className="mt-1 text-lg font-semibold text-slate-900">
+            {isDecisionFlow ? "Client decision and correction requests" : "Approval and correction requests"}
+          </h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            If everything is correct, sign and approve this version. If you spot an issue,
-            request a correction for one specific area so the admin can review it.
+            {isDecisionFlow
+              ? "Approve the current version, deny it, or request corrections so the admin team knows how to proceed."
+              : "If everything is correct, sign and approve this version. If you spot an issue, request a correction for one specific area so the admin can review it."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setShowApprovalCapture(true)}
-            className="rounded-full bg-[#0f4c81] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0c416d] transition"
-          >
-            {currentApproval ? "Re-Approve & Sign" : "Approve & Sign"}
-          </button>
+          {isDecisionFlow ? (
+            <>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => setShowDecisionForm("approved")}
+                className="rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition disabled:opacity-60"
+              >
+                {currentDecision?.decision_status === "approved" ? "Update Approval" : "Approve"}
+              </button>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => setShowDecisionForm("denied")}
+                className="rounded-full bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 transition disabled:opacity-60"
+              >
+                {currentDecision?.decision_status === "denied" ? "Update Denial" : "Deny"}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowApprovalCapture(true)}
+              className="rounded-full bg-[#0f4c81] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0c416d] transition"
+            >
+              {currentApproval ? "Re-Approve & Sign" : "Approve & Sign"}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowRequestForm(true)}
@@ -251,18 +366,51 @@ export default function BonanClientActionPanel({
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate-500">Loading approval status...</p>
+        <p className="text-sm text-slate-500">
+          Loading {isDecisionFlow ? "client decision status" : "approval status"}...
+        </p>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           <div className="rounded-[24px] border border-slate-200/80 bg-white p-4 shadow-[0_12px_30px_rgba(15,23,42,0.05)]">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Approval</p>
-            {currentApproval ? (
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              {isDecisionFlow ? "Current Client Decision" : "Approval"}
+            </p>
+            {isDecisionFlow ? (
+              currentDecision ? (
+                <div className="mt-3 text-sm text-slate-800">
+                  <div
+                    className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${
+                      currentDecision.decision_status === "approved"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {formatDecisionLabel(currentDecision.decision_status)}
+                  </div>
+                  <p className="mt-3 font-medium">{currentDecision.responder_name}</p>
+                  <p className="text-slate-600">Response date {currentDecision.response_date}</p>
+                  <p className="text-slate-500">
+                    Logged {formatUsCentralDateTime(currentDecision.responded_at)} CT
+                  </p>
+                  {currentDecision.note ? (
+                    <p className="mt-3 rounded-2xl bg-slate-50 px-3 py-2.5 text-slate-700">
+                      {currentDecision.note}
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-slate-600">No client decision has been recorded on this revision yet.</p>
+              )
+            ) : currentApproval ? (
               <div className="mt-3 text-sm text-slate-800">
                 <div className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">
                   Approved
                 </div>
                 <p className="mt-3 font-medium">{currentApproval.signer_name}</p>
                 <p className="text-slate-600">Approved on {currentApproval.approval_date}</p>
+                <p className="text-slate-500">
+                  Logged {formatUsCentralDateTime(currentApproval.approved_at)} CT
+                </p>
               </div>
             ) : (
               <p className="mt-3 text-sm text-slate-600">No approval on the current revision yet.</p>
@@ -276,8 +424,11 @@ export default function BonanClientActionPanel({
               <div className="mt-3 space-y-2">
                 {changeRequests.slice(0, 3).map((request) => (
                   <div key={request.id} className="rounded-2xl bg-slate-50 px-3 py-2.5 text-sm text-slate-800">
-                    <p className="font-medium capitalize">{request.status.replace(/_/g, " ")}</p>
+                    <p className="font-medium">{CHANGE_REQUEST_STATUS_LABELS[request.status]}</p>
                     <p className="text-slate-600">{request.requested_area}</p>
+                    <p className="text-xs text-slate-500">
+                      Submitted {formatUsCentralDateTime(request.created_at)} CT
+                    </p>
                   </div>
                 ))}
               </div>
@@ -289,7 +440,7 @@ export default function BonanClientActionPanel({
       {feedback && <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{feedback}</p>}
       {error && <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
-      {showApprovalCapture && (
+      {showApprovalCapture && !isDecisionFlow && (
         <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4 md:p-5 space-y-4">
           <div className="grid gap-3 md:grid-cols-2">
             <input
@@ -313,6 +464,75 @@ export default function BonanClientActionPanel({
             onSave={(signatureData) => void handleSaveApproval(signatureData)}
             onCancel={() => setShowApprovalCapture(false)}
           />
+        </div>
+      )}
+
+      {showDecisionForm && isDecisionFlow && (
+        <div
+          className={`rounded-[24px] border p-4 md:p-5 space-y-4 ${
+            showDecisionForm === "approved"
+              ? "border-emerald-200 bg-emerald-50"
+              : "border-red-200 bg-red-50"
+          }`}
+        >
+          <div>
+            <p
+              className={`text-sm font-semibold ${
+                showDecisionForm === "approved" ? "text-emerald-800" : "text-red-800"
+              }`}
+            >
+              {showDecisionForm === "approved"
+                ? "Approve this work item for Bonan."
+                : "Mark this work item as denied for Bonan."}
+            </p>
+            <p className="mt-1 text-sm text-slate-600">
+              This will notify admins and save the item under the current client decision category.
+            </p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <input
+              type="date"
+              value={decisionForm.response_date}
+              onChange={(event) => setDecisionForm((current) => ({ ...current, response_date: event.target.value }))}
+              className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+            />
+            <input
+              type="text"
+              value={showDecisionForm === "approved" ? "Client approved" : "Client denied"}
+              readOnly
+              className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2.5 text-sm text-slate-600"
+            />
+          </div>
+          <textarea
+            value={decisionForm.note}
+            onChange={(event) => setDecisionForm((current) => ({ ...current, note: event.target.value }))}
+            rows={3}
+            placeholder={
+              showDecisionForm === "approved"
+                ? "Optional note for the admins"
+                : "Optional reason for denying this item"
+            }
+            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setShowDecisionForm(null)}
+              className="rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={submitting || !decisionForm.response_date}
+              onClick={() => void handleSubmitDecision()}
+              className={`rounded-full px-4 py-2 text-sm font-semibold text-white disabled:opacity-60 ${
+                showDecisionForm === "approved" ? "bg-emerald-600" : "bg-red-600"
+              }`}
+            >
+              {showDecisionForm === "approved" ? "Confirm Approval" : "Confirm Denial"}
+            </button>
+          </div>
         </div>
       )}
 

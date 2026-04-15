@@ -1,15 +1,27 @@
 "use client";
 
-function formatLabel(value: string) {
+import {
+  formatBonanDailyPrimitiveValue,
+  getBonanDailyFieldLabel,
+} from "@/lib/bonan-daily-formatting";
+
+function formatLabel(value: string, path: string[] = []) {
+  const override = getBonanDailyFieldLabel(path);
+  if (override) return override;
+
   return value
     .replace(/_/g, " ")
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function renderPrimitive(value: unknown) {
+function renderPrimitive(value: unknown, path: string[] = []) {
   if (value === null || value === undefined || value === "") return "Not provided";
   if (typeof value === "boolean") return value ? "Yes" : "No";
+  const formattedBonanDailyValue = formatBonanDailyPrimitiveValue(path, value);
+  if (formattedBonanDailyValue !== null) {
+    return formattedBonanDailyValue || "Not provided";
+  }
   return String(value);
 }
 
@@ -59,11 +71,13 @@ function getEntryTitle(value: unknown, index: number) {
 function PrimitiveField({
   label,
   value,
+  path,
 }: {
   label: string;
   value: unknown;
+  path: string[];
 }) {
-  const displayValue = renderPrimitive(value);
+  const displayValue = renderPrimitive(value, path);
   const isEmpty = displayValue === "Not provided";
 
   return (
@@ -85,9 +99,11 @@ function PrimitiveField({
 function ValueBlock({
   value,
   level = 0,
+  path = [],
 }: {
   value: unknown;
   level?: number;
+  path?: string[];
 }) {
   if (Array.isArray(value)) {
     if (value.length === 0) {
@@ -117,7 +133,7 @@ function ValueBlock({
                 Entry {index + 1}
               </p>
               <p className="mt-2 text-[15px] text-slate-800">
-                {renderPrimitive(entry)}
+                {renderPrimitive(entry, [...path, String(index)])}
               </p>
             </div>
           ))}
@@ -149,7 +165,7 @@ function ValueBlock({
                 {index + 1}
               </span>
             </div>
-            <ValueBlock value={entry} level={level + 1} />
+            <ValueBlock value={entry} level={level + 1} path={[...path, String(index)]} />
           </div>
         ))}
       </div>
@@ -177,8 +193,9 @@ function ValueBlock({
             {primitiveEntries.map(([key, entryValue]) => (
               <PrimitiveField
                 key={key}
-                label={formatLabel(key)}
+                label={formatLabel(key, [...path, key])}
                 value={entryValue}
+                path={[...path, key]}
               />
             ))}
           </div>
@@ -204,7 +221,7 @@ function ValueBlock({
                         Section
                       </p>
                       <h4 className="mt-1 text-base font-semibold text-slate-900">
-                        {formatLabel(key)}
+                        {formatLabel(key, [...path, key])}
                       </h4>
                     </div>
                     {countLabel && (
@@ -213,7 +230,7 @@ function ValueBlock({
                       </span>
                     )}
                   </div>
-                  <ValueBlock value={entryValue} level={level + 1} />
+                  <ValueBlock value={entryValue} level={level + 1} path={[...path, key]} />
                 </section>
               );
             })}
@@ -226,7 +243,7 @@ function ValueBlock({
   return (
     <div className="rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
       <p className="text-[15px] leading-6 text-slate-800 whitespace-pre-wrap break-words">
-        {renderPrimitive(value)}
+        {renderPrimitive(value, path)}
       </p>
     </div>
   );
@@ -254,7 +271,7 @@ export default function BonanReadOnlyData({
             Review Section
           </p>
           <h2 className="mt-1 text-lg md:text-xl font-semibold text-slate-900">
-            {formatLabel(title)}
+            {formatLabel(title, [title])}
           </h2>
         </div>
         {countLabel && (
@@ -263,7 +280,7 @@ export default function BonanReadOnlyData({
           </span>
         )}
       </div>
-      <ValueBlock value={value} />
+      <ValueBlock value={value} path={[title]} />
     </section>
   );
 }

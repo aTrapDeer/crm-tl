@@ -54,6 +54,25 @@ export interface BonanApproval {
   approver_email?: string;
 }
 
+export type BonanClientDecisionStatus = "approved" | "denied";
+
+export interface BonanClientDecision {
+  id: string;
+  site: BonanSite;
+  entity_type: BonanEntityType;
+  entity_id: string;
+  entity_revision: number;
+  decision_status: BonanClientDecisionStatus;
+  responded_by_user_id: string;
+  responder_name: string;
+  response_date: string;
+  responded_at: string;
+  note: string | null;
+  created_at: string;
+  responder_account_name?: string;
+  responder_email?: string;
+}
+
 export interface BonanChangeRequest {
   id: string;
   site: BonanSite;
@@ -154,6 +173,25 @@ function mapApproval(row: Record<string, unknown>): BonanApproval {
     created_at: row.created_at as string,
     approver_name: row.approver_name as string | undefined,
     approver_email: row.approver_email as string | undefined,
+  };
+}
+
+function mapDecision(row: Record<string, unknown>): BonanClientDecision {
+  return {
+    id: row.id as string,
+    site: (row.site as BonanSite) || SITE,
+    entity_type: row.entity_type as BonanEntityType,
+    entity_id: row.entity_id as string,
+    entity_revision: Number(row.entity_revision || 1),
+    decision_status: row.decision_status as BonanClientDecisionStatus,
+    responded_by_user_id: row.responded_by_user_id as string,
+    responder_name: row.responder_name as string,
+    response_date: row.response_date as string,
+    responded_at: row.responded_at as string,
+    note: row.note as string | null,
+    created_at: row.created_at as string,
+    responder_account_name: row.responder_account_name as string | undefined,
+    responder_email: row.responder_email as string | undefined,
   };
 }
 
@@ -273,6 +311,24 @@ export async function ensureBonanClientSchema(): Promise<void> {
     `);
 
     await turso.execute(`
+      CREATE TABLE IF NOT EXISTS bonan_client_decisions (
+        id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+        site TEXT NOT NULL DEFAULT 'bonan_towers',
+        entity_type TEXT NOT NULL CHECK (entity_type IN ('bonan_report', 'work_order', 'incident_report')),
+        entity_id TEXT NOT NULL,
+        entity_revision INTEGER NOT NULL DEFAULT 1,
+        decision_status TEXT NOT NULL CHECK (decision_status IN ('approved', 'denied')),
+        responded_by_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        responder_name TEXT NOT NULL,
+        response_date TEXT NOT NULL,
+        responded_at TEXT NOT NULL DEFAULT (datetime('now')),
+        note TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(entity_type, entity_id, responded_by_user_id, entity_revision)
+      )
+    `);
+
+    await turso.execute(`
       CREATE TABLE IF NOT EXISTS bonan_change_requests (
         id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
         site TEXT NOT NULL DEFAULT 'bonan_towers',
@@ -329,6 +385,7 @@ export async function ensureBonanClientSchema(): Promise<void> {
     await turso.execute("CREATE INDEX IF NOT EXISTS idx_bonan_client_invitations_email ON bonan_client_invitations(email)");
     await turso.execute("CREATE INDEX IF NOT EXISTS idx_bonan_client_invitations_status ON bonan_client_invitations(status)");
     await turso.execute("CREATE INDEX IF NOT EXISTS idx_bonan_client_approvals_entity ON bonan_client_approvals(entity_type, entity_id)");
+    await turso.execute("CREATE INDEX IF NOT EXISTS idx_bonan_client_decisions_entity ON bonan_client_decisions(entity_type, entity_id)");
     await turso.execute("CREATE INDEX IF NOT EXISTS idx_bonan_change_requests_entity ON bonan_change_requests(entity_type, entity_id)");
     await turso.execute("CREATE INDEX IF NOT EXISTS idx_bonan_change_requests_requester ON bonan_change_requests(requested_by)");
     await turso.execute("CREATE INDEX IF NOT EXISTS idx_bonan_change_requests_status ON bonan_change_requests(status)");
@@ -639,6 +696,104 @@ export async function saveBonanApproval(data: {
     throw new Error("Failed to save Bonan approval");
   }
   return latest;
+}
+
+export async function getBonanClientDecisions(
+  entityType: BonanEntityType,
+  entityId: string
+): Promise<BonanClientDecision[]> {
+  await ensureBonanClientSchema();
+  const result = await turso.execute({
+    sql: `SELECT bcd.*,
+                 u.first_name || ' ' || u.last_name AS responder_account_name,
+                 u.email AS responder_email
+          FROM bonan_client_decisions bcd
+          LEFT JOIN users u ON u.id = bcd.responded_by_user_id
+          WHERE bcd.site = ?
+            AND bcd.entity_type = ?
+            AND bcd.entity_id = ?
+          ORDER BY bcd.responded_at DESC`,
+    args: [SITE, entityType, entityId],
+  });
+  return result.rows.map(mapDecision);
+}
+
+export async function getBonanClientDecisionsForEntities(
+  entityType: BonanEntityType,
+  entityIds: string[]
+): Promise<BonanClientDecision[]> {
+  await ensureBonanClientSchema();
+  if (entityIds.length === 0) return [];
+
+  const placeholders = entityIds.map(() => "?").join(", ");
+  const result = await turso.execute({
+    sql: `SELECT bcd.*,
+                 u.first_name || ' ' || u.last_name AS responder_account_name,
+                 u.email AS responder_email
+          FROM bonan_client_decisions bcd
+          LEFT JOIN users u ON u.id = bcd.responded_by_user_id
+          WHERE bcd.site = ?
+            AND bcd.entity_type = ?
+            AND bcd.entity_id IN (${placeholders})
+          ORDER BY bcd.responded_at DESC`,
+    args: [SITE, entityType, ...entityIds],
+  });
+  return result.rows.map(mapDecision);
+}
+
+export async function getBonanCurrentClientDecision(
+  entityType: BonanEntityType,
+  entityId: string,
+  revision?: number
+): Promise<BonanClientDecision | null> {
+  const decisions = await getBonanClientDecisions(entityType, entityId);
+  const currentRevision = revision ?? (await getBonanEntityRevision(entityType, entityId));
+  return decisions.find((decision) => decision.entity_revision === currentRevision) || null;
+}
+
+export async function saveBonanClientDecision(data: {
+  entity_type: BonanEntityType;
+  entity_id: string;
+  decision_status: BonanClientDecisionStatus;
+  responded_by_user_id: string;
+  responder_name: string;
+  response_date: string;
+  note?: string | null;
+}): Promise<BonanClientDecision> {
+  await ensureBonanClientSchema();
+  const id = crypto.randomUUID().replace(/-/g, "");
+  const revision = await getBonanEntityRevision(data.entity_type, data.entity_id);
+
+  await turso.execute({
+    sql: `INSERT INTO bonan_client_decisions (
+            id, site, entity_type, entity_id, entity_revision, decision_status,
+            responded_by_user_id, responder_name, response_date, note
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(entity_type, entity_id, responded_by_user_id, entity_revision) DO UPDATE SET
+            decision_status = excluded.decision_status,
+            responder_name = excluded.responder_name,
+            response_date = excluded.response_date,
+            note = excluded.note,
+            responded_at = datetime('now')`,
+    args: [
+      id,
+      SITE,
+      data.entity_type,
+      data.entity_id,
+      revision,
+      data.decision_status,
+      data.responded_by_user_id,
+      data.responder_name,
+      data.response_date,
+      data.note || null,
+    ],
+  });
+
+  const currentDecision = await getBonanCurrentClientDecision(data.entity_type, data.entity_id, revision);
+  if (!currentDecision) {
+    throw new Error("Failed to save Bonan client decision");
+  }
+  return currentDecision;
 }
 
 async function expireChangeRequestIfNeeded(changeRequest: BonanChangeRequest): Promise<BonanChangeRequest> {

@@ -5,6 +5,12 @@ import { use, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import BonanReadOnlyData from "@/app/components/BonanReadOnlyData";
 import BonanClientActionPanel from "@/app/components/BonanClientActionPanel";
+import { formatUsCentralDateTime } from "@/lib/us-central-time";
+
+interface ClientDecision {
+  decision_status: "approved" | "denied";
+  responded_at: string;
+}
 
 interface WorkOrder {
   id: string;
@@ -21,6 +27,7 @@ interface WorkOrder {
   work_summary: string | null;
   publication_status: string;
   updated_at: string;
+  client_decision: ClientDecision | null;
 }
 
 export default function BonanClientWorkOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -99,10 +106,29 @@ export default function BonanClientWorkOrderDetailPage({ params }: { params: Pro
               <p className="text-sm text-(--text)/60 mt-1">
                 Updated {new Date(workOrder.updated_at).toLocaleString()}
               </p>
+              {workOrder.client_decision ? (
+                <p className="mt-2 text-sm text-(--text)/65">
+                  {workOrder.client_decision.decision_status === "approved" ? "Client approved" : "Client denied"}{" "}
+                  {formatUsCentralDateTime(workOrder.client_decision.responded_at)} CT
+                </p>
+              ) : null}
             </div>
-            <Link href="/dashboard/bonan/work-orders" className="rounded-full border border-(--border)/30 px-4 py-2 text-sm font-medium text-(--text)">
-              Back
-            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              {workOrder.client_decision ? (
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    workOrder.client_decision.decision_status === "approved"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-red-100 text-red-700"
+                  }`}
+                >
+                  {workOrder.client_decision.decision_status === "approved" ? "Client approved" : "Client denied"}
+                </span>
+              ) : null}
+              <Link href="/dashboard/bonan/work-orders" className="rounded-full border border-(--border)/30 px-4 py-2 text-sm font-medium text-(--text)">
+                Back
+              </Link>
+            </div>
           </div>
         </header>
 

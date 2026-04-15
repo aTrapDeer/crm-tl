@@ -3,6 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { formatUsCentralDateTime } from "@/lib/us-central-time";
+
+interface ClientDecision {
+  decision_status: "approved" | "denied";
+  responded_at: string;
+}
 
 interface IncidentReport {
   id: string;
@@ -12,6 +18,7 @@ interface IncidentReport {
   location: string | null;
   description: string;
   status: "open" | "in_progress" | "closed";
+  client_decision: ClientDecision | null;
 }
 
 function formatIncidentStatusLabel(status: IncidentReport["status"]) {
@@ -90,10 +97,29 @@ export default function BonanClientIncidentsPage() {
                     <p className="text-xs text-(--text)/55 mt-2">
                       {[incident.report_date, incident.section_name, incident.location].filter(Boolean).join(" - ")}
                     </p>
+                    {incident.client_decision ? (
+                      <p className="mt-2 text-xs text-(--text)/55">
+                        {incident.client_decision.decision_status === "approved" ? "Client approved" : "Client denied"}{" "}
+                        {formatUsCentralDateTime(incident.client_decision.responded_at)} CT
+                      </p>
+                    ) : null}
                   </div>
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 capitalize">
-                    {formatIncidentStatusLabel(incident.status)}
-                  </span>
+                  <div className="flex flex-col items-end gap-2">
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 capitalize">
+                      {formatIncidentStatusLabel(incident.status)}
+                    </span>
+                    {incident.client_decision ? (
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                          incident.client_decision.decision_status === "approved"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-red-100 text-red-700"
+                        }`}
+                      >
+                        {incident.client_decision.decision_status === "approved" ? "Client approved" : "Client denied"}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               </Link>
             ))}
