@@ -4,7 +4,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import SignatureCapture from "@/app/components/SignatureCapture";
 import {
   normalizeDailyReportPayload,
@@ -27,6 +27,7 @@ import {
   normalizeBonanPsiInput,
   normalizeBonanTemperatureInput,
 } from "@/lib/bonan-daily-formatting";
+import { fetchLocalWeather, requestBrowserGeolocation } from "@/lib/bonan-weather";
 import BonanClientReportReview from "@/app/components/BonanClientReportReview";
 import { ModalLayer } from "@/app/components/ModalLayer";
 
@@ -230,8 +231,8 @@ function isIncidentEntryFilled(row: IncidentEntry): boolean {
 function AreaStatusOptions() {
   return (
     <>
-      <option value="O">OK</option>
-      <option value="D">Deficiency</option>
+      <option value="O">Pass</option>
+      <option value="D">Fail</option>
       <option value="NA">NA</option>
     </>
   );
@@ -321,6 +322,9 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
   const [syncState, setSyncState] = useState<DraftSyncState>("idle");
   const [lastCachedAt, setLastCachedAt] = useState("");
   const [pendingSectionAction, setPendingSectionAction] = useState<PendingSectionAction | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherError, setWeatherError] = useState("");
+  const weatherAutoAttemptedRef = useRef(false);
 
   const isReadOnly = report?.status === "submitted" || userRole === "client";
   const draftCacheKey = useMemo(() => getDraftCacheKey(id), [id]);
@@ -659,6 +663,51 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
       },
     }));
   }
+
+  const fillLocalWeather = useCallback(
+    async (options: { silent?: boolean } = {}) => {
+      if (weatherLoading) return;
+      setWeatherError("");
+      setWeatherLoading(true);
+      try {
+        const position = await requestBrowserGeolocation();
+        if (!position) {
+          if (!options.silent) {
+            setWeatherError(
+              "Location permission is required to pull local weather. Please allow access and try again."
+            );
+          }
+          return;
+        }
+        const weather = await fetchLocalWeather(
+          position.coords.latitude,
+          position.coords.longitude
+        );
+        if (!weather) {
+          if (!options.silent) setWeatherError("Couldn't load local weather. Try again in a moment.");
+          return;
+        }
+        updateMetadata("weather", weather.summary);
+      } catch (weatherFetchError) {
+        console.warn("Failed to load local weather:", weatherFetchError);
+        if (!options.silent) setWeatherError("Couldn't load local weather. Try again in a moment.");
+      } finally {
+        setWeatherLoading(false);
+      }
+    },
+    // updateMetadata is stable via closure; we intentionally exclude it to avoid re-creating the callback each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [weatherLoading]
+  );
+
+  useEffect(() => {
+    if (!payload || !report) return;
+    if (isReadOnly) return;
+    if (weatherAutoAttemptedRef.current) return;
+    if (payload.metadata.weather.trim() !== "") return;
+    weatherAutoAttemptedRef.current = true;
+    void fillLocalWeather({ silent: true });
+  }, [payload, report, isReadOnly, fillLocalWeather]);
 
   function updateCoverageRow<K extends keyof CoverageMatrixRow>(
     index: number,
@@ -1664,14 +1713,35 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                   </select>
                 </label>
                 <label className="min-w-0 space-y-1 text-xs">
-                  <span className="font-medium text-(--text)/60">Weather</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-(--text)/60">Weather</span>
+                    {!isReadOnly && (
+                      <button
+                        type="button"
+                        onClick={() => void fillLocalWeather()}
+                        disabled={weatherLoading}
+                        className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-60"
+                        title="Use device location to auto-fill current conditions"
+                      >
+                        <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="3" />
+                          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+                        </svg>
+                        {weatherLoading ? "Fetching…" : "Auto-fill"}
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={payload.metadata.weather}
                     onChange={(event) => updateMetadata("weather", event.target.value)}
                     disabled={isReadOnly}
+                    placeholder="e.g. Partly cloudy, 72°F, wind 6 mph"
                     className="w-full min-w-0 rounded-lg border border-(--border)/40 bg-(--bg) px-3 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60"
                   />
+                  {weatherError && (
+                    <p className="text-[10px] text-red-600 leading-snug">{weatherError}</p>
+                  )}
                 </label>
                 <label className="min-w-0 space-y-1 text-xs">
                   <span className="font-medium text-(--text)/60">Shift</span>
@@ -1775,7 +1845,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
               <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-(--border)/10">
                 <div>
                   <h2 className="text-sm font-semibold text-(--text)">Coverage Matrix</h2>
-                  <p className="text-[11px] text-(--text)/50 mt-0.5">Mark each area: OK, Deficiency, or NA</p>
+                  <p className="text-[11px] text-(--text)/50 mt-0.5">Mark each area: Pass, Fail, or NA</p>
                 </div>
                 <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-(--text)/60">
                   {completedCoverage}/{payload.coverageMatrix.length}

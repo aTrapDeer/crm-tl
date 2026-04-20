@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 import BonanReadOnlyData from "./BonanReadOnlyData";
 import BonanClientActionPanel from "./BonanClientActionPanel";
+import { getBonanDailyFieldLabel } from "@/lib/bonan-daily-formatting";
 
 interface SummaryCard {
   label: string;
@@ -11,6 +13,9 @@ interface SummaryCard {
 }
 
 function formatLabel(value: string) {
+  const override = getBonanDailyFieldLabel([value]);
+  if (override) return override;
+
   return value
     .replace(/_/g, " ")
     .replace(/([a-z])([A-Z])/g, "$1 $2")
@@ -32,9 +37,33 @@ function getSectionDescription(key: string) {
     dailyRollup: "Day-by-day walkthrough completion and findings.",
     weeklyCheckups: "Weekly system checks and related work order follow-up.",
     sprinklerLogs: "Pump room test log and sprinkler system checks.",
+    kpiSummary: "High-level performance counters and deficiency snapshot.",
+    priorityWatchList: "Top items flagged for escalation or follow-up this period.",
+    workOrdersCreated: "Work orders opened during this reporting window.",
+    workOrdersClosed: "Work orders closed during this reporting window.",
+    openCarryForward: "Open items carried into the next review period.",
+    alarmEventsLog: "Fire alarm, trouble, and supervisory events for the period.",
+    managementActions: "Management follow-ups planned or completed this period.",
   };
 
   return descriptions[key] || "Review this section carefully before signing off.";
+}
+
+function isValueEmptyForReview(value: unknown): boolean {
+  if (value === null || value === undefined) return true;
+  if (typeof value === "string") return value.trim() === "";
+  if (typeof value === "number") return Number.isNaN(value);
+  if (typeof value === "boolean") return false;
+  if (Array.isArray(value)) {
+    return value.length === 0 || value.every(isValueEmptyForReview);
+  }
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).filter(
+      ([key]) => key !== "signature_data"
+    );
+    return entries.every(([, entryValue]) => isValueEmptyForReview(entryValue));
+  }
+  return false;
 }
 
 export default function BonanClientReportReview({
@@ -59,6 +88,34 @@ export default function BonanClientReportReview({
   currentFieldValues?: Record<string, string>;
 }) {
   const sections = Object.entries(payload);
+
+  const [showScrollBottom, setShowScrollBottom] = useState(true);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  useEffect(() => {
+    function handleScroll() {
+      if (typeof window === "undefined") return;
+      const doc = document.documentElement;
+      const scrollTop = window.scrollY || doc.scrollTop || 0;
+      const maxScroll = (doc.scrollHeight || 0) - (window.innerHeight || 0);
+      setShowScrollTop(scrollTop > 240);
+      setShowScrollBottom(maxScroll - scrollTop > 240);
+    }
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+    };
+  }, [sections.length]);
+
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+  const scrollToBottom = useCallback(() => {
+    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+  }, []);
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#eef4f8_0%,#f8fbfd_40%,#edf2f7_100%)]">
@@ -96,14 +153,14 @@ export default function BonanClientReportReview({
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/80">
                 How To Review
               </p>
-              <div className="mt-3 space-y-3 text-sm text-white">
-                <div className="rounded-2xl bg-white/12 px-3 py-2.5 ring-1 ring-white/8">
-                  1. Read each section from top to bottom.
+              <div className="mt-3 space-y-2 text-sm text-white">
+                <div className="rounded-2xl bg-white/12 px-3 py-2 ring-1 ring-white/8">
+                  1. Empty sections collapse automatically — tap any section to open.
                 </div>
-                <div className="rounded-2xl bg-white/12 px-3 py-2.5 ring-1 ring-white/8">
-                  2. Use the summary cards to understand totals quickly.
+                <div className="rounded-2xl bg-white/12 px-3 py-2 ring-1 ring-white/8">
+                  2. Use the quick jump chips below to move between sections.
                 </div>
-                <div className="rounded-2xl bg-white/12 px-3 py-2.5 ring-1 ring-white/8 text-white">
+                <div className="rounded-2xl bg-white/12 px-3 py-2 ring-1 ring-white/8 text-white">
                   3. Sign if correct, or request a correction for one area only.
                 </div>
               </div>
@@ -141,52 +198,49 @@ export default function BonanClientReportReview({
           </section>
         )}
 
-        <section className="rounded-[28px] border border-slate-200/80 bg-white/90 p-4 md:p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <section className="sticky top-2 z-20 rounded-[22px] border border-slate-200/80 bg-white/95 p-3 md:p-4 shadow-[0_10px_30px_rgba(15,23,42,0.06)] backdrop-blur">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Walkthrough Guide
+                Quick Jump
               </p>
-              <h2 className="mt-1 text-lg font-semibold text-slate-900">
-                Review one section at a time
+              <h2 className="mt-0.5 text-sm font-semibold text-slate-900">
+                Tap a section to jump to it
               </h2>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {sections.map(([key], index) => (
-                <a
-                  key={key}
-                  href={`#section-${key}`}
-                  className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-700 transition hover:border-[#0f4c81]/40 hover:bg-[#0f4c81]/5 hover:text-[#0f4c81]"
-                >
-                  {index + 1}. {formatLabel(key)}
-                </a>
-              ))}
+            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+              {sections.map(([key], index) => {
+                const empty = isValueEmptyForReview(payload[key]);
+                return (
+                  <a
+                    key={key}
+                    href={`#section-${key}`}
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] transition ${
+                      empty
+                        ? "border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300 hover:text-slate-700"
+                        : "border-[#0f4c81]/25 bg-[#0f4c81]/8 text-[#0f4c81] hover:bg-[#0f4c81]/12"
+                    }`}
+                  >
+                    {index + 1}. {formatLabel(key)}
+                    {empty && <span className="ml-1 opacity-70">(empty)</span>}
+                  </a>
+                );
+              })}
             </div>
           </div>
         </section>
 
-        <div className="space-y-5">
+        <div className="space-y-4">
           {sections.map(([key, value], index) => (
-            <div key={key} className="space-y-3">
-              <div className="flex flex-wrap items-end justify-between gap-3 px-1">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    Step {index + 1}
-                  </p>
-                  <h2 className="mt-1 text-lg font-semibold text-slate-900">
-                    {formatLabel(key)}
-                  </h2>
-                </div>
-                <p className="max-w-2xl text-sm leading-6 text-slate-600">
-                  {getSectionDescription(key)}
-                </p>
-              </div>
-              <BonanReadOnlyData
-                sectionId={`section-${key}`}
-                title={key}
-                value={value}
-              />
-            </div>
+            <BonanReadOnlyData
+              key={key}
+              sectionId={`section-${key}`}
+              title={key}
+              value={value}
+              collapsible
+              stepLabel={`Step ${index + 1} of ${sections.length}`}
+              description={getSectionDescription(key)}
+            />
           ))}
         </div>
 
@@ -199,6 +253,35 @@ export default function BonanClientReportReview({
             currentFieldValues={currentFieldValues}
           />
         </div>
+      </div>
+
+      <div className="fixed bottom-4 right-3 z-40 flex flex-col gap-2 md:hidden">
+        {showScrollTop && (
+          <button
+            type="button"
+            onClick={scrollToTop}
+            aria-label="Scroll to top"
+            className="h-11 w-11 rounded-full bg-[#0b2f52] text-white shadow-[0_14px_30px_rgba(11,47,82,0.35)] ring-1 ring-white/20 flex items-center justify-center transition hover:bg-[#114a78]"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 19V5" />
+              <path d="M5 12l7-7 7 7" />
+            </svg>
+          </button>
+        )}
+        {showScrollBottom && (
+          <button
+            type="button"
+            onClick={scrollToBottom}
+            aria-label="Scroll to bottom"
+            className="h-11 w-11 rounded-full bg-[#0b2f52] text-white shadow-[0_14px_30px_rgba(11,47,82,0.35)] ring-1 ring-white/20 flex items-center justify-center transition hover:bg-[#114a78]"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 5v14" />
+              <path d="M5 12l7 7 7-7" />
+            </svg>
+          </button>
+        )}
       </div>
     </div>
   );

@@ -25,14 +25,39 @@ const PSI_PATHS = new Set([
 ]);
 
 const LABEL_OVERRIDES: Record<string, string> = {
+  kpiSummary: "Performance Summary",
   "criticalWaterStructuralChecks.boilerRoom.gaugeLeftSuctionPsi": "Gauge Left Suction",
   "criticalWaterStructuralChecks.boilerRoom.gaugeRightDischargePsi": "Gauge Right Suction",
-  "criticalWaterStructuralChecks.boilerRoom.pump1SuctionPsi": "Pump 1 Suction",
-  "criticalWaterStructuralChecks.boilerRoom.pump1DischargePsi": "Pump 1 Discharge",
-  "criticalWaterStructuralChecks.boilerRoom.pump2SuctionPsi": "Pump 2 Suction",
-  "criticalWaterStructuralChecks.boilerRoom.pump2DischargePsi": "Pump 2 Discharge",
+  "criticalWaterStructuralChecks.boilerRoom.pump1SuctionPsi": "Pump-1 Suction (PSI)",
+  "criticalWaterStructuralChecks.boilerRoom.pump1DischargePsi": "Pump-1 Discharge (PSI)",
+  "criticalWaterStructuralChecks.boilerRoom.pump2SuctionPsi": "Pump-2 Suction (PSI)",
+  "criticalWaterStructuralChecks.boilerRoom.pump2DischargePsi": "Pump-2 Discharge (PSI)",
   "criticalWaterStructuralChecks.boilerRoom.airCompressorPsi": "Air Compressor",
 };
+
+const COVERAGE_MATRIX_STATUS_KEYS = new Set([
+  "restroomsMale",
+  "restroomsFemale",
+  "fountain",
+  "elecCloset",
+]);
+
+const COVERAGE_STATUS_LABELS: Record<string, string> = {
+  O: "Pass",
+  D: "Fail",
+  NA: "NA",
+};
+
+function isCoverageMatrixStatusPath(path: string[]): boolean {
+  if (path.length < 2) return false;
+  const lastKey = path[path.length - 1];
+  if (!COVERAGE_MATRIX_STATUS_KEYS.has(lastKey)) return false;
+  return path.includes("coverageMatrix");
+}
+
+export function formatCoverageMatrixStatus(value: string): string {
+  return COVERAGE_STATUS_LABELS[value] ?? value;
+}
 
 function pathToKey(path: string[]): string {
   return path.filter(Boolean).join(".");
@@ -94,6 +119,9 @@ export function formatBonanDailyPrimitiveValue(path: string[], value: unknown): 
   }
   if (pathKey === "criticalWaterStructuralChecks.buildingMainShutoff.valveCondition") {
     return formatBonanMainShutoffCondition(value);
+  }
+  if (isCoverageMatrixStatusPath(path)) {
+    return formatCoverageMatrixStatus(value);
   }
 
   return null;

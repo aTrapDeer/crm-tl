@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   formatBonanDailyPrimitiveValue,
   getBonanDailyFieldLabel,
@@ -25,6 +26,23 @@ function renderPrimitive(value: unknown, path: string[] = []) {
   return String(value);
 }
 
+function isValueEmpty(value: unknown): boolean {
+  if (value === null || value === undefined) return true;
+  if (typeof value === "string") return value.trim() === "";
+  if (typeof value === "number") return Number.isNaN(value);
+  if (typeof value === "boolean") return false;
+  if (Array.isArray(value)) {
+    return value.length === 0 || value.every(isValueEmpty);
+  }
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).filter(
+      ([key]) => key !== "signature_data"
+    );
+    return entries.every(([, entryValue]) => isValueEmpty(entryValue));
+  }
+  return false;
+}
+
 function getCollectionCountLabel(value: unknown) {
   if (Array.isArray(value)) {
     return `${value.length} ${value.length === 1 ? "entry" : "entries"}`;
@@ -37,6 +55,23 @@ function getCollectionCountLabel(value: unknown) {
     return `${count} ${count === 1 ? "item" : "items"}`;
   }
 
+  return null;
+}
+
+function getFilledCount(value: unknown): { filled: number; total: number } | null {
+  if (Array.isArray(value)) {
+    const total = value.length;
+    const filled = value.filter((entry) => !isValueEmpty(entry)).length;
+    return { filled, total };
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).filter(
+      ([key]) => key !== "signature_data"
+    );
+    const total = entries.length;
+    const filled = entries.filter(([, entryValue]) => !isValueEmpty(entryValue)).length;
+    return { filled, total };
+  }
   return null;
 }
 
@@ -253,34 +288,100 @@ export default function BonanReadOnlyData({
   title,
   value,
   sectionId,
+  collapsible = false,
+  defaultCollapsed,
+  stepLabel,
+  description,
 }: {
   title: string;
   value: unknown;
   sectionId?: string;
+  collapsible?: boolean;
+  defaultCollapsed?: boolean;
+  stepLabel?: string;
+  description?: string;
 }) {
   const countLabel = getCollectionCountLabel(value);
+  const filledInfo = getFilledCount(value);
+  const empty = isValueEmpty(value);
+  const initialCollapsed = collapsible ? (defaultCollapsed ?? empty) : false;
+  const [collapsed, setCollapsed] = useState(initialCollapsed);
+
+  const headingLabel = formatLabel(title, [title]);
 
   return (
     <section
       id={sectionId}
       className="scroll-mt-28 rounded-[28px] border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(244,247,250,0.96))] p-4 md:p-6 shadow-[0_20px_50px_rgba(15,23,42,0.08)]"
     >
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 pb-4">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-            Review Section
-          </p>
+      <button
+        type="button"
+        onClick={collapsible ? () => setCollapsed((value) => !value) : undefined}
+        aria-expanded={collapsible ? !collapsed : undefined}
+        aria-controls={sectionId ? `${sectionId}-body` : undefined}
+        className={`w-full flex flex-wrap items-center justify-between gap-3 text-left ${
+          collapsible ? "cursor-pointer" : "cursor-default"
+        } ${!collapsed ? "border-b border-slate-200/80 pb-4 mb-5" : ""}`}
+      >
+        <div className="min-w-0 flex-1">
+          {stepLabel && (
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+              {stepLabel}
+            </p>
+          )}
+          {!stepLabel && (
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Review Section
+            </p>
+          )}
           <h2 className="mt-1 text-lg md:text-xl font-semibold text-slate-900">
-            {formatLabel(title, [title])}
+            {headingLabel}
           </h2>
+          {description && (
+            <p className="mt-1 text-xs md:text-sm leading-5 text-slate-600 max-w-3xl">
+              {description}
+            </p>
+          )}
         </div>
-        {countLabel && (
-          <span className="rounded-full bg-[#0f4c81]/8 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#0f4c81]">
-            {countLabel}
-          </span>
-        )}
-      </div>
-      <ValueBlock value={value} path={[title]} />
+        <div className="flex items-center gap-2 shrink-0">
+          {empty ? (
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              No data
+            </span>
+          ) : filledInfo && filledInfo.total > 0 ? (
+            <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">
+              {filledInfo.filled}/{filledInfo.total} filled
+            </span>
+          ) : countLabel ? (
+            <span className="rounded-full bg-[#0f4c81]/8 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#0f4c81]">
+              {countLabel}
+            </span>
+          ) : null}
+          {collapsible && (
+            <span
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition"
+              aria-hidden="true"
+            >
+              <svg
+                className={`h-4 w-4 transition-transform ${collapsed ? "" : "rotate-180"}`}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.25"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </span>
+          )}
+        </div>
+      </button>
+      {!collapsed && (
+        <div id={sectionId ? `${sectionId}-body` : undefined}>
+          <ValueBlock value={value} path={[title]} />
+        </div>
+      )}
     </section>
   );
 }
