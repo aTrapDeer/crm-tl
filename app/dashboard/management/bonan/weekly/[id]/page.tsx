@@ -557,7 +557,88 @@ export default function BonanWeeklyReportEditorPage({ params }: { params: Promis
               Follow manufacturer instructions and code requirements. Create a WO immediately for Level 1-2 issues.
             </p>
           </div>
-          <div className="overflow-x-auto">
+          <div className="block md:hidden divide-y divide-(--border)/12">
+            {payload.sprinklerLogs.map((row, rowIndex) => (
+              <div key={`sprinkler-mobile-${rowIndex}`} className="p-3">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-(--text)/55">
+                  Test {rowIndex + 1}
+                </p>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <label className="min-w-0 flex-[1_1_8.75rem] space-y-1">
+                    <span className="font-medium text-(--text)/55">Date</span>
+                    <input
+                      type="date"
+                      value={row.date}
+                      onChange={(event) => updateSprinklerRow(rowIndex, "date", event.target.value)}
+                      disabled={isReadOnly}
+                      className="block w-full min-w-0 rounded border border-(--border)/35 bg-white px-2 py-2 disabled:bg-slate-50"
+                    />
+                  </label>
+                  <label className="min-w-0 flex-[1_1_7rem] space-y-1">
+                    <span className="font-medium text-(--text)/55">Start/Run</span>
+                    <input
+                      value={row.runTime}
+                      onChange={(event) => updateSprinklerRow(rowIndex, "runTime", event.target.value)}
+                      disabled={isReadOnly}
+                      className="block w-full min-w-0 rounded border border-(--border)/35 bg-white px-2 py-2 disabled:bg-slate-50"
+                    />
+                  </label>
+                  <label className="min-w-0 flex-[1_1_7rem] space-y-1">
+                    <span className="font-medium text-(--text)/55">Suction PSI</span>
+                    <input
+                      value={row.suctionPsi}
+                      onChange={(event) => updateSprinklerRow(rowIndex, "suctionPsi", event.target.value)}
+                      disabled={isReadOnly}
+                      className="block w-full min-w-0 rounded border border-(--border)/35 bg-white px-2 py-2 disabled:bg-slate-50"
+                    />
+                  </label>
+                  <label className="min-w-0 flex-[1_1_8rem] space-y-1">
+                    <span className="font-medium text-(--text)/55">Discharge PSI</span>
+                    <input
+                      value={row.dischargePsi}
+                      onChange={(event) => updateSprinklerRow(rowIndex, "dischargePsi", event.target.value)}
+                      disabled={isReadOnly}
+                      className="block w-full min-w-0 rounded border border-(--border)/35 bg-white px-2 py-2 disabled:bg-slate-50"
+                    />
+                  </label>
+                  <label className="min-w-0 flex-[1_1_9rem] space-y-1">
+                    <span className="font-medium text-(--text)/55">Controller Normal</span>
+                    <select
+                      value={row.controllerNormal ? "Y" : "N"}
+                      onChange={(event) => updateSprinklerRow(rowIndex, "controllerNormal", event.target.value === "Y")}
+                      disabled={isReadOnly}
+                      className="block w-full min-w-0 rounded border border-(--border)/35 bg-white px-2 py-2 disabled:bg-slate-50"
+                    >
+                      <option value="Y">Y</option>
+                      <option value="N">N</option>
+                    </select>
+                  </label>
+                  <label className="min-w-0 flex-[1_1_9rem] space-y-1">
+                    <span className="font-medium text-(--text)/55">Alarms/Trouble</span>
+                    <select
+                      value={row.alarmTrouble ? "Y" : "N"}
+                      onChange={(event) => updateSprinklerRow(rowIndex, "alarmTrouble", event.target.value === "Y")}
+                      disabled={isReadOnly}
+                      className="block w-full min-w-0 rounded border border-(--border)/35 bg-white px-2 py-2 disabled:bg-slate-50"
+                    >
+                      <option value="N">N</option>
+                      <option value="Y">Y</option>
+                    </select>
+                  </label>
+                  <label className="min-w-0 flex-[2_1_100%] space-y-1">
+                    <span className="font-medium text-(--text)/55">Notes / WO#</span>
+                    <input
+                      value={row.notes}
+                      onChange={(event) => updateSprinklerRow(rowIndex, "notes", event.target.value)}
+                      disabled={isReadOnly}
+                      className="block w-full min-w-0 rounded border border-(--border)/35 bg-white px-2 py-2 disabled:bg-slate-50"
+                    />
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[880px] table-fixed text-xs">
               <colgroup>
                 <col className="w-[128px]" />

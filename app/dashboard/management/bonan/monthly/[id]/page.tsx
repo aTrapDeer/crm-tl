@@ -959,7 +959,69 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
             <input value={payload.emergencyLightingLog.supervisorReview} onChange={(event) => updatePayload((current) => ({ ...current, emergencyLightingLog: { ...current.emergencyLightingLog, supervisorReview: event.target.value } }))} disabled={isReadOnly} placeholder="Supervisor Review" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
             {renderSignatureControl("emergency_lighting", payload.emergencyLightingLog.signature)}
           </div>
-          <div className="overflow-x-auto">
+          <div className="block md:hidden divide-y divide-(--border)/12">
+            {payload.emergencyLightingLog.rows.map((row, rowIndex) => (
+              <div key={`light-mobile-${rowIndex}`} className="p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-(--text)/55">
+                    Test {rowIndex + 1}
+                  </p>
+                  <input
+                    value={row.initials}
+                    onChange={(event) => updateEmergencyRow(rowIndex, "initials", event.target.value)}
+                    disabled={isReadOnly}
+                    placeholder="Init."
+                    className="w-16 shrink-0 rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <label className="min-w-0 flex-[1_1_8.75rem] space-y-1">
+                    <span className="font-medium text-(--text)/55">Date</span>
+                    <input
+                      type="date"
+                      value={row.date}
+                      onChange={(event) => updateEmergencyRow(rowIndex, "date", event.target.value)}
+                      disabled={isReadOnly}
+                      className="block w-full min-w-0 rounded border border-(--border)/35 bg-white px-2 py-2 disabled:bg-slate-50"
+                    />
+                  </label>
+                  <label className="min-w-0 flex-[2_1_11rem] space-y-1">
+                    <span className="font-medium text-(--text)/55">Area / Device</span>
+                    <input
+                      value={row.areaDevice}
+                      onChange={(event) => updateEmergencyRow(rowIndex, "areaDevice", event.target.value)}
+                      disabled={isReadOnly}
+                      className="block w-full min-w-0 rounded border border-(--border)/35 bg-white px-2 py-2 disabled:bg-slate-50"
+                    />
+                  </label>
+                  <label className="min-w-0 flex-[1_1_9rem] space-y-1">
+                    <span className="font-medium text-(--text)/55">Condition</span>
+                    <select
+                      value={row.condition}
+                      onChange={(event) => updateEmergencyRow(rowIndex, "condition", event.target.value as MonthlyEmergencyLightingRow["condition"])}
+                      disabled={isReadOnly}
+                      className="block w-full min-w-0 rounded border border-(--border)/35 bg-white px-2 py-2 disabled:bg-slate-50"
+                    >
+                      <option value="">Select</option>
+                      {FIRE_PASS_FAIL_OPTIONS.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="min-w-0 flex-[2_1_100%] space-y-1">
+                    <span className="font-medium text-(--text)/55">Corrective Action / WO#</span>
+                    <input
+                      value={row.correctiveActionWorkOrder}
+                      onChange={(event) => updateEmergencyRow(rowIndex, "correctiveActionWorkOrder", event.target.value)}
+                      disabled={isReadOnly}
+                      className="block w-full min-w-0 rounded border border-(--border)/35 bg-white px-2 py-2 disabled:bg-slate-50"
+                    />
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[860px] table-fixed text-xs">
               <colgroup>
                 <col className="w-[128px]" />
