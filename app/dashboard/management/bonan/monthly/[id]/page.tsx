@@ -975,23 +975,23 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
                   />
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
-                  <label className="min-w-0 flex-[1_1_8.75rem] space-y-1">
+                  <label className="min-w-0 flex-[1_1_100%] space-y-1">
                     <span className="font-medium text-(--text)/55">Date</span>
                     <input
                       type="date"
                       value={row.date}
                       onChange={(event) => updateEmergencyRow(rowIndex, "date", event.target.value)}
                       disabled={isReadOnly}
-                      className="block w-full min-w-0 rounded border border-(--border)/35 bg-white px-2 py-2 disabled:bg-slate-50"
+                      className="block w-full min-w-0 rounded border border-(--border)/35 bg-white px-2 py-2 text-base disabled:bg-slate-50"
                     />
                   </label>
-                  <label className="min-w-0 flex-[2_1_11rem] space-y-1">
+                  <label className="min-w-0 flex-[1_1_100%] space-y-1">
                     <span className="font-medium text-(--text)/55">Area / Device</span>
                     <input
                       value={row.areaDevice}
                       onChange={(event) => updateEmergencyRow(rowIndex, "areaDevice", event.target.value)}
                       disabled={isReadOnly}
-                      className="block w-full min-w-0 rounded border border-(--border)/35 bg-white px-2 py-2 disabled:bg-slate-50"
+                      className="block w-full min-w-0 rounded border border-(--border)/35 bg-white px-2 py-2 text-base disabled:bg-slate-50"
                     />
                   </label>
                   <label className="min-w-0 flex-[1_1_9rem] space-y-1">
