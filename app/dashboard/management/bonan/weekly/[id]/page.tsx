@@ -18,6 +18,7 @@ import {
   getMonthKey,
 } from "@/lib/us-central-time";
 import BonanClientReportReview from "@/app/components/BonanClientReportReview";
+import ClickSignatureModal from "@/app/components/ClickSignatureModal";
 
 interface BonanWeeklyReport {
   id: string;
@@ -115,6 +116,8 @@ export default function BonanWeeklyReportEditorPage({ params }: { params: Promis
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
+  const [currentUserName, setCurrentUserName] = useState("Signer");
+  const [showEmployeeSignaturePrompt, setShowEmployeeSignaturePrompt] = useState(false);
 
   const isReadOnly = report?.status === "submitted" || userRole === "client";
 
@@ -129,6 +132,9 @@ export default function BonanWeeklyReportEditorPage({ params }: { params: Promis
         }
 
         setUserRole(sessionData.user.role as UserRole);
+        setCurrentUserName(
+          `${sessionData.user.first_name || ""} ${sessionData.user.last_name || ""}`.trim() || "Signer"
+        );
 
         const reportRes = await fetch(`/api/bonan/reports/${id}`);
         const reportData = await reportRes.json();
@@ -195,6 +201,17 @@ export default function BonanWeeklyReportEditorPage({ params }: { params: Promis
       setSaveMessage("Unsaved changes");
       return next;
     });
+  }
+
+  function applyEmployeeSignature(_signatureData: string, signedAtLabel: string) {
+    updatePayload((current) => ({
+      ...current,
+      metadata: {
+        ...current.metadata,
+        constructionMgmtReview: `${currentUserName} - ${signedAtLabel}`,
+      },
+    }));
+    setShowEmployeeSignaturePrompt(false);
   }
 
   const saveDraft = useCallback(async () => {
@@ -467,17 +484,32 @@ export default function BonanWeeklyReportEditorPage({ params }: { params: Promis
             </label>
             <label className="space-y-1">
               <span className="text-(--text)/60">Signature</span>
-              <input
-                value={payload.metadata.constructionMgmtReview}
-                onChange={(event) =>
-                  updatePayload((current) => ({
-                    ...current,
-                    metadata: { ...current.metadata, constructionMgmtReview: event.target.value },
-                  }))
-                }
-                disabled={isReadOnly}
-                className="w-full rounded-lg border border-(--border)/35 bg-white px-3 py-2 disabled:bg-slate-50"
-              />
+              {payload.metadata.constructionMgmtReview ? (
+                <div className="rounded-lg border border-(--border)/35 bg-white px-3 py-2">
+                  <p
+                    className="text-2xl leading-tight text-[#01224f]"
+                    style={{ fontFamily: '"Brush Script MT", "Segoe Script", "Lucida Handwriting", cursive' }}
+                  >
+                    {payload.metadata.constructionMgmtReview.split(" - ")[0]}
+                  </p>
+                  <p className="mt-1 text-xs text-(--text)/55">
+                    {payload.metadata.constructionMgmtReview.split(" - ").slice(1).join(" - ")}
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-(--border)/45 bg-slate-50 px-3 py-2 text-sm text-(--text)/55">
+                  No signature recorded
+                </div>
+              )}
+              {!isReadOnly && (
+                <button
+                  type="button"
+                  onClick={() => setShowEmployeeSignaturePrompt(true)}
+                  className="w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+                >
+                  {payload.metadata.constructionMgmtReview ? "Replace Signature" : "Click to Sign"}
+                </button>
+              )}
             </label>
           </div>
 
@@ -733,6 +765,15 @@ export default function BonanWeeklyReportEditorPage({ params }: { params: Promis
           </div>
         )}
       </div>
+      {showEmployeeSignaturePrompt && (
+        <ClickSignatureModal
+          signerName={currentUserName}
+          signerLabel="Weekly Checks Signer"
+          submitLabel="Submit Signature"
+          onSave={applyEmployeeSignature}
+          onCancel={() => setShowEmployeeSignaturePrompt(false)}
+        />
+      )}
     </div>
   );
 }

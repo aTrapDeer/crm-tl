@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatUsCentralDateTime } from "@/lib/us-central-time";
-import SignatureCapture from "./SignatureCapture";
+import ClickSignatureModal from "./ClickSignatureModal";
 
 type BonanEntityType = "bonan_report" | "work_order" | "incident_report";
 type DecisionStatus = "approved" | "denied";
@@ -41,6 +41,11 @@ interface ChangeRequest {
   created_at: string;
 }
 
+interface SessionUser {
+  first_name?: string;
+  last_name?: string;
+}
+
 const CHANGE_REQUEST_STATUS_LABELS: Record<ChangeRequest["status"], string> = {
   pending: "Pending review",
   grant_approved: "Correction window approved",
@@ -76,14 +81,11 @@ export default function BonanClientActionPanel({
   const [showDecisionForm, setShowDecisionForm] = useState<DecisionStatus | null>(null);
   const [showRequestForm, setShowRequestForm] = useState(false);
   const [showApprovedEdits, setShowApprovedEdits] = useState(false);
+  const [currentUser, setCurrentUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
-  const [approvalForm, setApprovalForm] = useState({
-    signer_name: "",
-    approval_date: new Date().toISOString().slice(0, 10),
-  });
   const [decisionForm, setDecisionForm] = useState({
     response_date: new Date().toISOString().slice(0, 10),
     note: "",
@@ -94,6 +96,11 @@ export default function BonanClientActionPanel({
     message: "",
   });
   const [approvedEditValues, setApprovedEditValues] = useState<Record<string, string>>({});
+
+  const signerName = useMemo(() => {
+    if (!currentUser) return "Signer";
+    return `${currentUser.first_name || ""} ${currentUser.last_name || ""}`.trim() || "Signer";
+  }, [currentUser]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -135,6 +142,20 @@ export default function BonanClientActionPanel({
     void loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    async function loadSession() {
+      try {
+        const res = await fetch("/api/auth/session");
+        const data = await res.json().catch(() => ({}));
+        setCurrentUser(data.user || null);
+      } catch (sessionError) {
+        console.error("Failed to load signature account details:", sessionError);
+      }
+    }
+
+    void loadSession();
+  }, []);
+
   const currentApproval = useMemo(
     () => approvals.find((approval) => approval.approved_revision === currentRevision),
     [approvals, currentRevision]
@@ -172,8 +193,8 @@ export default function BonanClientActionPanel({
         body: JSON.stringify({
           entity_type: entityType,
           entity_id: entityId,
-          signer_name: approvalForm.signer_name,
-          approval_date: approvalForm.approval_date,
+          signer_name: signerName,
+          approval_date: new Date().toISOString().slice(0, 10),
           signature_data: signatureData,
         }),
       });
@@ -441,30 +462,15 @@ export default function BonanClientActionPanel({
       {error && <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
       {showApprovalCapture && !isDecisionFlow && (
-        <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4 md:p-5 space-y-4">
-          <div className="grid gap-3 md:grid-cols-2">
-            <input
-              type="text"
-              value={approvalForm.signer_name}
-              onChange={(event) => setApprovalForm((current) => ({ ...current, signer_name: event.target.value }))}
-              placeholder="Your name"
-              className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
-            />
-            <input
-              type="date"
-              value={approvalForm.approval_date}
-              onChange={(event) => setApprovalForm((current) => ({ ...current, approval_date: event.target.value }))}
-              className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
-            />
-          </div>
-          <SignatureCapture
-            signerType="building_rep"
-            signerName={approvalForm.signer_name}
-            signerTitle="Bonan Client"
-            onSave={(signatureData) => void handleSaveApproval(signatureData)}
-            onCancel={() => setShowApprovalCapture(false)}
-          />
-        </div>
+        <ClickSignatureModal
+          signerName={signerName}
+          signerTitle="Bonan Client"
+          signerLabel="Client Signer"
+          submitLabel="Submit Approval"
+          submitting={submitting}
+          onSave={(signatureData) => void handleSaveApproval(signatureData)}
+          onCancel={() => setShowApprovalCapture(false)}
+        />
       )}
 
       {showDecisionForm && isDecisionFlow && (

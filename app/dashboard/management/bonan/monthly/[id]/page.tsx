@@ -14,6 +14,7 @@ import {
   type MonthlyFireExtinguisherRow,
 } from "@/lib/bonan-period-payloads";
 import { formatUsCentralDateTime, formatUsCentralTime } from "@/lib/us-central-time";
+import ClickSignatureModal from "@/app/components/ClickSignatureModal";
 
 interface BonanMonthlyReport {
   id: string;
@@ -73,6 +74,13 @@ interface BonanCollectiveSummary {
 }
 
 type UserRole = "admin" | "employee" | "client";
+type MonthlySignatureTarget =
+  | "fire_extinguisher"
+  | "emergency_lighting"
+  | "deficiency"
+  | "board_approval"
+  | "certified_by"
+  | "reviewed_accepted";
 
 function classNames(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
@@ -226,6 +234,8 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
+  const [currentUserName, setCurrentUserName] = useState("Signer");
+  const [showSignaturePrompt, setShowSignaturePrompt] = useState<MonthlySignatureTarget | null>(null);
 
   const isReadOnly = report?.status === "submitted" || userRole === "client";
 
@@ -239,6 +249,9 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
           return;
         }
         const role = sessionData.user.role as UserRole;
+        setCurrentUserName(
+          `${sessionData.user.first_name || ""} ${sessionData.user.last_name || ""}`.trim() || "Signer"
+        );
         if (role === "client") {
           router.push(`/dashboard/bonan/monthly-summaries/${id}`);
           return;
@@ -434,15 +447,91 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
     }));
   }
 
-  function updateBoardApprovalSignature(signature: string) {
-    updatePayload((current) => ({
-      ...current,
-      deficiencyRegister: {
-        ...current.deficiencyRegister,
-        ownerExecutiveReview: signature,
-        ownerExecutiveDate: signature.trim() ? `${formatUsCentralDateTime(new Date())} CT` : "",
-      },
-    }));
+  function applyEmployeeSignature(_signatureData: string, signedAtLabel: string) {
+    if (!showSignaturePrompt) return;
+    const stampedSignature = `${currentUserName} - ${signedAtLabel}`;
+
+    updatePayload((current) => {
+      if (showSignaturePrompt === "fire_extinguisher") {
+        return {
+          ...current,
+          fireExtinguisherLog: { ...current.fireExtinguisherLog, signature: stampedSignature },
+        };
+      }
+      if (showSignaturePrompt === "emergency_lighting") {
+        return {
+          ...current,
+          emergencyLightingLog: { ...current.emergencyLightingLog, signature: stampedSignature },
+        };
+      }
+      if (showSignaturePrompt === "deficiency") {
+        return {
+          ...current,
+          deficiencyRegister: { ...current.deficiencyRegister, signature: stampedSignature },
+        };
+      }
+      if (showSignaturePrompt === "board_approval") {
+        return {
+          ...current,
+          deficiencyRegister: {
+            ...current.deficiencyRegister,
+            ownerExecutiveReview: stampedSignature,
+            ownerExecutiveDate: signedAtLabel,
+          },
+        };
+      }
+      if (showSignaturePrompt === "certified_by") {
+        return {
+          ...current,
+          closeoutCertification: {
+            ...current.closeoutCertification,
+            certifiedBySignature: stampedSignature,
+            certifiedDate: signedAtLabel,
+          },
+        };
+      }
+      return {
+        ...current,
+        closeoutCertification: {
+          ...current.closeoutCertification,
+          reviewedAcceptedSignature: stampedSignature,
+          reviewedAcceptedDate: signedAtLabel,
+        },
+      };
+    });
+    setShowSignaturePrompt(null);
+  }
+
+  function renderSignatureControl(target: MonthlySignatureTarget, value: string, emptyLabel = "No signature recorded") {
+    const [name, ...dateParts] = value.split(" - ");
+    return (
+      <div className="space-y-1">
+        {value ? (
+          <div className="rounded border border-(--border)/35 bg-white px-2 py-1.5">
+            <p
+              className="text-2xl leading-tight text-[#01224f]"
+              style={{ fontFamily: '"Brush Script MT", "Segoe Script", "Lucida Handwriting", cursive' }}
+            >
+              {name}
+            </p>
+            <p className="mt-0.5 text-[11px] text-(--text)/55">{dateParts.join(" - ")}</p>
+          </div>
+        ) : (
+          <div className="rounded border border-dashed border-(--border)/40 bg-slate-50 px-2 py-2 text-xs text-(--text)/55">
+            {emptyLabel}
+          </div>
+        )}
+        {!isReadOnly && (
+          <button
+            type="button"
+            onClick={() => setShowSignaturePrompt(target)}
+            className="w-full rounded bg-blue-600 px-2 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
+          >
+            {value ? "Replace Signature" : "Click to Sign"}
+          </button>
+        )}
+      </div>
+    );
   }
 
   const dailyCompletionPercent = useMemo(() => {
@@ -799,7 +888,7 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
             <input value={payload.fireExtinguisherLog.monthYear} onChange={(event) => updatePayload((current) => ({ ...current, fireExtinguisherLog: { ...current.fireExtinguisherLog, monthYear: event.target.value } }))} disabled={isReadOnly} placeholder="Month / Year" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
             <input value={payload.fireExtinguisherLog.inspector} onChange={(event) => updatePayload((current) => ({ ...current, fireExtinguisherLog: { ...current.fireExtinguisherLog, inspector: event.target.value } }))} disabled={isReadOnly} placeholder="Inspector" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
             <input value={payload.fireExtinguisherLog.supervisorReview} onChange={(event) => updatePayload((current) => ({ ...current, fireExtinguisherLog: { ...current.fireExtinguisherLog, supervisorReview: event.target.value } }))} disabled={isReadOnly} placeholder="Supervisor Review" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
-            <input value={payload.fireExtinguisherLog.signature} onChange={(event) => updatePayload((current) => ({ ...current, fireExtinguisherLog: { ...current.fireExtinguisherLog, signature: event.target.value } }))} disabled={isReadOnly} placeholder="Signature" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
+            {renderSignatureControl("fire_extinguisher", payload.fireExtinguisherLog.signature)}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[980px] text-xs">
@@ -868,7 +957,7 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
             <input value={payload.emergencyLightingLog.monthYear} onChange={(event) => updatePayload((current) => ({ ...current, emergencyLightingLog: { ...current.emergencyLightingLog, monthYear: event.target.value } }))} disabled={isReadOnly} placeholder="Month / Year" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
             <input value={payload.emergencyLightingLog.inspector} onChange={(event) => updatePayload((current) => ({ ...current, emergencyLightingLog: { ...current.emergencyLightingLog, inspector: event.target.value } }))} disabled={isReadOnly} placeholder="Inspector" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
             <input value={payload.emergencyLightingLog.supervisorReview} onChange={(event) => updatePayload((current) => ({ ...current, emergencyLightingLog: { ...current.emergencyLightingLog, supervisorReview: event.target.value } }))} disabled={isReadOnly} placeholder="Supervisor Review" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
-            <input value={payload.emergencyLightingLog.signature} onChange={(event) => updatePayload((current) => ({ ...current, emergencyLightingLog: { ...current.emergencyLightingLog, signature: event.target.value } }))} disabled={isReadOnly} placeholder="Signature" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
+            {renderSignatureControl("emergency_lighting", payload.emergencyLightingLog.signature)}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[980px] table-fixed text-xs">
@@ -920,7 +1009,7 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
               <input value={payload.deficiencyRegister.monthYear} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, monthYear: event.target.value } }))} disabled={isReadOnly} placeholder="Month / Year" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
               <input value={payload.deficiencyRegister.preparedBy} disabled placeholder="Prepared By" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
               <input value={payload.deficiencyRegister.supervisorReview} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, supervisorReview: event.target.value } }))} disabled={isReadOnly} placeholder="Supervisor Review" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
-              <input value={payload.deficiencyRegister.signature} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, signature: event.target.value } }))} disabled={isReadOnly} placeholder="Signature" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
+              {renderSignatureControl("deficiency", payload.deficiencyRegister.signature)}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-8 gap-2">
               <input value={resolvedDeficiencyMetrics.totalOpenStart} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, totalOpenStart: event.target.value } }))} disabled={isReadOnly} placeholder="Total Open (Start)" className="rounded border border-(--border)/35 bg-white/90 px-2 py-1.5 disabled:bg-slate-50" />
@@ -971,7 +1060,7 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
           <div className="p-3 md:p-4 space-y-2 text-xs border-t border-(--border)/15">
             <textarea rows={3} value={payload.deficiencyRegister.managementNotes} onChange={(event) => updatePayload((current) => ({ ...current, deficiencyRegister: { ...current.deficiencyRegister, managementNotes: event.target.value } }))} disabled={isReadOnly} placeholder="Management Recommendation Notes" className="w-full rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
             <div className="grid grid-cols-1 gap-2 md:max-w-md">
-              <input value={payload.deficiencyRegister.ownerExecutiveReview} onChange={(event) => updateBoardApprovalSignature(event.target.value)} disabled={isReadOnly} placeholder="Board Approval Signature" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
+              {renderSignatureControl("board_approval", payload.deficiencyRegister.ownerExecutiveReview, "No board approval signature recorded")}
               <input value={payload.deficiencyRegister.ownerExecutiveDate} readOnly disabled placeholder="Board Approval Date & Time" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
             </div>
           </div>
@@ -1124,9 +1213,9 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
             </table>
           </div>
           <div className="p-3 md:p-4 grid grid-cols-1 md:grid-cols-4 gap-2 text-xs">
-            <input value={payload.closeoutCertification.certifiedBySignature} onChange={(event) => updatePayload((current) => ({ ...current, closeoutCertification: { ...current.closeoutCertification, certifiedBySignature: event.target.value } }))} disabled={isReadOnly} placeholder="Certified By (Signature)" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
+            {renderSignatureControl("certified_by", payload.closeoutCertification.certifiedBySignature)}
             <input value={payload.closeoutCertification.certifiedDate} onChange={(event) => updatePayload((current) => ({ ...current, closeoutCertification: { ...current.closeoutCertification, certifiedDate: event.target.value } }))} disabled={isReadOnly} placeholder="Date" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
-            <input value={payload.closeoutCertification.reviewedAcceptedSignature} onChange={(event) => updatePayload((current) => ({ ...current, closeoutCertification: { ...current.closeoutCertification, reviewedAcceptedSignature: event.target.value } }))} disabled={isReadOnly} placeholder="Reviewed/Accepted By" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
+            {renderSignatureControl("reviewed_accepted", payload.closeoutCertification.reviewedAcceptedSignature)}
             <input value={payload.closeoutCertification.reviewedAcceptedDate} onChange={(event) => updatePayload((current) => ({ ...current, closeoutCertification: { ...current.closeoutCertification, reviewedAcceptedDate: event.target.value } }))} disabled={isReadOnly} placeholder="Date" className="rounded border border-(--border)/35 px-2 py-1.5 disabled:bg-slate-50" />
           </div>
         </section>
@@ -1142,6 +1231,15 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
           </div>
         )}
       </div>
+      {showSignaturePrompt && (
+        <ClickSignatureModal
+          signerName={currentUserName}
+          signerLabel="Monthly Summary Signer"
+          submitLabel="Submit Signature"
+          onSave={applyEmployeeSignature}
+          onCancel={() => setShowSignaturePrompt(null)}
+        />
+      )}
     </div>
   );
 }

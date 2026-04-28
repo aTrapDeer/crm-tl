@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import SignatureCapture from "@/app/components/SignatureCapture";
+import ClickSignatureModal from "@/app/components/ClickSignatureModal";
 import {
   normalizeDailyReportPayload,
   type DailyReportPayload,
@@ -304,6 +304,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
   const [submitting, setSubmitting] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [userRole, setUserRole] = useState<"admin" | "employee" | "client" | null>(null);
+  const [currentUserName, setCurrentUserName] = useState("Signer");
   const [associatedWorkOrders, setAssociatedWorkOrders] = useState<AssociatedWorkOrder[]>([]);
   const [associatedIncidentReports, setAssociatedIncidentReports] = useState<AssociatedIncidentReport[]>([]);
   const [creatingAssociatedWorkOrder, setCreatingAssociatedWorkOrder] = useState(false);
@@ -495,6 +496,9 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
           return;
         }
         setUserRole(sessionData.user.role);
+        setCurrentUserName(
+          `${sessionData.user.first_name || ""} ${sessionData.user.last_name || ""}`.trim() || "Signer"
+        );
 
         const reportRes = await fetch(`/api/bonan/reports/${id}`);
         const reportData = await reportRes.json();
@@ -882,10 +886,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
   ) {
     if (scope === "daily_walkthrough") {
       return {
-        signerName:
-          currentPayload.metadata.inspector.trim() ||
-          currentPayload.metadata.supervisorReview.trim() ||
-          "Signer",
+        signerName: currentUserName,
         signerTitle:
           currentPayload.metadata.supervisorReview.trim()
             ? `Supervisor: ${currentPayload.metadata.supervisorReview.trim()}`
@@ -894,10 +895,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
     }
 
     return {
-      signerName:
-        currentPayload.fireAlarmMeta.preparedBy.trim() ||
-        currentPayload.fireAlarmMeta.supervisorReview.trim() ||
-        "Signer",
+      signerName: currentUserName,
       signerTitle:
         currentPayload.fireAlarmMeta.supervisorReview.trim()
           ? `Supervisor: ${currentPayload.fireAlarmMeta.supervisorReview.trim()}`
@@ -1821,7 +1819,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                       onClick={() => openReportSignaturePrompt("daily_walkthrough")}
                       className="w-full rounded-lg border-2 border-dashed border-(--border)/40 px-3 py-4 text-sm text-(--text)/60 transition hover:border-blue-400 hover:text-(--text)"
                     >
-                      Capture handwritten signature
+                      Click to sign
                     </button>
                   ) : (
                     <div className="rounded-lg border border-(--border)/30 bg-(--bg) px-3 py-3 text-sm text-(--text)/60">
@@ -3094,7 +3092,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                       onClick={() => openReportSignaturePrompt("fire_alarm")}
                       className="w-full rounded-lg border-2 border-dashed border-(--border)/40 px-3 py-4 text-sm text-(--text)/60 transition hover:border-blue-400 hover:text-(--text)"
                     >
-                      Capture handwritten signature
+                      Click to sign
                     </button>
                   ) : (
                     <div className="rounded-lg border border-(--border)/30 bg-(--bg) px-3 py-3 text-sm text-(--text)/60">
@@ -3503,8 +3501,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
       </div>
 
       {showReportSignatureCapture && payload && (
-        <SignatureCapture
-          signerType={showReportSignatureCapture}
+        <ClickSignatureModal
           signerLabel={
             showReportSignatureCapture === "daily_walkthrough"
               ? "Daily Walkthrough Signer"
