@@ -558,7 +558,16 @@ export default function BonanWeeklyReportEditorPage({ params }: { params: Promis
             </p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-xs">
+            <table className="w-full min-w-[880px] table-fixed text-xs">
+              <colgroup>
+                <col className="w-[128px]" />
+                <col className="w-[112px]" />
+                <col className="w-[112px]" />
+                <col className="w-[128px]" />
+                <col className="w-[132px]" />
+                <col className="w-[132px]" />
+                <col className="w-[136px]" />
+              </colgroup>
               <thead className="bg-slate-100/70 text-(--text)/65">
                 <tr>
                   <th className="px-2.5 py-2 text-left font-semibold">Date</th>
@@ -573,32 +582,32 @@ export default function BonanWeeklyReportEditorPage({ params }: { params: Promis
               <tbody className="divide-y divide-(--border)/12">
                 {payload.sprinklerLogs.map((row, rowIndex) => (
                   <tr key={`sprinkler-${rowIndex}`}>
-                    <td className="px-2.5 py-1.5">
-                      <input type="date" value={row.date} onChange={(event) => updateSprinklerRow(rowIndex, "date", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" />
+                    <td className="px-1.5 py-1.5">
+                      <input type="date" value={row.date} onChange={(event) => updateSprinklerRow(rowIndex, "date", event.target.value)} disabled={isReadOnly} className="block w-full min-w-0 max-w-full rounded border border-(--border)/35 bg-white px-1.5 py-1 disabled:bg-slate-50" />
                     </td>
-                    <td className="px-2.5 py-1.5">
-                      <input value={row.runTime} onChange={(event) => updateSprinklerRow(rowIndex, "runTime", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" />
+                    <td className="px-1.5 py-1.5">
+                      <input value={row.runTime} onChange={(event) => updateSprinklerRow(rowIndex, "runTime", event.target.value)} disabled={isReadOnly} className="block w-full min-w-0 max-w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" />
                     </td>
-                    <td className="px-2.5 py-1.5">
-                      <input value={row.suctionPsi} onChange={(event) => updateSprinklerRow(rowIndex, "suctionPsi", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" />
+                    <td className="px-1.5 py-1.5">
+                      <input value={row.suctionPsi} onChange={(event) => updateSprinklerRow(rowIndex, "suctionPsi", event.target.value)} disabled={isReadOnly} className="block w-full min-w-0 max-w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" />
                     </td>
-                    <td className="px-2.5 py-1.5">
-                      <input value={row.dischargePsi} onChange={(event) => updateSprinklerRow(rowIndex, "dischargePsi", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" />
+                    <td className="px-1.5 py-1.5">
+                      <input value={row.dischargePsi} onChange={(event) => updateSprinklerRow(rowIndex, "dischargePsi", event.target.value)} disabled={isReadOnly} className="block w-full min-w-0 max-w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" />
                     </td>
-                    <td className="px-2.5 py-1.5">
-                      <select value={row.controllerNormal ? "Y" : "N"} onChange={(event) => updateSprinklerRow(rowIndex, "controllerNormal", event.target.value === "Y")} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50">
+                    <td className="px-1.5 py-1.5">
+                      <select value={row.controllerNormal ? "Y" : "N"} onChange={(event) => updateSprinklerRow(rowIndex, "controllerNormal", event.target.value === "Y")} disabled={isReadOnly} className="block w-full min-w-0 max-w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50">
                         <option value="Y">Y</option>
                         <option value="N">N</option>
                       </select>
                     </td>
-                    <td className="px-2.5 py-1.5">
-                      <select value={row.alarmTrouble ? "Y" : "N"} onChange={(event) => updateSprinklerRow(rowIndex, "alarmTrouble", event.target.value === "Y")} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50">
+                    <td className="px-1.5 py-1.5">
+                      <select value={row.alarmTrouble ? "Y" : "N"} onChange={(event) => updateSprinklerRow(rowIndex, "alarmTrouble", event.target.value === "Y")} disabled={isReadOnly} className="block w-full min-w-0 max-w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50">
                         <option value="N">N</option>
                         <option value="Y">Y</option>
                       </select>
                     </td>
-                    <td className="px-2.5 py-1.5">
-                      <input value={row.notes} onChange={(event) => updateSprinklerRow(rowIndex, "notes", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" />
+                    <td className="px-1.5 py-1.5">
+                      <input value={row.notes} onChange={(event) => updateSprinklerRow(rowIndex, "notes", event.target.value)} disabled={isReadOnly} className="block w-full min-w-0 max-w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" />
                     </td>
                   </tr>
                 ))}

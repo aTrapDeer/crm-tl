@@ -960,13 +960,13 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
             {renderSignatureControl("emergency_lighting", payload.emergencyLightingLog.signature)}
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] table-fixed text-xs">
+            <table className="w-full min-w-[860px] table-fixed text-xs">
               <colgroup>
-                <col className="w-[152px]" />
-                <col className="w-[240px]" />
-                <col className="w-[152px]" />
-                <col className="w-[280px]" />
-                <col className="w-[96px]" />
+                <col className="w-[128px]" />
+                <col className="w-[220px]" />
+                <col className="w-[132px]" />
+                <col className="w-[300px]" />
+                <col className="w-[80px]" />
               </colgroup>
               <thead className="bg-slate-100/70 text-(--text)/65">
                 <tr>
@@ -980,18 +980,18 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
               <tbody className="divide-y divide-(--border)/12">
                 {payload.emergencyLightingLog.rows.map((row, rowIndex) => (
                   <tr key={`light-${rowIndex}`}>
-                    <td className="px-2.5 py-1.5"><input type="date" value={row.date} onChange={(event) => updateEmergencyRow(rowIndex, "date", event.target.value)} disabled={isReadOnly} className="w-full min-w-[9.5rem] rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
-                    <td className="px-2.5 py-1.5"><input value={row.areaDevice} onChange={(event) => updateEmergencyRow(rowIndex, "areaDevice", event.target.value)} disabled={isReadOnly} className="w-full min-w-[15rem] rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
+                    <td className="px-1.5 py-1.5"><input type="date" value={row.date} onChange={(event) => updateEmergencyRow(rowIndex, "date", event.target.value)} disabled={isReadOnly} className="block w-full min-w-0 max-w-full rounded border border-(--border)/35 bg-white px-1.5 py-1 disabled:bg-slate-50" /></td>
+                    <td className="px-1.5 py-1.5"><input value={row.areaDevice} onChange={(event) => updateEmergencyRow(rowIndex, "areaDevice", event.target.value)} disabled={isReadOnly} className="block w-full min-w-0 max-w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
                     <td className="px-2.5 py-1.5">
-                      <select value={row.condition} onChange={(event) => updateEmergencyRow(rowIndex, "condition", event.target.value as MonthlyEmergencyLightingRow["condition"])} disabled={isReadOnly} className="w-full min-w-[9.5rem] rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50">
+                      <select value={row.condition} onChange={(event) => updateEmergencyRow(rowIndex, "condition", event.target.value as MonthlyEmergencyLightingRow["condition"])} disabled={isReadOnly} className="block w-full min-w-0 max-w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50">
                         <option value="">Select condition</option>
                         {FIRE_PASS_FAIL_OPTIONS.map((option) => (
                           <option key={option} value={option}>{option}</option>
                         ))}
                       </select>
                     </td>
-                    <td className="px-2.5 py-1.5"><input value={row.correctiveActionWorkOrder} onChange={(event) => updateEmergencyRow(rowIndex, "correctiveActionWorkOrder", event.target.value)} disabled={isReadOnly} className="w-full min-w-[17.5rem] rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
-                    <td className="px-2.5 py-1.5"><input value={row.initials} onChange={(event) => updateEmergencyRow(rowIndex, "initials", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
+                    <td className="px-1.5 py-1.5"><input value={row.correctiveActionWorkOrder} onChange={(event) => updateEmergencyRow(rowIndex, "correctiveActionWorkOrder", event.target.value)} disabled={isReadOnly} className="block w-full min-w-0 max-w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
+                    <td className="px-1.5 py-1.5"><input value={row.initials} onChange={(event) => updateEmergencyRow(rowIndex, "initials", event.target.value)} disabled={isReadOnly} className="block w-full min-w-0 max-w-full rounded border border-(--border)/35 bg-white px-1.5 py-1 disabled:bg-slate-50" /></td>
                   </tr>
                 ))}
               </tbody>
