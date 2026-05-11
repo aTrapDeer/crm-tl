@@ -125,3 +125,6 @@ Creating turbopack project { dir: 'E:\\Coding\\crm-tl', testMode: true }
  GET /api/bonan/change-requests?entity_type=bonan_report&entity_id=aebe4a01126d42c78e8ca299a277fda4 200 in 181ms (compile: 3ms, render: 178ms)
  GET /api/bonan/approvals?entity_type=bonan_report&entity_id=aebe4a01126d42c78e8ca299a277fda4 200 in 437ms (compile: 246ms, render: 191ms)
  GET /api/bonan/approvals?entity_type=bonan_report&entity_id=aebe4a01126d42c78e8ca299a277fda4 200 in 194ms (compile: 1871µs, render: 193ms)
+ GET /dashboard/client 200 in 84ms (compile: 13ms, render: 71ms)
+ GET /api/auth/session 200 in 11ms (compile: 3ms, render: 8ms)
+ GET /login 200 in 33ms (compile: 10ms, render: 23ms)

@@ -1,13 +1,19 @@
-// Email service using Gmail SMTP with nodemailer
+// Email service using Amazon SES with nodemailer
+import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
 import nodemailer from "nodemailer";
 import { turso } from "./turso";
 import { formatUsCentralDateTime } from "./us-central-time";
 
-const GMAIL_LOGIN = process.env.GMAIL_LOGIN;
-const GMAIL_PASSWORD = process.env.GMAIL_PW;
-// Use GMAIL_FROM for the "From" address display, authenticate with GMAIL_LOGIN
-const GMAIL_FROM = process.env.GMAIL_FROM || process.env.GMAIL_LOGIN || "no-reply@taylorleonard.com";
-const GMAIL_FROM_NAME = process.env.GMAIL_FROM_NAME || "Taylor Leonard CRM";
+const AWS_REGION = process.env.AWS_REGION || "us-east-1";
+const SES_FROM_EMAIL = process.env.SES_FROM_EMAIL || "no-reply@tlcorp.build";
+const SES_FROM_NAME = process.env.SES_FROM_NAME || "TL-Corp";
+const SES_REPLY_TO_EMAIL = process.env.SES_REPLY_TO_EMAIL;
+const IS_SES_CONFIGURED = Boolean(
+  process.env.AWS_ACCESS_KEY_ID &&
+  process.env.AWS_SECRET_ACCESS_KEY &&
+  AWS_REGION &&
+  SES_FROM_EMAIL
+);
 // APP_URL priority: explicit APP_URL env > NEXT_PUBLIC_APP_URL > Vercel auto-set URL > localhost fallback
 const APP_URL = (
   process.env.APP_URL ||
@@ -17,15 +23,10 @@ const APP_URL = (
 ).replace(/\/+$/, ""); // strip trailing slash
 
 // Create reusable transporter
-const transporter = GMAIL_LOGIN && GMAIL_PASSWORD
+const sesClient = new SESv2Client({ region: AWS_REGION });
+const transporter = IS_SES_CONFIGURED
   ? nodemailer.createTransport({
-      host: process.env.GMAIL_SMTP || "smtp.gmail.com",
-      port: 587,
-      secure: false,
-      auth: {
-        user: GMAIL_LOGIN,
-        pass: GMAIL_PASSWORD,
-      },
+      SES: { sesClient, SendEmailCommand },
     })
   : null;
 
@@ -39,7 +40,7 @@ async function sendEmail(options: SendEmailOptions): Promise<boolean> {
   const recipients = Array.isArray(options.to) ? options.to : [options.to];
 
   if (!transporter) {
-    console.log("📧 Email would be sent (Gmail not configured):");
+    console.log("📧 Email would be sent (SES not configured):");
     console.log(`   To: ${recipients.join(", ")}`);
     console.log(`   Subject: ${options.subject}`);
     console.log("   ---");
@@ -48,7 +49,8 @@ async function sendEmail(options: SendEmailOptions): Promise<boolean> {
 
   try {
     await transporter.sendMail({
-      from: `"${GMAIL_FROM_NAME}" <${GMAIL_FROM}>`,
+      from: `"${SES_FROM_NAME}" <${SES_FROM_EMAIL}>`,
+      replyTo: SES_REPLY_TO_EMAIL || undefined,
       to: recipients.join(", "),
       subject: options.subject,
       html: options.html,
