@@ -18,6 +18,10 @@ export default function SettingsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [testEmail, setTestEmail] = useState("");
+  const [testingEmail, setTestingEmail] = useState(false);
+  const [testEmailError, setTestEmailError] = useState("");
+  const [testEmailSuccess, setTestEmailSuccess] = useState("");
   const [form, setForm] = useState({
     currentPassword: "",
     newPassword: "",
@@ -82,6 +86,40 @@ export default function SettingsPage() {
       setError("Unable to change password right now.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleSendTestEmail(e: FormEvent) {
+    e.preventDefault();
+    setTestEmailError("");
+    setTestEmailSuccess("");
+
+    const recipient = testEmail.trim();
+    if (!recipient) {
+      setTestEmailError("Enter an email address to test.");
+      return;
+    }
+
+    setTestingEmail(true);
+    try {
+      const res = await fetch("/api/settings/email-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: recipient }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setTestEmailError(data.error || "Failed to send test email.");
+        return;
+      }
+
+      setTestEmailSuccess(`Test email sent to ${recipient}.`);
+      setTestEmail("");
+    } catch {
+      setTestEmailError("Unable to send a test email right now.");
+    } finally {
+      setTestingEmail(false);
     }
   }
 
@@ -173,6 +211,48 @@ export default function SettingsPage() {
           </button>
         </form>
       </section>
+
+      {user.role === "admin" && (
+        <section className="tl-card p-6 md:p-8 max-w-xl">
+          <p className="text-xs uppercase tracking-[0.2em] text-(--text)/60">
+            Admin Tools
+          </p>
+          <h2 className="mt-2 text-lg font-semibold text-(--text)">Email Tester</h2>
+          <p className="mt-1 text-sm text-(--text)">
+            Send a predefined SES test email with the current date, time, and admin
+            portal details to confirm the email service is running.
+          </p>
+
+          <form onSubmit={handleSendTestEmail} className="mt-5 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-(--text) mb-1">
+                Recipient Email
+              </label>
+              <input
+                type="email"
+                value={testEmail}
+                onChange={(e) => setTestEmail(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text)"
+                placeholder="name@example.com"
+                required
+              />
+            </div>
+
+            {testEmailError && <p className="text-sm text-red-600">{testEmailError}</p>}
+            {testEmailSuccess && (
+              <p className="text-sm text-emerald-700">{testEmailSuccess}</p>
+            )}
+
+            <button
+              type="submit"
+              disabled={testingEmail}
+              className="tl-btn px-5 py-2.5 text-sm disabled:opacity-60"
+            >
+              {testingEmail ? "Sending..." : "Send Test Email"}
+            </button>
+          </form>
+        </section>
+      )}
     </div>
   );
 }
