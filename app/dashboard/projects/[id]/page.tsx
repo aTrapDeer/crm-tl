@@ -4,9 +4,9 @@ import Image from "next/image";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import SignatureCapture from "@/app/components/SignatureCapture";
 import { ModalLayer } from "@/app/components/ModalLayer";
 import { formatUsCentralDateTime } from "@/lib/us-central-time";
+import { buildTapSignatureImage, getTapSignedAtLabel } from "@/app/components/tap-signature";
 
 interface Project {
   id: string;
@@ -114,9 +114,6 @@ export default function ProjectPage() {
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [projectSignatures, setProjectSignatures] = useState<ProjectSignature[]>([]);
-  const [showSignatureCapture, setShowSignatureCapture] = useState<{
-    signerRole: "admin" | "client";
-  } | null>(null);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [editingEstimateId, setEditingEstimateId] = useState<string | null>(null);
   const [estimateEditForm, setEstimateEditForm] = useState({
@@ -529,11 +526,17 @@ export default function ProjectPage() {
     }
   }
 
-  async function handleSaveProjectSignature(signatureData: string) {
-    if (!showSignatureCapture || !currentUser) return;
+  async function handleTapProjectSignature() {
+    if (!currentUser) return;
 
     try {
       const signerName = `${currentUser.first_name || ""} ${currentUser.last_name || ""}`.trim() || "Signer";
+      const signatureData = buildTapSignatureImage(
+        signerName,
+        getTapSignedAtLabel(),
+        userRole === "admin" ? "Admin" : "Client"
+      );
+      if (!signatureData) return;
       const res = await fetch(`/api/projects/${projectId}/signatures`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -546,7 +549,6 @@ export default function ProjectPage() {
       const data = await res.json();
       if (res.ok) {
         setProjectSignatures(data.signatures || []);
-        setShowSignatureCapture(null);
       } else {
         window.alert(data.error || "Failed to save signature");
       }
@@ -1536,7 +1538,7 @@ export default function ProjectPage() {
                   )}
                   {userRole === "admin" && (
                     <button
-                      onClick={() => setShowSignatureCapture({ signerRole: "admin" })}
+                      onClick={() => void handleTapProjectSignature()}
                       className="mt-3 text-xs rounded-full border border-(--border) px-3 py-1.5 text-(--text) hover:bg-white"
                     >
                       {adminSignature ? "Re-sign as Admin" : "Sign as Admin"}
@@ -1564,7 +1566,7 @@ export default function ProjectPage() {
                   )}
                   {userRole === "client" && (
                     <button
-                      onClick={() => setShowSignatureCapture({ signerRole: "client" })}
+                      onClick={() => void handleTapProjectSignature()}
                       className="mt-3 text-xs rounded-full border border-(--border) px-3 py-1.5 text-(--text) hover:bg-white"
                     >
                       {clientSignature ? "Re-sign as Client" : "Sign as Client"}
@@ -2289,18 +2291,6 @@ export default function ProjectPage() {
         </ModalLayer>
       )}
 
-      {showSignatureCapture && currentUser && (
-        <SignatureCapture
-          signerName={`${currentUser.first_name || ""} ${currentUser.last_name || ""}`.trim() || "Signer"}
-          signerType={
-            showSignatureCapture.signerRole === "admin"
-              ? "tl_corp_rep"
-              : "building_rep"
-          }
-          onSave={handleSaveProjectSignature}
-          onCancel={() => setShowSignatureCapture(null)}
-        />
-      )}
     </div>
   );
 }

@@ -18,7 +18,7 @@ import {
   getMonthKey,
 } from "@/lib/us-central-time";
 import BonanClientReportReview from "@/app/components/BonanClientReportReview";
-import ClickSignatureModal from "@/app/components/ClickSignatureModal";
+import { getTapSignedAtLabel } from "@/app/components/tap-signature";
 
 interface BonanWeeklyReport {
   id: string;
@@ -117,7 +117,6 @@ export default function BonanWeeklyReportEditorPage({ params }: { params: Promis
   const [submitting, setSubmitting] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [currentUserName, setCurrentUserName] = useState("Signer");
-  const [showEmployeeSignaturePrompt, setShowEmployeeSignaturePrompt] = useState(false);
 
   const isReadOnly = report?.status === "submitted" || userRole === "client";
 
@@ -203,7 +202,7 @@ export default function BonanWeeklyReportEditorPage({ params }: { params: Promis
     });
   }
 
-  function applyEmployeeSignature(_signatureData: string, signedAtLabel: string) {
+  function applyEmployeeSignature(signedAtLabel: string = getTapSignedAtLabel()) {
     updatePayload((current) => ({
       ...current,
       metadata: {
@@ -211,7 +210,6 @@ export default function BonanWeeklyReportEditorPage({ params }: { params: Promis
         constructionMgmtReview: `${currentUserName} - ${signedAtLabel}`,
       },
     }));
-    setShowEmployeeSignaturePrompt(false);
   }
 
   const saveDraft = useCallback(async () => {
@@ -504,10 +502,10 @@ export default function BonanWeeklyReportEditorPage({ params }: { params: Promis
               {!isReadOnly && (
                 <button
                   type="button"
-                  onClick={() => setShowEmployeeSignaturePrompt(true)}
+                  onClick={() => applyEmployeeSignature()}
                   className="w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
                 >
-                  {payload.metadata.constructionMgmtReview ? "Replace Signature" : "Click to Sign"}
+                  {payload.metadata.constructionMgmtReview ? "Replace Signature" : "Tap to Sign"}
                 </button>
               )}
             </label>
@@ -855,15 +853,6 @@ export default function BonanWeeklyReportEditorPage({ params }: { params: Promis
           </div>
         )}
       </div>
-      {showEmployeeSignaturePrompt && (
-        <ClickSignatureModal
-          signerName={currentUserName}
-          signerLabel="Weekly Checks Signer"
-          submitLabel="Submit Signature"
-          onSave={applyEmployeeSignature}
-          onCancel={() => setShowEmployeeSignaturePrompt(false)}
-        />
-      )}
     </div>
   );
 }

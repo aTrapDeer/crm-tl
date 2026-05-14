@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import Link from "next/link";
-import ClickSignatureModal from "./ClickSignatureModal";
+import { buildTapSignatureImage, getTapSignedAtLabel } from "@/app/components/tap-signature";
 import { ModalLayer } from "@/app/components/ModalLayer";
 import { formatUsCentralDateTime, formatWallClockTime12Hour } from "@/lib/us-central-time";
 
@@ -148,11 +148,11 @@ export default function WorkOrderDetailsModal({
   // Modal states
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAddMaterial, setShowAddMaterial] = useState(false);
-  const [showSignatureCapture, setShowSignatureCapture] = useState<"tl_corp_rep" | "building_rep" | null>(null);
   const [showStatusChange, setShowStatusChange] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showInviteCustomer, setShowInviteCustomer] = useState(false);
   const [inviteLoading, setInviteLoading] = useState(false);
+  const [currentUserName, setCurrentUserName] = useState("Signer");
 
   // Form states
   const [editForm, setEditForm] = useState({
@@ -172,11 +172,6 @@ export default function WorkOrderDetailsModal({
     notes: "",
   });
 
-  const [signatureForm, setSignatureForm] = useState({
-    signer_name: "",
-    signer_title: "",
-  });
-
   const [inviteForm, setInviteForm] = useState({
     customer_name: "",
     email: "",
@@ -191,6 +186,23 @@ export default function WorkOrderDetailsModal({
     return () => {
       document.body.style.overflow = "unset";
     };
+  }, []);
+
+  useEffect(() => {
+    async function loadCurrentUser() {
+      try {
+        const res = await fetch("/api/auth/session");
+        const data = await res.json();
+        if (!data.user) return;
+        setCurrentUserName(
+          `${data.user.first_name || ""} ${data.user.last_name || ""}`.trim() || "Signer"
+        );
+      } catch {
+        // Keep fallback if the session cannot be loaded.
+      }
+    }
+
+    void loadCurrentUser();
   }, []);
 
   const canEdit = userRole === "admin" || workOrder.assigned_to !== null;
@@ -333,24 +345,28 @@ export default function WorkOrderDetailsModal({
     }
   }
 
-  async function handleSaveSignature(signatureData: string) {
-    if (!showSignatureCapture || !signatureForm.signer_name.trim()) return;
+  async function handleTapSignature(signerType: "tl_corp_rep" | "building_rep") {
+    const signerTitle = userRole === "admin" ? "Admin" : "Employee";
+    const signatureData = buildTapSignatureImage(
+      currentUserName,
+      getTapSignedAtLabel(),
+      signerTitle
+    );
+    if (!signatureData || !currentUserName.trim()) return;
 
     try {
       const res = await fetch(`/api/work-orders/${workOrder.id}/signatures`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          signer_type: showSignatureCapture,
-          signer_name: signatureForm.signer_name,
-          signer_title: signatureForm.signer_title || null,
+          signer_type: signerType,
+          signer_name: currentUserName,
+          signer_title: signerTitle,
           signature_data: signatureData,
         }),
       });
 
       if (res.ok) {
-        setShowSignatureCapture(null);
-        setSignatureForm({ signer_name: "", signer_title: "" });
         fetchData();
       }
     } catch (error) {
@@ -794,7 +810,7 @@ export default function WorkOrderDetailsModal({
                       </div>
                     ) : canEdit ? (
                       <button
-                        onClick={() => setShowSignatureCapture("tl_corp_rep")}
+                        onClick={() => void handleTapSignature("tl_corp_rep")}
                         className="w-full border-2 border-dashed border-(--border) rounded-lg p-4 text-sm text-(--text)/60 hover:border-(--ring) hover:text-(--text) transition"
                       >
                         Tap to sign
@@ -827,7 +843,7 @@ export default function WorkOrderDetailsModal({
                       </div>
                     ) : canEdit ? (
                       <button
-                        onClick={() => setShowSignatureCapture("building_rep")}
+                        onClick={() => void handleTapSignature("building_rep")}
                         className="w-full border-2 border-dashed border-(--border) rounded-lg p-4 text-sm text-(--text)/60 hover:border-(--ring) hover:text-(--text) transition"
                       >
                         Tap to sign
@@ -1088,78 +1104,6 @@ export default function WorkOrderDetailsModal({
             </form>
           </div>
         </ModalLayer>
-      )}
-
-      {/* Signature Name Modal */}
-      {showSignatureCapture && !signatureForm.signer_name && (
-        <ModalLayer align="center" className="bg-black/50" onBackdropClick={() => setShowSignatureCapture(null)}>
-          <div className="tl-card p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-(--text) mb-4">
-              {showSignatureCapture === "tl_corp_rep" ? "TL Corp Representative" : "Building Representative"}
-            </h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-(--text) mb-1">Name *</label>
-                <input
-                  type="text"
-                  value={signatureForm.signer_name}
-                  onChange={(e) => setSignatureForm({ ...signatureForm, signer_name: e.target.value })}
-                  placeholder="Full name"
-                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-(--text) mb-1">Title (optional)</label>
-                <input
-                  type="text"
-                  value={signatureForm.signer_title}
-                  onChange={(e) => setSignatureForm({ ...signatureForm, signer_title: e.target.value })}
-                  placeholder="Job title"
-                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                />
-              </div>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowSignatureCapture(null);
-                    setSignatureForm({ signer_name: "", signer_title: "" });
-                  }}
-                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (signatureForm.signer_name.trim()) {
-                      // Name is set, signature capture component will show
-                    }
-                  }}
-                  disabled={!signatureForm.signer_name.trim()}
-                  className="flex-1 tl-btn px-4 py-2.5 text-sm disabled:opacity-50"
-                >
-                  Continue
-                </button>
-              </div>
-            </div>
-          </div>
-        </ModalLayer>
-      )}
-
-      {/* Signature Capture */}
-      {showSignatureCapture && signatureForm.signer_name && (
-        <ClickSignatureModal
-          signerName={signatureForm.signer_name}
-          signerTitle={signatureForm.signer_title}
-          signerLabel={showSignatureCapture === "tl_corp_rep" ? "TL Corp Representative" : "Building Representative"}
-          submitLabel="Submit Signature"
-          onSave={handleSaveSignature}
-          onCancel={() => {
-            setShowSignatureCapture(null);
-            setSignatureForm({ signer_name: "", signer_title: "" });
-          }}
-        />
       )}
 
       {/* Invite Customer Modal */}

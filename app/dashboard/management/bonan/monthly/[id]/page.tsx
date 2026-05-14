@@ -14,8 +14,8 @@ import {
   type MonthlyFireExtinguisherRow,
 } from "@/lib/bonan-period-payloads";
 import { formatUsCentralDateTime, formatUsCentralTime } from "@/lib/us-central-time";
-import ClickSignatureModal from "@/app/components/ClickSignatureModal";
 import TapInitialsControl from "@/app/components/TapInitialsControl";
+import { getTapSignedAtLabel } from "@/app/components/tap-signature";
 
 interface BonanMonthlyReport {
   id: string;
@@ -236,7 +236,6 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
   const [submitting, setSubmitting] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [currentUserName, setCurrentUserName] = useState("Signer");
-  const [showSignaturePrompt, setShowSignaturePrompt] = useState<MonthlySignatureTarget | null>(null);
 
   const isReadOnly = report?.status === "submitted" || userRole === "client";
 
@@ -448,30 +447,32 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
     }));
   }
 
-  function applyEmployeeSignature(_signatureData: string, signedAtLabel: string) {
-    if (!showSignaturePrompt) return;
+  function applyEmployeeSignature(
+    target: MonthlySignatureTarget,
+    signedAtLabel: string = getTapSignedAtLabel()
+  ) {
     const stampedSignature = `${currentUserName} - ${signedAtLabel}`;
 
     updatePayload((current) => {
-      if (showSignaturePrompt === "fire_extinguisher") {
+      if (target === "fire_extinguisher") {
         return {
           ...current,
           fireExtinguisherLog: { ...current.fireExtinguisherLog, signature: stampedSignature },
         };
       }
-      if (showSignaturePrompt === "emergency_lighting") {
+      if (target === "emergency_lighting") {
         return {
           ...current,
           emergencyLightingLog: { ...current.emergencyLightingLog, signature: stampedSignature },
         };
       }
-      if (showSignaturePrompt === "deficiency") {
+      if (target === "deficiency") {
         return {
           ...current,
           deficiencyRegister: { ...current.deficiencyRegister, signature: stampedSignature },
         };
       }
-      if (showSignaturePrompt === "board_approval") {
+      if (target === "board_approval") {
         return {
           ...current,
           deficiencyRegister: {
@@ -481,7 +482,7 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
           },
         };
       }
-      if (showSignaturePrompt === "certified_by") {
+      if (target === "certified_by") {
         return {
           ...current,
           closeoutCertification: {
@@ -500,7 +501,6 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
         },
       };
     });
-    setShowSignaturePrompt(null);
   }
 
   function renderSignatureControl(target: MonthlySignatureTarget, value: string, emptyLabel = "No signature recorded") {
@@ -525,10 +525,10 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
         {!isReadOnly && (
           <button
             type="button"
-            onClick={() => setShowSignaturePrompt(target)}
+            onClick={() => applyEmployeeSignature(target)}
             className="w-full rounded bg-blue-600 px-2 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
           >
-            {value ? "Replace Signature" : "Click to Sign"}
+            {value ? "Replace Signature" : "Tap to Sign"}
           </button>
         )}
       </div>
@@ -1317,15 +1317,6 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
           </div>
         )}
       </div>
-      {showSignaturePrompt && (
-        <ClickSignatureModal
-          signerName={currentUserName}
-          signerLabel="Monthly Summary Signer"
-          submitLabel="Submit Signature"
-          onSave={applyEmployeeSignature}
-          onCancel={() => setShowSignaturePrompt(null)}
-        />
-      )}
     </div>
   );
 }

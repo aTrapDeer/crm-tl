@@ -5,8 +5,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import ClickSignatureModal from "@/app/components/ClickSignatureModal";
 import TapInitialsControl from "@/app/components/TapInitialsControl";
+import { buildTapSignatureImage, getTapSignedAtLabel } from "@/app/components/tap-signature";
 import {
   normalizeDailyReportPayload,
   type DailyReportPayload,
@@ -315,8 +315,6 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
   const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
   const [deleteReportError, setDeleteReportError] = useState("");
   const [reportSignatures, setReportSignatures] = useState<BonanReportSignature[]>([]);
-  const [showReportSignatureCapture, setShowReportSignatureCapture] =
-    useState<BonanReportSignatureScope | null>(null);
   const [headerCollapsed, setHeaderCollapsed] = useState(true);
   /** Work Orders | Incident Reports panel — collapsed on walkthrough steps, expanded on Fire Alarm + Review by default */
   const [followUpSectionCollapsed, setFollowUpSectionCollapsed] = useState(true);
@@ -878,7 +876,15 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
   }
 
   function openReportSignaturePrompt(scope: BonanReportSignatureScope) {
-    setShowReportSignatureCapture(scope);
+    if (!payload) return;
+    const details = getReportSignatureDetails(scope, payload);
+    const signatureData = buildTapSignatureImage(
+      details.signerName,
+      getTapSignedAtLabel(),
+      details.signerTitle
+    );
+    if (!signatureData) return;
+    void handleSaveReportSignature(signatureData, scope);
   }
 
   function getReportSignatureDetails(
@@ -904,8 +910,11 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
     };
   }
 
-  async function handleSaveReportSignature(signatureData: string) {
-    if (!showReportSignatureCapture || !report || !payload) return;
+  async function handleSaveReportSignature(
+    signatureData: string,
+    signatureScope: BonanReportSignatureScope
+  ) {
+    if (!report || !payload) return;
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       setError("You are offline. Reconnect before saving a signature.");
       return;
@@ -925,10 +934,10 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          signature_scope: showReportSignatureCapture,
-          signer_name: getReportSignatureDetails(showReportSignatureCapture, payload).signerName,
+          signature_scope: signatureScope,
+          signer_name: getReportSignatureDetails(signatureScope, payload).signerName,
           signer_title:
-            getReportSignatureDetails(showReportSignatureCapture, payload).signerTitle || null,
+            getReportSignatureDetails(signatureScope, payload).signerTitle || null,
           signature_data: signatureData,
         }),
       });
@@ -958,7 +967,6 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
       });
       setReportSignatures(data.signatures || []);
       setSaveMessage(`Signature saved at ${formatUsCentralTime(new Date())} CT`);
-      setShowReportSignatureCapture(null);
     } catch (saveError) {
       console.error("Failed to save Bonan report signature:", saveError);
       setError("Failed to save walkthrough signature.");
@@ -1820,7 +1828,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                       onClick={() => openReportSignaturePrompt("daily_walkthrough")}
                       className="w-full rounded-lg border-2 border-dashed border-(--border)/40 px-3 py-4 text-sm text-(--text)/60 transition hover:border-blue-400 hover:text-(--text)"
                     >
-                      Click to sign
+                      Tap to sign
                     </button>
                   ) : (
                     <div className="rounded-lg border border-(--border)/30 bg-(--bg) px-3 py-3 text-sm text-(--text)/60">
@@ -1944,8 +1952,8 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                           disabled={isReadOnly}
                           signerName={currentUserName}
                           signerLabel={`${row.area} Initials`}
-                          inputClassName="min-w-0 flex-1 rounded-lg border border-(--border)/30 px-2 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
-                          buttonClassName="shrink-0 rounded-lg bg-blue-600 px-2 py-2 text-[10px] font-semibold text-white transition hover:bg-blue-700"
+                          tapOnly
+                          buttonClassName="w-full rounded-lg border border-(--border)/30 bg-white px-2 py-2 text-xs font-semibold text-(--text) transition hover:border-blue-400 hover:bg-blue-50 disabled:opacity-60"
                           onChange={(value) => updateCoverageRow(index, "initials", value)}
                         />
                       </label>
@@ -2034,8 +2042,8 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                             disabled={isReadOnly}
                             signerName={currentUserName}
                             signerLabel={`${row.area} Initials`}
-                            inputClassName="min-w-0 flex-1 rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
-                            buttonClassName="shrink-0 rounded-lg bg-blue-600 px-2 py-1.5 text-[10px] font-semibold text-white transition hover:bg-blue-700"
+                            tapOnly
+                            buttonClassName="w-full rounded-lg border border-(--border)/30 bg-white px-2 py-1.5 text-sm font-semibold text-(--text) transition hover:border-blue-400 hover:bg-blue-50 disabled:opacity-60"
                             onChange={(value) => updateCoverageRow(index, "initials", value)}
                           />
                         </td>
@@ -3101,7 +3109,7 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                       onClick={() => openReportSignaturePrompt("fire_alarm")}
                       className="w-full rounded-lg border-2 border-dashed border-(--border)/40 px-3 py-4 text-sm text-(--text)/60 transition hover:border-blue-400 hover:text-(--text)"
                     >
-                      Click to sign
+                      Tap to sign
                     </button>
                   ) : (
                     <div className="rounded-lg border border-(--border)/30 bg-(--bg) px-3 py-3 text-sm text-(--text)/60">
@@ -3508,24 +3516,6 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
           </div>
         </div>
       </div>
-
-      {showReportSignatureCapture && payload && (
-        <ClickSignatureModal
-          signerLabel={
-            showReportSignatureCapture === "daily_walkthrough"
-              ? "Daily Walkthrough Signer"
-              : "Fire Alarm Signer"
-          }
-          signerName={
-            getReportSignatureDetails(showReportSignatureCapture, payload).signerName
-          }
-          signerTitle={
-            getReportSignatureDetails(showReportSignatureCapture, payload).signerTitle
-          }
-          onSave={handleSaveReportSignature}
-          onCancel={() => setShowReportSignatureCapture(null)}
-        />
-      )}
 
       {pendingSectionAction && (
         <ModalLayer align="sheet-sm" className="bg-black/50 backdrop-blur-sm" onBackdropClick={closePendingSectionActionPrompt}>

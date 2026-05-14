@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatUsCentralDateTime } from "@/lib/us-central-time";
-import ClickSignatureModal from "./ClickSignatureModal";
+import { buildTapSignatureImage, getTapSignedAtLabel } from "@/app/components/tap-signature";
 
 type BonanEntityType = "bonan_report" | "work_order" | "incident_report";
 type DecisionStatus = "approved" | "denied";
@@ -77,7 +77,6 @@ export default function BonanClientActionPanel({
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
-  const [showApprovalCapture, setShowApprovalCapture] = useState(false);
   const [showDecisionForm, setShowDecisionForm] = useState<DecisionStatus | null>(null);
   const [showRequestForm, setShowRequestForm] = useState(false);
   const [showApprovedEdits, setShowApprovedEdits] = useState(false);
@@ -182,7 +181,14 @@ export default function BonanClientActionPanel({
     });
   }, [activeGrantedRequest, currentFieldValues]);
 
-  async function handleSaveApproval(signatureData: string) {
+  async function handleSaveApproval() {
+    const signatureData = buildTapSignatureImage(
+      signerName,
+      getTapSignedAtLabel(),
+      "Bonan Client"
+    );
+    if (!signatureData) return;
+
     setSubmitting(true);
     setError("");
     setFeedback("");
@@ -204,7 +210,6 @@ export default function BonanClientActionPanel({
         return;
       }
       setFeedback("Approval recorded.");
-      setShowApprovalCapture(false);
       await loadData();
     } catch (saveError) {
       console.error("Failed to save Bonan approval:", saveError);
@@ -361,7 +366,7 @@ export default function BonanClientActionPanel({
           ) : (
             <button
               type="button"
-              onClick={() => setShowApprovalCapture(true)}
+              onClick={() => void handleSaveApproval()}
               className="rounded-full bg-[#0f4c81] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0c416d] transition"
             >
               {currentApproval ? "Re-Approve & Sign" : "Approve & Sign"}
@@ -460,18 +465,6 @@ export default function BonanClientActionPanel({
 
       {feedback && <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{feedback}</p>}
       {error && <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
-
-      {showApprovalCapture && !isDecisionFlow && (
-        <ClickSignatureModal
-          signerName={signerName}
-          signerTitle="Bonan Client"
-          signerLabel="Client Signer"
-          submitLabel="Submit Approval"
-          submitting={submitting}
-          onSave={(signatureData) => void handleSaveApproval(signatureData)}
-          onCancel={() => setShowApprovalCapture(false)}
-        />
-      )}
 
       {showDecisionForm && isDecisionFlow && (
         <div
