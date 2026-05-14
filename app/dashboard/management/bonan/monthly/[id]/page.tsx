@@ -15,6 +15,7 @@ import {
 } from "@/lib/bonan-period-payloads";
 import { formatUsCentralDateTime, formatUsCentralTime } from "@/lib/us-central-time";
 import ClickSignatureModal from "@/app/components/ClickSignatureModal";
+import TapInitialsControl from "@/app/components/TapInitialsControl";
 
 interface BonanMonthlyReport {
   id: string;
@@ -939,7 +940,17 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
                         ))}
                       </select>
                     </td>
-                    <td className="px-2.5 py-1.5"><input value={row.initials} onChange={(event) => updateFireRow(rowIndex, "initials", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
+                    <td className="px-2.5 py-1.5">
+                      <TapInitialsControl
+                        value={row.initials}
+                        disabled={isReadOnly}
+                        signerName={currentUserName}
+                        signerLabel={`Fire Extinguisher Row ${rowIndex + 1} Initials`}
+                        inputClassName="min-w-0 flex-1 rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50"
+                        buttonClassName="shrink-0 rounded bg-blue-600 px-2 py-1 text-[10px] font-semibold text-white transition hover:bg-blue-700"
+                        onChange={(value) => updateFireRow(rowIndex, "initials", value)}
+                      />
+                    </td>
                     <td className="px-2.5 py-1.5"><input value={row.notesWorkOrder} onChange={(event) => updateFireRow(rowIndex, "notesWorkOrder", event.target.value)} disabled={isReadOnly} className="w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
                   </tr>
                 ))}
@@ -966,12 +977,15 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
                   <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-(--text)/55">
                     Test {rowIndex + 1}
                   </p>
-                  <input
+                  <TapInitialsControl
                     value={row.initials}
-                    onChange={(event) => updateEmergencyRow(rowIndex, "initials", event.target.value)}
                     disabled={isReadOnly}
+                    signerName={currentUserName}
+                    signerLabel={`Emergency Lighting Test ${rowIndex + 1} Initials`}
                     placeholder="Init."
-                    className="w-16 shrink-0 rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50"
+                    inputClassName="w-16 min-w-0 rounded border border-(--border)/35 bg-white px-2 py-1.5 text-xs disabled:bg-slate-50"
+                    buttonClassName="shrink-0 rounded bg-blue-600 px-2 py-1.5 text-[10px] font-semibold text-white transition hover:bg-blue-700"
+                    onChange={(value) => updateEmergencyRow(rowIndex, "initials", value)}
                   />
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
@@ -1053,7 +1067,17 @@ export default function BonanMonthlyReportEditorPage({ params }: { params: Promi
                       </select>
                     </td>
                     <td className="px-1.5 py-1.5"><input value={row.correctiveActionWorkOrder} onChange={(event) => updateEmergencyRow(rowIndex, "correctiveActionWorkOrder", event.target.value)} disabled={isReadOnly} className="block w-full min-w-0 max-w-full rounded border border-(--border)/35 bg-white px-2 py-1 disabled:bg-slate-50" /></td>
-                    <td className="px-1.5 py-1.5"><input value={row.initials} onChange={(event) => updateEmergencyRow(rowIndex, "initials", event.target.value)} disabled={isReadOnly} className="block w-full min-w-0 max-w-full rounded border border-(--border)/35 bg-white px-1.5 py-1 disabled:bg-slate-50" /></td>
+                    <td className="px-1.5 py-1.5">
+                      <TapInitialsControl
+                        value={row.initials}
+                        disabled={isReadOnly}
+                        signerName={currentUserName}
+                        signerLabel={`Emergency Lighting Test ${rowIndex + 1} Initials`}
+                        inputClassName="block min-w-0 flex-1 rounded border border-(--border)/35 bg-white px-1.5 py-1 disabled:bg-slate-50"
+                        buttonClassName="shrink-0 rounded bg-blue-600 px-2 py-1 text-[10px] font-semibold text-white transition hover:bg-blue-700"
+                        onChange={(value) => updateEmergencyRow(rowIndex, "initials", value)}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>

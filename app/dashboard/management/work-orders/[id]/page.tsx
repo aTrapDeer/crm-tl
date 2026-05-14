@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import SignatureCapture from "@/app/components/SignatureCapture";
+import ClickSignatureModal from "@/app/components/ClickSignatureModal";
 import EntityPhotoManager from "@/app/components/EntityPhotoManager";
 import MaterialPurchaseManager from "@/app/components/MaterialPurchaseManager";
 import { ModalLayer } from "@/app/components/ModalLayer";
@@ -1434,7 +1434,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
                   className="w-full border-2 border-dashed border-(--border) rounded-lg p-4 text-sm text-(--text)/60 hover:border-(--ring) hover:text-(--text) transition disabled:opacity-50"
                   title={signatureActionTitle}
                 >
-                  Click to capture signature
+                  Tap to sign
                 </button>
               )}
             </div>
@@ -1456,7 +1456,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
                   className="w-full border-2 border-dashed border-(--border) rounded-lg p-4 text-sm text-(--text)/60 hover:border-(--ring) hover:text-(--text) transition disabled:opacity-50"
                   title={signatureActionTitle}
                 >
-                  Click to capture signature
+                  Tap to sign
                 </button>
               )}
             </div>
@@ -1750,10 +1750,11 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
 
       {/* Signature Capture */}
       {showSignatureCapture && signatureForm.signer_name && canCaptureSignature && (
-        <SignatureCapture
-          signerType={showSignatureCapture}
+        <ClickSignatureModal
           signerName={signatureForm.signer_name}
           signerTitle={signatureForm.signer_title}
+          signerLabel={showSignatureCapture === "tl_corp_rep" ? "TL Corp Representative" : "Building Representative"}
+          submitLabel="Submit Signature"
           onSave={handleSaveSignature}
           onCancel={() => {
             setShowSignatureCapture(null);

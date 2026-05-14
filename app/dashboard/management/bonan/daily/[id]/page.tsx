@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ClickSignatureModal from "@/app/components/ClickSignatureModal";
+import TapInitialsControl from "@/app/components/TapInitialsControl";
 import {
   normalizeDailyReportPayload,
   type DailyReportPayload,
@@ -1938,12 +1939,14 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                       </label>
                       <label className="space-y-0.5 text-[10px]">
                         <span className="text-(--text)/50 font-medium">Initials</span>
-                        <input
-                          type="text"
+                        <TapInitialsControl
                           value={row.initials}
-                          onChange={(event) => updateCoverageRow(index, "initials", event.target.value)}
                           disabled={isReadOnly}
-                          className="w-full rounded-lg border border-(--border)/30 px-2 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
+                          signerName={currentUserName}
+                          signerLabel={`${row.area} Initials`}
+                          inputClassName="min-w-0 flex-1 rounded-lg border border-(--border)/30 px-2 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
+                          buttonClassName="shrink-0 rounded-lg bg-blue-600 px-2 py-2 text-[10px] font-semibold text-white transition hover:bg-blue-700"
+                          onChange={(value) => updateCoverageRow(index, "initials", value)}
                         />
                       </label>
                     </div>
@@ -2026,12 +2029,14 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                           />
                         </td>
                         <td className="px-3 py-2">
-                          <input
-                            type="text"
+                          <TapInitialsControl
                             value={row.initials}
-                            onChange={(event) => updateCoverageRow(index, "initials", event.target.value)}
                             disabled={isReadOnly}
-                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
+                            signerName={currentUserName}
+                            signerLabel={`${row.area} Initials`}
+                            inputClassName="min-w-0 flex-1 rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
+                            buttonClassName="shrink-0 rounded-lg bg-blue-600 px-2 py-1.5 text-[10px] font-semibold text-white transition hover:bg-blue-700"
+                            onChange={(value) => updateCoverageRow(index, "initials", value)}
                           />
                         </td>
                         <td className="px-2 py-2 text-center">
@@ -2889,12 +2894,14 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                       </label>
                       <label className="space-y-0.5 text-[10px]">
                         <span className="text-(--text)/50 font-medium">Initials</span>
-                        <input
-                          type="text"
+                        <TapInitialsControl
                           value={row.initials}
-                          onChange={(event) => updateFridgeRow(index, "initials", event.target.value)}
                           disabled={isReadOnly}
-                          className="w-full rounded-lg border border-(--border)/30 px-2 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
+                          signerName={currentUserName}
+                          signerLabel={`Retail Fridge Entry ${index + 1} Initials`}
+                          inputClassName="min-w-0 flex-1 rounded-lg border border-(--border)/30 px-2 py-2 text-xs text-(--text) bg-white disabled:opacity-60"
+                          buttonClassName="shrink-0 rounded-lg bg-blue-600 px-2 py-2 text-[10px] font-semibold text-white transition hover:bg-blue-700"
+                          onChange={(value) => updateFridgeRow(index, "initials", value)}
                         />
                       </label>
                     </div>
@@ -2968,12 +2975,14 @@ export default function BonanDailyReportEditorPage({ params }: { params: Promise
                           />
                         </td>
                         <td className="px-3 py-2">
-                          <input
-                            type="text"
+                          <TapInitialsControl
                             value={row.initials}
-                            onChange={(event) => updateFridgeRow(index, "initials", event.target.value)}
                             disabled={isReadOnly}
-                            className="w-full rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
+                            signerName={currentUserName}
+                            signerLabel={`Retail Fridge Entry ${index + 1} Initials`}
+                            inputClassName="min-w-0 flex-1 rounded-lg border border-(--border)/30 px-2 py-1.5 text-sm text-(--text) bg-white disabled:opacity-60"
+                            buttonClassName="shrink-0 rounded-lg bg-blue-600 px-2 py-1.5 text-[10px] font-semibold text-white transition hover:bg-blue-700"
+                            onChange={(value) => updateFridgeRow(index, "initials", value)}
                           />
                         </td>
                         <td className="px-2 py-2 text-center">

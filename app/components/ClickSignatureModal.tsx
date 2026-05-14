@@ -8,16 +8,24 @@ interface ClickSignatureModalProps {
   signerName: string;
   signerTitle?: string;
   signerLabel?: string;
+  signerInitials?: string;
+  mode?: "signature" | "initials";
   submitLabel?: string;
   submitting?: boolean;
-  onSave: (signatureData: string, signedAtLabel: string) => void;
+  onSave: (signatureData: string, signedAtLabel: string, signedValue: string) => void;
   onCancel: () => void;
 }
 
-function buildSignatureImage(signerName: string, signedAtLabel: string, signerTitle?: string): string {
+function buildSignatureImage(
+  signerName: string,
+  signedAtLabel: string,
+  signerTitle?: string,
+  mode: "signature" | "initials" = "signature",
+  signerInitials?: string
+): string {
   const canvas = document.createElement("canvas");
-  canvas.width = 720;
-  canvas.height = 220;
+  canvas.width = mode === "initials" ? 420 : 720;
+  canvas.height = mode === "initials" ? 200 : 220;
 
   const ctx = canvas.getContext("2d");
   if (!ctx) return "";
@@ -34,8 +42,11 @@ function buildSignatureImage(signerName: string, signedAtLabel: string, signerTi
 
   ctx.fillStyle = "#01224f";
   ctx.textBaseline = "alphabetic";
-  ctx.font = '64px "Brush Script MT", "Segoe Script", "Lucida Handwriting", cursive';
-  ctx.fillText(signerName, 42, 112, canvas.width - 84);
+  ctx.font =
+    mode === "initials"
+      ? '76px "Brush Script MT", "Segoe Script", "Lucida Handwriting", cursive'
+      : '64px "Brush Script MT", "Segoe Script", "Lucida Handwriting", cursive';
+  ctx.fillText(mode === "initials" ? signerInitials || signerName : signerName, 42, 112, canvas.width - 84);
 
   ctx.fillStyle = "#334155";
   ctx.font = '20px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
@@ -54,6 +65,8 @@ export default function ClickSignatureModal({
   signerName,
   signerTitle,
   signerLabel = "Signer",
+  signerInitials,
+  mode = "signature",
   submitLabel = "Submit Signature",
   submitting = false,
   onSave,
@@ -63,15 +76,24 @@ export default function ClickSignatureModal({
   const resolvedSignerName = signerName.trim() || "Signer";
 
   function handleSubmit() {
-    const signatureData = buildSignatureImage(resolvedSignerName, signedAtLabel, signerTitle);
+    const signedValue = mode === "initials" ? signerInitials || resolvedSignerName : resolvedSignerName;
+    const signatureData = buildSignatureImage(
+      resolvedSignerName,
+      signedAtLabel,
+      signerTitle,
+      mode,
+      signedValue
+    );
     if (!signatureData) return;
-    onSave(signatureData, signedAtLabel);
+    onSave(signatureData, signedAtLabel, signedValue);
   }
 
   return (
     <ModalLayer align="center" className="bg-black/60" onBackdropClick={onCancel}>
       <div className="tl-card w-full max-w-lg p-6" onClick={(event) => event.stopPropagation()}>
-        <h3 className="text-lg font-semibold text-(--text)">Confirm Signature</h3>
+        <h3 className="text-lg font-semibold text-(--text)">
+          {mode === "initials" ? "Confirm Initials" : "Confirm Signature"}
+        </h3>
 
         <div className="mt-4 space-y-1">
           <p className="text-sm text-(--text)/65">{signerLabel}</p>
@@ -84,7 +106,7 @@ export default function ClickSignatureModal({
             className="border-b border-slate-200 pb-3 text-4xl leading-tight text-[#01224f]"
             style={{ fontFamily: '"Brush Script MT", "Segoe Script", "Lucida Handwriting", cursive' }}
           >
-            {resolvedSignerName}
+            {mode === "initials" ? signerInitials || resolvedSignerName : resolvedSignerName}
           </p>
           <p className="mt-3 text-xs font-medium text-slate-600">{signedAtLabel}</p>
         </div>
