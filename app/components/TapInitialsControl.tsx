@@ -32,51 +32,22 @@ export default function TapInitialsControl({
   signerName,
   disabled = false,
   placeholder = "Init.",
-  tapOnly = false,
-  inputClassName = "",
   buttonClassName = "",
   onChange,
 }: TapInitialsControlProps) {
   const initials = getInitials(signerName);
 
-  if (tapOnly) {
-    return (
-      <button
-        type="button"
-        onClick={() => onChange(initials)}
-        disabled={disabled}
-        className={
-          buttonClassName ||
-          "w-full rounded-lg border border-(--border)/30 bg-white px-2 py-2 text-xs font-semibold text-(--text) transition hover:border-blue-400 hover:bg-blue-50 disabled:opacity-60"
-        }
-      >
-        {value || "Tap to initial"}
-      </button>
-    );
-  }
-
   return (
-    <div className="flex min-w-0 items-center gap-1.5">
-      <input
-        type="text"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        disabled={disabled}
-        placeholder={placeholder}
-        className={inputClassName}
-      />
-      {!disabled ? (
-        <button
-          type="button"
-          onClick={() => onChange(initials)}
-          className={
-            buttonClassName ||
-            "shrink-0 rounded-lg bg-blue-600 px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
-          }
-        >
-          {value ? "Replace" : "Initial"}
-        </button>
-      ) : null}
-    </div>
+    <button
+      type="button"
+      onClick={() => onChange(initials)}
+      disabled={disabled}
+      className={
+        buttonClassName ||
+        "w-full rounded-lg border border-(--border)/30 bg-white px-2.5 py-2 text-xs font-semibold text-(--text) transition hover:border-blue-400 hover:bg-blue-50 disabled:opacity-60"
+      }
+    >
+      {value || placeholder || "Tap to initial"}
+    </button>
   );
 }
