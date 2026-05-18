@@ -3,6 +3,9 @@ import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
 import nodemailer from "nodemailer";
 import { turso } from "./turso";
 import { formatUsCentralDateTime } from "./us-central-time";
+import type { InstallmentWithAmount, EstimateBreakdown } from "./estimate";
+import { formatCurrency, getCategoryLabel } from "./estimate";
+import type { EstimateLineItem } from "./projects";
 
 const AWS_REGION = process.env.AWS_REGION || "us-east-1";
 const SES_FROM_EMAIL = process.env.SES_FROM_EMAIL || "no-reply@tlcorp.build";
@@ -1103,5 +1106,239 @@ export async function sendPasswordResetLinkEmail(data: {
     to: data.to,
     subject: "Reset your Taylor Leonard CRM password",
     html: getEmailTemplate(content, "Reset Password"),
+  });
+}
+
+// ============ PROJECT ESTIMATE EMAILS ============
+
+export async function sendProjectEstimateEmail(data: {
+  to: string;
+  projectName: string;
+  clientName: string;
+  grandTotal: number;
+  subtotal: number;
+  breakdown: EstimateBreakdown;
+  lineItems: EstimateLineItem[];
+  installments: InstallmentWithAmount[];
+  deliveryToken: string;
+  projectId: string;
+  inviteToken?: string;
+  hideLineItemPricing?: boolean;
+  hideMarkup?: boolean;
+}): Promise<boolean> {
+  const hideLineItemPricing = Boolean(data.hideLineItemPricing);
+  const hideMarkup = Boolean(data.hideMarkup);
+  const publicEstimateUrl = `${APP_URL}/estimate/${data.deliveryToken}`;
+  const crmEstimateUrl = `${APP_URL}/dashboard/projects/${data.projectId}/estimate?delivery=${data.deliveryToken}`;
+  const signupUrl = data.inviteToken
+    ? `${APP_URL}/register?invite=${data.inviteToken}`
+    : `${APP_URL}/register`;
+  const trackingPixelUrl = `${APP_URL}/api/tracking/estimate/${data.deliveryToken}/open`;
+
+  const lineItemsHtml = data.lineItems
+    .map(
+      (item) => `
+      <tr>
+        <td style="padding: 10px 8px; border-bottom: 1px solid #e8edf4; color: #01224f; font-size: 13px; font-weight: 600;">
+          ${getCategoryLabel(item)}
+        </td>
+        <td style="padding: 10px 8px; border-bottom: 1px solid #e8edf4; color: #0d3e8d; font-size: 13px;">
+          ${item.description || "—"}
+        </td>
+        <td style="padding: 10px 8px; border-bottom: 1px solid #e8edf4; color: #0d3e8d; font-size: 13px; text-align: right;">
+          ${item.quantity}
+        </td>
+        ${
+          hideLineItemPricing
+            ? ""
+            : `<td style="padding: 10px 8px; border-bottom: 1px solid #e8edf4; color: #0d3e8d; font-size: 13px; text-align: right;">
+          ${formatCurrency(item.price_rate)}
+        </td>
+        <td style="padding: 10px 8px; border-bottom: 1px solid #e8edf4; color: #01224f; font-size: 13px; font-weight: 600; text-align: right;">
+          ${formatCurrency(item.total)}
+        </td>`
+        }
+      </tr>`
+    )
+    .join("");
+
+  const lineItemTableHeaders = hideLineItemPricing
+    ? `<th style="padding: 10px 8px; text-align: left; color: #6b7280; font-size: 11px; text-transform: uppercase;">Category</th>
+          <th style="padding: 10px 8px; text-align: left; color: #6b7280; font-size: 11px; text-transform: uppercase;">Description</th>
+          <th style="padding: 10px 8px; text-align: right; color: #6b7280; font-size: 11px; text-transform: uppercase;">Qty</th>`
+    : `<th style="padding: 10px 8px; text-align: left; color: #6b7280; font-size: 11px; text-transform: uppercase;">Category</th>
+          <th style="padding: 10px 8px; text-align: left; color: #6b7280; font-size: 11px; text-transform: uppercase;">Description</th>
+          <th style="padding: 10px 8px; text-align: right; color: #6b7280; font-size: 11px; text-transform: uppercase;">Qty</th>
+          <th style="padding: 10px 8px; text-align: right; color: #6b7280; font-size: 11px; text-transform: uppercase;">Rate</th>
+          <th style="padding: 10px 8px; text-align: right; color: #6b7280; font-size: 11px; text-transform: uppercase;">Total</th>`;
+
+  const pricingSummaryHtml = hideLineItemPricing
+    ? ""
+    : `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 24px;">
+      <tr><td style="padding: 4px 0; color: #6b7280; font-size: 13px;">Subtotal</td><td style="padding: 4px 0; color: #0d3e8d; font-size: 13px; text-align: right;">${formatCurrency(data.subtotal)}</td></tr>
+      ${!hideMarkup && data.breakdown.markup > 0 ? `<tr><td style="padding: 4px 0; color: #6b7280; font-size: 13px;">Markup</td><td style="padding: 4px 0; color: #0d3e8d; font-size: 13px; text-align: right;">+${formatCurrency(data.breakdown.markup)}</td></tr>` : ""}
+      ${!hideMarkup && data.breakdown.tax > 0 ? `<tr><td style="padding: 4px 0; color: #6b7280; font-size: 13px;">Tax</td><td style="padding: 4px 0; color: #0d3e8d; font-size: 13px; text-align: right;">+${formatCurrency(data.breakdown.tax)}</td></tr>` : ""}
+      ${!hideMarkup && data.breakdown.servicingFee > 0 ? `<tr><td style="padding: 4px 0; color: #6b7280; font-size: 13px;">Online servicing fee</td><td style="padding: 4px 0; color: #0d3e8d; font-size: 13px; text-align: right;">+${formatCurrency(data.breakdown.servicingFee)}</td></tr>` : ""}
+      <tr><td style="padding: 8px 0 4px; color: #01224f; font-size: 14px; font-weight: 700;">Total</td><td style="padding: 8px 0 4px; color: #01224f; font-size: 14px; font-weight: 700; text-align: right;">${formatCurrency(data.grandTotal)}</td></tr>
+    </table>`;
+
+  const installmentsHtml = data.installments
+    .map(
+      (inst) => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #e8edf4; color: #0d3e8d; font-size: 13px;">${inst.label}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e8edf4; color: #0d3e8d; font-size: 13px; text-align: right;">${inst.percent}%</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e8edf4; color: #0d3e8d; font-size: 13px;">${inst.due_description}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e8edf4; color: #01224f; font-size: 13px; font-weight: 600; text-align: right;">${formatCurrency(inst.amount)}</td>
+      </tr>`
+    )
+    .join("");
+
+  const content = `
+    <h2 style="margin: 0 0 16px; color: #01224f; font-size: 20px; font-weight: 600;">
+      Your Project Estimate
+    </h2>
+    <p style="margin: 0 0 16px; color: #0d3e8d; font-size: 16px; line-height: 1.6;">
+      Hi ${data.clientName},
+    </p>
+    <p style="margin: 0 0 24px; color: #0d3e8d; font-size: 16px; line-height: 1.6;">
+      Taylor Leonard Construction Corp. has prepared an estimate for <strong>${data.projectName}</strong>.
+      ${hideLineItemPricing ? "Your total and payment schedule are below — scope details are included without per-line pricing." : "The full breakdown is below — no account required to view."}
+    </p>
+
+    <div style="background-color: #01224f; border-radius: 12px; padding: 20px; margin-bottom: 24px; text-align: center;">
+      <p style="margin: 0 0 4px; color: #94a3b8; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;">Total Estimate</p>
+      <p style="margin: 0; color: #ffffff; font-size: 32px; font-weight: 700;">${formatCurrency(data.grandTotal)}</p>
+    </div>
+
+    <h3 style="margin: 0 0 12px; color: #01224f; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;">Scope &amp; Line Items</h3>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 24px; border: 1px solid #e8edf4; border-radius: 8px; overflow: hidden;">
+      <thead>
+        <tr style="background-color: #f7f8fb;">
+          ${lineItemTableHeaders}
+        </tr>
+      </thead>
+      <tbody>${lineItemsHtml}</tbody>
+    </table>
+
+    ${pricingSummaryHtml}
+
+    <h3 style="margin: 0 0 12px; color: #01224f; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;">Payment Schedule</h3>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 28px; border: 1px solid #e8edf4; border-radius: 8px; overflow: hidden;">
+      <thead>
+        <tr style="background-color: #f7f8fb;">
+          <th style="padding: 8px; text-align: left; color: #6b7280; font-size: 11px; text-transform: uppercase;">Milestone</th>
+          <th style="padding: 8px; text-align: right; color: #6b7280; font-size: 11px; text-transform: uppercase;">%</th>
+          <th style="padding: 8px; text-align: left; color: #6b7280; font-size: 11px; text-transform: uppercase;">Due</th>
+          <th style="padding: 8px; text-align: right; color: #6b7280; font-size: 11px; text-transform: uppercase;">Amount</th>
+        </tr>
+      </thead>
+      <tbody>${installmentsHtml}</tbody>
+    </table>
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 16px;">
+      <tr>
+        <td align="center">
+          <a href="${publicEstimateUrl}" style="display: inline-block; padding: 16px 32px; background-color: #01224f; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; border-radius: 12px;">
+            View Full Estimate Online
+          </a>
+        </td>
+      </tr>
+    </table>
+    ${
+      data.inviteToken
+        ? `<p style="margin: 0 0 16px; color: #0d3e8d; font-size: 14px; line-height: 1.6; text-align: center;">
+             Want ongoing project updates? <a href="${signupUrl}" style="color: #01224f; font-weight: 600;">Create your CRM account</a> using this email.
+           </p>`
+        : `<p style="margin: 0 0 16px; color: #7ba8b3; font-size: 13px; line-height: 1.6; text-align: center;">
+             Already have an account? <a href="${crmEstimateUrl}" style="color: #01224f;">View in CRM</a>
+           </p>`
+    }
+    <img src="${trackingPixelUrl}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0;" />
+  `;
+
+  return sendEmail({
+    to: data.to,
+    subject: `Project Estimate: ${data.projectName} — ${formatCurrency(data.grandTotal)}`,
+    html: getEmailTemplate(content, "Project Estimate"),
+  });
+}
+
+export async function sendEstimateEmailOpenedNotification(data: {
+  projectId: string;
+  recipientEmail: string;
+  recipientName?: string;
+}): Promise<boolean> {
+  const adminEmails = await getAdminEmails();
+  if (adminEmails.length === 0) return true;
+
+  const projectUrl = `${APP_URL}/dashboard/projects/${data.projectId}`;
+
+  const content = `
+    <div style="background-color: #2563eb15; border-left: 4px solid #2563eb; padding: 16px; border-radius: 0 12px 12px 0; margin-bottom: 24px;">
+      <p style="margin: 0; color: #2563eb; font-size: 14px; font-weight: 600; text-transform: uppercase;">
+        Estimate Email Opened
+      </p>
+    </div>
+    <p style="margin: 0 0 16px; color: #0d3e8d; font-size: 16px; line-height: 1.6;">
+      ${data.recipientName || data.recipientEmail} opened the estimate notification email.
+    </p>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td align="center">
+          <a href="${projectUrl}" style="display: inline-block; padding: 14px 28px; background-color: #01224f; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 12px;">
+            View Project
+          </a>
+        </td>
+      </tr>
+    </table>
+  `;
+
+  return sendEmail({
+    to: adminEmails,
+    subject: `Estimate email opened — ${data.recipientName || data.recipientEmail}`,
+    html: getEmailTemplate(content, "Estimate Email Opened"),
+  });
+}
+
+export async function sendEstimateViewedNotification(data: {
+  projectId: string;
+  projectName: string;
+  viewerName: string;
+  viewerEmail: string;
+  viewerRole: string;
+}): Promise<boolean> {
+  const adminEmails = await getAdminEmails();
+  if (adminEmails.length === 0) return true;
+
+  const estimateUrl = `${APP_URL}/dashboard/projects/${data.projectId}/estimate`;
+
+  const content = `
+    <div style="background-color: #16a34a15; border-left: 4px solid #16a34a; padding: 16px; border-radius: 0 12px 12px 0; margin-bottom: 24px;">
+      <p style="margin: 0; color: #16a34a; font-size: 14px; font-weight: 600; text-transform: uppercase;">
+        Estimate Viewed in CRM
+      </p>
+    </div>
+    <p style="margin: 0 0 16px; color: #0d3e8d; font-size: 16px; line-height: 1.6;">
+      <strong>${data.viewerName}</strong> (${data.viewerRole}) opened the estimate for <strong>${data.projectName}</strong>.
+    </p>
+    <p style="margin: 0 0 24px; color: #6b7280; font-size: 14px;">
+      ${data.viewerEmail}
+    </p>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td align="center">
+          <a href="${estimateUrl}" style="display: inline-block; padding: 14px 28px; background-color: #01224f; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 12px;">
+            View Estimate
+          </a>
+        </td>
+      </tr>
+    </table>
+  `;
+
+  return sendEmail({
+    to: adminEmails,
+    subject: `Estimate viewed — ${data.viewerName} — ${data.projectName}`,
+    html: getEmailTemplate(content, "Estimate Viewed"),
   });
 }

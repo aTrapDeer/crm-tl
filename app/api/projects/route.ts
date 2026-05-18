@@ -1,5 +1,11 @@
 import { getSession, getUserById } from "@/lib/auth";
-import { getAllProjects, getProjectsByUserId, createProject } from "@/lib/projects";
+import {
+  getAllProjects,
+  getProjectsByUserId,
+  createProject,
+  stripProjectPricingForEmployee,
+  getActiveEstimateDelivery,
+} from "@/lib/projects";
 import { cookies } from "next/headers";
 
 export async function GET() {
@@ -21,11 +27,32 @@ export async function GET() {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Admin sees all projects, others see only assigned projects
     const projects =
       user.role === "admin"
         ? await getAllProjects()
         : await getProjectsByUserId(user.id);
+
+    if (user.role === "employee") {
+      return Response.json({
+        projects: projects.map(stripProjectPricingForEmployee),
+      });
+    }
+
+    if (user.role === "client") {
+      const projectsWithEstimate = await Promise.all(
+        projects.map(async (project) => {
+          const delivery = await getActiveEstimateDelivery(project.id);
+          const { budget_amount, funding_notes, ...rest } = project;
+          return {
+            ...rest,
+            budget_amount: delivery ? budget_amount : null,
+            funding_notes: delivery ? funding_notes : null,
+            estimate_sent: Boolean(delivery),
+          };
+        })
+      );
+      return Response.json({ projects: projectsWithEstimate });
+    }
 
     return Response.json({ projects });
   } catch (error) {

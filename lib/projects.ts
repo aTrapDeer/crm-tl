@@ -1,4 +1,10 @@
 import { turso } from "./turso";
+import {
+  DEFAULT_ESTIMATE_SETTINGS,
+  DEFAULT_INSTALLMENT_SCHEDULE,
+  type EstimateSettingsInput,
+  parseInstallmentSchedule,
+} from "./estimate";
 
 export interface Project {
   id: string;
@@ -979,6 +985,581 @@ export async function getEstimateTotal(projectId: string): Promise<number> {
     args: [projectId],
   });
   return (result.rows[0].estimate_total as number) || 0;
+}
+
+// ============ ESTIMATE SETTINGS & DELIVERY ============
+
+export interface ProjectEstimateSettings extends EstimateSettingsInput {
+  project_id: string;
+  updated_at: string;
+}
+
+export interface ProjectEstimateDelivery {
+  id: string;
+  project_id: string;
+  sent_by: string | null;
+  sent_to_email: string;
+  recipient_user_id: string | null;
+  snapshot_line_items: EstimateLineItem[];
+  snapshot_settings: EstimateSettingsInput;
+  snapshot_total: number;
+  tracking_token: string;
+  sent_at: string;
+  email_opened_at: string | null;
+  first_viewed_at: string | null;
+  status: "sent" | "revoked";
+  sent_by_name?: string;
+  recipient_name?: string;
+}
+
+export interface ProjectEstimateEvent {
+  id: string;
+  delivery_id: string;
+  event_type: "sent" | "email_opened" | "viewed_in_app";
+  user_id: string | null;
+  user_email: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
+  user_name?: string;
+}
+
+let estimateDeliveryTablesReady = false;
+let estimateDeliveryTablesReadyPromise: Promise<void> | null = null;
+
+async function ensureEstimateDeliveryTables(): Promise<void> {
+  if (estimateDeliveryTablesReady) return;
+  if (estimateDeliveryTablesReadyPromise) {
+    await estimateDeliveryTablesReadyPromise;
+    return;
+  }
+
+  estimateDeliveryTablesReadyPromise = (async () => {
+    await turso.execute(`
+      CREATE TABLE IF NOT EXISTS project_estimate_settings (
+        project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+        markup_type TEXT NOT NULL DEFAULT 'percentage' CHECK (markup_type IN ('percentage', 'fixed')),
+        markup_value REAL NOT NULL DEFAULT 0,
+        tax_rate REAL NOT NULL DEFAULT 0,
+        servicing_fee INTEGER NOT NULL DEFAULT 1,
+        installment_schedule TEXT NOT NULL DEFAULT '[]',
+        custom_terms TEXT,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+
+    await turso.execute(`
+      CREATE TABLE IF NOT EXISTS project_estimate_deliveries (
+        id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        sent_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        sent_to_email TEXT NOT NULL,
+        recipient_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        snapshot_line_items TEXT NOT NULL,
+        snapshot_settings TEXT NOT NULL,
+        snapshot_total REAL NOT NULL DEFAULT 0,
+        tracking_token TEXT NOT NULL UNIQUE,
+        sent_at TEXT NOT NULL DEFAULT (datetime('now')),
+        email_opened_at TEXT,
+        first_viewed_at TEXT,
+        status TEXT NOT NULL DEFAULT 'sent' CHECK (status IN ('sent', 'revoked'))
+      )
+    `);
+
+    await turso.execute(`
+      CREATE TABLE IF NOT EXISTS project_estimate_events (
+        id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+        delivery_id TEXT NOT NULL REFERENCES project_estimate_deliveries(id) ON DELETE CASCADE,
+        event_type TEXT NOT NULL CHECK (event_type IN ('sent', 'email_opened', 'viewed_in_app')),
+        user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        user_email TEXT,
+        ip_address TEXT,
+        user_agent TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+
+    await turso.execute(
+      "CREATE INDEX IF NOT EXISTS idx_estimate_deliveries_project ON project_estimate_deliveries(project_id)"
+    );
+    await turso.execute(
+      "CREATE INDEX IF NOT EXISTS idx_estimate_deliveries_token ON project_estimate_deliveries(tracking_token)"
+    );
+    await turso.execute(
+      "CREATE INDEX IF NOT EXISTS idx_estimate_deliveries_status ON project_estimate_deliveries(project_id, status)"
+    );
+    await turso.execute(
+      "CREATE INDEX IF NOT EXISTS idx_estimate_events_delivery ON project_estimate_events(delivery_id)"
+    );
+
+    estimateDeliveryTablesReady = true;
+  })();
+
+  try {
+    await estimateDeliveryTablesReadyPromise;
+  } finally {
+    estimateDeliveryTablesReadyPromise = null;
+  }
+}
+
+function mapRowToEstimateSettings(row: Record<string, unknown>): ProjectEstimateSettings {
+  const schedule = parseInstallmentSchedule(row.installment_schedule);
+  return {
+    project_id: row.project_id as string,
+    markup_type: (row.markup_type as ProjectEstimateSettings["markup_type"]) || "percentage",
+    markup_value: (row.markup_value as number) || 0,
+    tax_rate: (row.tax_rate as number) || 0,
+    servicing_fee: Boolean(row.servicing_fee),
+    installment_schedule: schedule.length > 0 ? schedule : DEFAULT_INSTALLMENT_SCHEDULE,
+    custom_terms: (row.custom_terms as string | null) || null,
+    updated_at: row.updated_at as string,
+  };
+}
+
+function mapRowToEstimateDelivery(row: Record<string, unknown>): ProjectEstimateDelivery {
+  let snapshotLineItems: EstimateLineItem[] = [];
+  let snapshotSettings: EstimateSettingsInput = { ...DEFAULT_ESTIMATE_SETTINGS };
+
+  try {
+    snapshotLineItems = JSON.parse(row.snapshot_line_items as string) as EstimateLineItem[];
+  } catch {
+    snapshotLineItems = [];
+  }
+
+  try {
+    const parsed = JSON.parse(row.snapshot_settings as string) as EstimateSettingsInput;
+    snapshotSettings = {
+      ...DEFAULT_ESTIMATE_SETTINGS,
+      ...parsed,
+      installment_schedule: parseInstallmentSchedule(parsed.installment_schedule),
+    };
+  } catch {
+    snapshotSettings = { ...DEFAULT_ESTIMATE_SETTINGS };
+  }
+
+  return {
+    id: row.id as string,
+    project_id: row.project_id as string,
+    sent_by: row.sent_by as string | null,
+    sent_to_email: row.sent_to_email as string,
+    recipient_user_id: row.recipient_user_id as string | null,
+    snapshot_line_items: snapshotLineItems,
+    snapshot_settings: snapshotSettings,
+    snapshot_total: (row.snapshot_total as number) || 0,
+    tracking_token: row.tracking_token as string,
+    sent_at: row.sent_at as string,
+    email_opened_at: (row.email_opened_at as string | null) || null,
+    first_viewed_at: (row.first_viewed_at as string | null) || null,
+    status: (row.status as ProjectEstimateDelivery["status"]) || "sent",
+    sent_by_name: row.sent_by_name as string | undefined,
+    recipient_name: row.recipient_name as string | undefined,
+  };
+}
+
+function mapRowToEstimateEvent(row: Record<string, unknown>): ProjectEstimateEvent {
+  return {
+    id: row.id as string,
+    delivery_id: row.delivery_id as string,
+    event_type: row.event_type as ProjectEstimateEvent["event_type"],
+    user_id: row.user_id as string | null,
+    user_email: row.user_email as string | null,
+    ip_address: row.ip_address as string | null,
+    user_agent: row.user_agent as string | null,
+    created_at: row.created_at as string,
+    user_name: row.user_name as string | undefined,
+  };
+}
+
+export async function getProjectEstimateSettings(
+  projectId: string
+): Promise<ProjectEstimateSettings> {
+  await ensureEstimateDeliveryTables();
+
+  const result = await turso.execute({
+    sql: `SELECT * FROM project_estimate_settings WHERE project_id = ?`,
+    args: [projectId],
+  });
+
+  if (result.rows.length === 0) {
+    return {
+      project_id: projectId,
+      ...DEFAULT_ESTIMATE_SETTINGS,
+      installment_schedule: DEFAULT_INSTALLMENT_SCHEDULE,
+      updated_at: new Date().toISOString(),
+    };
+  }
+
+  return mapRowToEstimateSettings(result.rows[0]);
+}
+
+export async function upsertProjectEstimateSettings(
+  projectId: string,
+  data: Partial<EstimateSettingsInput>
+): Promise<ProjectEstimateSettings> {
+  await ensureEstimateDeliveryTables();
+
+  const existing = await getProjectEstimateSettings(projectId);
+  const merged: EstimateSettingsInput = {
+    markup_type: data.markup_type ?? existing.markup_type,
+    markup_value: data.markup_value ?? existing.markup_value,
+    tax_rate: data.tax_rate ?? existing.tax_rate,
+    servicing_fee: data.servicing_fee ?? existing.servicing_fee,
+    installment_schedule: data.installment_schedule ?? existing.installment_schedule,
+    custom_terms: data.custom_terms !== undefined ? data.custom_terms : existing.custom_terms,
+  };
+
+  await turso.execute({
+    sql: `INSERT INTO project_estimate_settings
+          (project_id, markup_type, markup_value, tax_rate, servicing_fee, installment_schedule, custom_terms, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+          ON CONFLICT(project_id) DO UPDATE SET
+            markup_type = excluded.markup_type,
+            markup_value = excluded.markup_value,
+            tax_rate = excluded.tax_rate,
+            servicing_fee = excluded.servicing_fee,
+            installment_schedule = excluded.installment_schedule,
+            custom_terms = excluded.custom_terms,
+            updated_at = datetime('now')`,
+    args: [
+      projectId,
+      merged.markup_type,
+      merged.markup_value,
+      merged.tax_rate,
+      merged.servicing_fee ? 1 : 0,
+      JSON.stringify(merged.installment_schedule),
+      merged.custom_terms,
+    ],
+  });
+
+  return getProjectEstimateSettings(projectId);
+}
+
+export async function revokeActiveEstimateDeliveries(projectId: string): Promise<void> {
+  await ensureEstimateDeliveryTables();
+  await turso.execute({
+    sql: `UPDATE project_estimate_deliveries SET status = 'revoked' WHERE project_id = ? AND status = 'sent'`,
+    args: [projectId],
+  });
+}
+
+export async function createEstimateDelivery(data: {
+  project_id: string;
+  sent_by: string;
+  sent_to_email: string;
+  recipient_user_id?: string | null;
+  snapshot_line_items: EstimateLineItem[];
+  snapshot_settings: EstimateSettingsInput;
+  snapshot_total: number;
+}): Promise<ProjectEstimateDelivery> {
+  await ensureEstimateDeliveryTables();
+
+  await revokeActiveEstimateDeliveries(data.project_id);
+
+  const id = crypto.randomUUID().replace(/-/g, "");
+  const trackingToken = crypto.randomUUID().replace(/-/g, "");
+
+  await turso.execute({
+    sql: `INSERT INTO project_estimate_deliveries
+          (id, project_id, sent_by, sent_to_email, recipient_user_id, snapshot_line_items, snapshot_settings, snapshot_total, tracking_token)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      id,
+      data.project_id,
+      data.sent_by,
+      data.sent_to_email.toLowerCase(),
+      data.recipient_user_id || null,
+      JSON.stringify(data.snapshot_line_items),
+      JSON.stringify(data.snapshot_settings),
+      data.snapshot_total,
+      trackingToken,
+    ],
+  });
+
+  await createEstimateEvent({
+    delivery_id: id,
+    event_type: "sent",
+    user_id: data.sent_by,
+    user_email: data.sent_to_email,
+  });
+
+  const delivery = await getEstimateDeliveryById(id);
+  if (!delivery) throw new Error("Failed to create estimate delivery");
+  return delivery;
+}
+
+export async function getEstimateDeliveryById(id: string): Promise<ProjectEstimateDelivery | null> {
+  await ensureEstimateDeliveryTables();
+  const result = await turso.execute({
+    sql: `SELECT d.*,
+                 sender.first_name || ' ' || sender.last_name as sent_by_name,
+                 recipient.first_name || ' ' || recipient.last_name as recipient_name
+          FROM project_estimate_deliveries d
+          LEFT JOIN users sender ON d.sent_by = sender.id
+          LEFT JOIN users recipient ON d.recipient_user_id = recipient.id
+          WHERE d.id = ?`,
+    args: [id],
+  });
+  if (result.rows.length === 0) return null;
+  return mapRowToEstimateDelivery(result.rows[0]);
+}
+
+export async function getEstimateDeliveryByToken(
+  token: string
+): Promise<ProjectEstimateDelivery | null> {
+  await ensureEstimateDeliveryTables();
+  const result = await turso.execute({
+    sql: `SELECT d.*,
+                 sender.first_name || ' ' || sender.last_name as sent_by_name,
+                 recipient.first_name || ' ' || recipient.last_name as recipient_name
+          FROM project_estimate_deliveries d
+          LEFT JOIN users sender ON d.sent_by = sender.id
+          LEFT JOIN users recipient ON d.recipient_user_id = recipient.id
+          WHERE d.tracking_token = ?`,
+    args: [token],
+  });
+  if (result.rows.length === 0) return null;
+  return mapRowToEstimateDelivery(result.rows[0]);
+}
+
+export async function getActiveEstimateDelivery(
+  projectId: string
+): Promise<ProjectEstimateDelivery | null> {
+  await ensureEstimateDeliveryTables();
+  const result = await turso.execute({
+    sql: `SELECT d.*,
+                 sender.first_name || ' ' || sender.last_name as sent_by_name,
+                 recipient.first_name || ' ' || recipient.last_name as recipient_name
+          FROM project_estimate_deliveries d
+          LEFT JOIN users sender ON d.sent_by = sender.id
+          LEFT JOIN users recipient ON d.recipient_user_id = recipient.id
+          WHERE d.project_id = ? AND d.status = 'sent'
+          ORDER BY d.sent_at DESC
+          LIMIT 1`,
+    args: [projectId],
+  });
+  if (result.rows.length === 0) return null;
+  return mapRowToEstimateDelivery(result.rows[0]);
+}
+
+export async function getEstimateDeliveries(
+  projectId: string
+): Promise<ProjectEstimateDelivery[]> {
+  await ensureEstimateDeliveryTables();
+  const result = await turso.execute({
+    sql: `SELECT d.*,
+                 sender.first_name || ' ' || sender.last_name as sent_by_name,
+                 recipient.first_name || ' ' || recipient.last_name as recipient_name
+          FROM project_estimate_deliveries d
+          LEFT JOIN users sender ON d.sent_by = sender.id
+          LEFT JOIN users recipient ON d.recipient_user_id = recipient.id
+          WHERE d.project_id = ?
+          ORDER BY d.sent_at DESC`,
+    args: [projectId],
+  });
+  return result.rows.map(mapRowToEstimateDelivery);
+}
+
+export async function createEstimateEvent(data: {
+  delivery_id: string;
+  event_type: ProjectEstimateEvent["event_type"];
+  user_id?: string | null;
+  user_email?: string | null;
+  ip_address?: string | null;
+  user_agent?: string | null;
+}): Promise<ProjectEstimateEvent> {
+  await ensureEstimateDeliveryTables();
+  const id = crypto.randomUUID().replace(/-/g, "");
+
+  await turso.execute({
+    sql: `INSERT INTO project_estimate_events
+          (id, delivery_id, event_type, user_id, user_email, ip_address, user_agent)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      id,
+      data.delivery_id,
+      data.event_type,
+      data.user_id || null,
+      data.user_email || null,
+      data.ip_address || null,
+      data.user_agent || null,
+    ],
+  });
+
+  const result = await turso.execute({
+    sql: `SELECT e.*, u.first_name || ' ' || u.last_name as user_name
+          FROM project_estimate_events e
+          LEFT JOIN users u ON e.user_id = u.id
+          WHERE e.id = ?`,
+    args: [id],
+  });
+
+  return mapRowToEstimateEvent(result.rows[0]);
+}
+
+export async function getEstimateEvents(deliveryId: string): Promise<ProjectEstimateEvent[]> {
+  await ensureEstimateDeliveryTables();
+  const result = await turso.execute({
+    sql: `SELECT e.*, u.first_name || ' ' || u.last_name as user_name
+          FROM project_estimate_events e
+          LEFT JOIN users u ON e.user_id = u.id
+          WHERE e.delivery_id = ?
+          ORDER BY e.created_at ASC`,
+    args: [deliveryId],
+  });
+  return result.rows.map(mapRowToEstimateEvent);
+}
+
+export async function markEstimateEmailOpened(
+  deliveryId: string,
+  ipAddress?: string | null,
+  userAgent?: string | null
+): Promise<boolean> {
+  await ensureEstimateDeliveryTables();
+
+  const delivery = await getEstimateDeliveryById(deliveryId);
+  if (!delivery || delivery.email_opened_at) return false;
+
+  await turso.execute({
+    sql: `UPDATE project_estimate_deliveries SET email_opened_at = datetime('now') WHERE id = ?`,
+    args: [deliveryId],
+  });
+
+  await createEstimateEvent({
+    delivery_id: deliveryId,
+    event_type: "email_opened",
+    user_email: delivery.sent_to_email,
+    ip_address: ipAddress,
+    user_agent: userAgent,
+  });
+
+  return true;
+}
+
+export async function markEstimateViewedInApp(data: {
+  deliveryId: string;
+  userId?: string | null;
+  userEmail?: string | null;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+}): Promise<{ isFirstView: boolean; event: ProjectEstimateEvent }> {
+  await ensureEstimateDeliveryTables();
+
+  const delivery = await getEstimateDeliveryById(data.deliveryId);
+  if (!delivery) throw new Error("Delivery not found");
+
+  const isFirstView = !delivery.first_viewed_at;
+
+  if (isFirstView) {
+    await turso.execute({
+      sql: `UPDATE project_estimate_deliveries SET first_viewed_at = datetime('now') WHERE id = ?`,
+      args: [data.deliveryId],
+    });
+  }
+
+  const event = await createEstimateEvent({
+    delivery_id: data.deliveryId,
+    event_type: "viewed_in_app",
+    user_id: data.userId,
+    user_email: data.userEmail,
+    ip_address: data.ipAddress,
+    user_agent: data.userAgent,
+  });
+
+  return { isFirstView, event };
+}
+
+export async function getProjectClientUsers(
+  projectId: string
+): Promise<Array<{ id: string; email: string; first_name: string; last_name: string }>> {
+  const result = await turso.execute({
+    sql: `SELECT u.id, u.email, u.first_name, u.last_name
+          FROM users u
+          INNER JOIN project_assignments pa ON pa.user_id = u.id
+          WHERE pa.project_id = ? AND u.role = 'client'
+          ORDER BY u.last_name, u.first_name`,
+    args: [projectId],
+  });
+  return result.rows.map((row) => ({
+    id: row.id as string,
+    email: row.email as string,
+    first_name: row.first_name as string,
+    last_name: row.last_name as string,
+  }));
+}
+
+export interface ProjectEstimateRecipient {
+  id: string | null;
+  email: string;
+  name: string;
+  status: "registered" | "invited";
+  invitation_token?: string;
+}
+
+export async function getProjectEstimateRecipients(
+  projectId: string
+): Promise<ProjectEstimateRecipient[]> {
+  const [clients, invitations] = await Promise.all([
+    getProjectClientUsers(projectId),
+    getProjectInvitations(projectId),
+  ]);
+
+  const recipients: ProjectEstimateRecipient[] = [];
+  const seenEmails = new Set<string>();
+
+  for (const client of clients) {
+    const email = client.email.toLowerCase();
+    seenEmails.add(email);
+    recipients.push({
+      id: client.id,
+      email: client.email,
+      name: `${client.first_name} ${client.last_name}`.trim() || client.email,
+      status: "registered",
+    });
+  }
+
+  for (const invitation of invitations) {
+    if (invitation.status !== "pending") continue;
+    const email = invitation.email.toLowerCase();
+    if (seenEmails.has(email)) continue;
+    seenEmails.add(email);
+    recipients.push({
+      id: null,
+      email: invitation.email,
+      name: invitation.email,
+      status: "invited",
+      invitation_token: invitation.token,
+    });
+  }
+
+  return recipients;
+}
+
+export async function getPendingInvitationForEmail(
+  projectId: string,
+  email: string
+): Promise<ProjectInvitation | null> {
+  const invitations = await getProjectInvitations(projectId);
+  return (
+    invitations.find(
+      (inv) => inv.status === "pending" && inv.email.toLowerCase() === email.toLowerCase()
+    ) || null
+  );
+}
+
+export function stripProjectPricingForEmployee<T extends Project>(project: T): Omit<T, "budget_amount" | "funding_notes" | "hide_line_item_prices_for_client" | "hide_markup_for_client"> & {
+  budget_amount: null;
+  funding_notes: null;
+  hide_line_item_prices_for_client: undefined;
+  hide_markup_for_client: undefined;
+} {
+  const { budget_amount, funding_notes, hide_line_item_prices_for_client, hide_markup_for_client, ...rest } = project;
+  return {
+    ...rest,
+    budget_amount: null,
+    funding_notes: null,
+    hide_line_item_prices_for_client: undefined,
+    hide_markup_for_client: undefined,
+  };
 }
 
 // ============ IMAGE FUNCTIONS ============

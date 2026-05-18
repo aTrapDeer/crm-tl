@@ -17,3 +17,5 @@ Rules:
 - Details about specific line items, cancellations, and terms and conditions are below page 1 on additional pages / estimate viewer
 
 We essentially want to focus clarity so the payment amount, structure, dates and scope are immediately apparent to customer, then if they want additional details they can scroll down.
+
+There might be some place for ChatGPT API to be integrated to help out with the pricing and handling estimate building - but for now we wont have anything like that, it will be by hand. However, would be nice if these prices can get saved into the Database some how so that if TL Corp does a similar build or construction plan we can retrieve that data and edit it then 

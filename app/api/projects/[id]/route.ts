@@ -5,6 +5,8 @@ import {
   getProjectsByUserId,
   deleteProjectById,
   clearProjectSignatures,
+  stripProjectPricingForEmployee,
+  getActiveEstimateDelivery,
 } from "@/lib/projects";
 import { sendProjectCompletionNotification } from "@/lib/email";
 import { cookies } from "next/headers";
@@ -44,6 +46,23 @@ export async function GET(
       if (!isAssigned) {
         return Response.json({ error: "Access denied" }, { status: 403 });
       }
+    }
+
+    if (user.role === "employee") {
+      return Response.json({ project: stripProjectPricingForEmployee(project) });
+    }
+
+    if (user.role === "client") {
+      const delivery = await getActiveEstimateDelivery(id);
+      const { budget_amount, funding_notes, ...rest } = project;
+      return Response.json({
+        project: {
+          ...rest,
+          budget_amount: delivery ? budget_amount : null,
+          funding_notes: delivery ? funding_notes : null,
+          estimate_sent: Boolean(delivery),
+        },
+      });
     }
 
     return Response.json({ project });

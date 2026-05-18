@@ -605,3 +605,53 @@ CREATE TABLE IF NOT EXISTS estimate_custom_entries (
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_estimate_custom_entries_name_unique
   ON estimate_custom_entries(lower(name));
+
+-- ============ PROJECT ESTIMATE SETTINGS ============
+
+CREATE TABLE IF NOT EXISTS project_estimate_settings (
+  project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+  markup_type TEXT NOT NULL DEFAULT 'percentage' CHECK (markup_type IN ('percentage', 'fixed')),
+  markup_value REAL NOT NULL DEFAULT 0,
+  tax_rate REAL NOT NULL DEFAULT 0,
+  servicing_fee INTEGER NOT NULL DEFAULT 1,
+  installment_schedule TEXT NOT NULL DEFAULT '[]',
+  custom_terms TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ============ PROJECT ESTIMATE DELIVERIES ============
+
+CREATE TABLE IF NOT EXISTS project_estimate_deliveries (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  sent_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  sent_to_email TEXT NOT NULL,
+  recipient_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  snapshot_line_items TEXT NOT NULL,
+  snapshot_settings TEXT NOT NULL,
+  snapshot_total REAL NOT NULL DEFAULT 0,
+  tracking_token TEXT NOT NULL UNIQUE,
+  sent_at TEXT NOT NULL DEFAULT (datetime('now')),
+  email_opened_at TEXT,
+  first_viewed_at TEXT,
+  status TEXT NOT NULL DEFAULT 'sent' CHECK (status IN ('sent', 'revoked'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_estimate_deliveries_project ON project_estimate_deliveries(project_id);
+CREATE INDEX IF NOT EXISTS idx_estimate_deliveries_token ON project_estimate_deliveries(tracking_token);
+CREATE INDEX IF NOT EXISTS idx_estimate_deliveries_status ON project_estimate_deliveries(project_id, status);
+
+-- ============ PROJECT ESTIMATE EVENTS ============
+
+CREATE TABLE IF NOT EXISTS project_estimate_events (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  delivery_id TEXT NOT NULL REFERENCES project_estimate_deliveries(id) ON DELETE CASCADE,
+  event_type TEXT NOT NULL CHECK (event_type IN ('sent', 'email_opened', 'viewed_in_app')),
+  user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  user_email TEXT,
+  ip_address TEXT,
+  user_agent TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_estimate_events_delivery ON project_estimate_events(delivery_id);

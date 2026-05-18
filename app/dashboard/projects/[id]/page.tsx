@@ -7,6 +7,13 @@ import Link from "next/link";
 import { ModalLayer } from "@/app/components/ModalLayer";
 import { formatUsCentralDateTime } from "@/lib/us-central-time";
 import { buildTapSignatureImage, getTapSignedAtLabel } from "@/app/components/tap-signature";
+import { PREDEFINED_CATEGORIES } from "@/lib/estimate-categories";
+import {
+  calculateEstimateBreakdown,
+  calculateInstallmentAmounts,
+  formatCurrency,
+  type InstallmentScheduleItem,
+} from "@/lib/estimate";
 
 interface Project {
   id: string;
@@ -24,6 +31,7 @@ interface Project {
   on_hold_reason: string | null;
   expected_resume_date: string | null;
   created_at: string;
+  estimate_sent?: boolean;
 }
 
 interface Task {
@@ -142,25 +150,40 @@ export default function ProjectPage() {
     priceRate: "",
     quantity: "1",
   });
-  const PREDEFINED_CATEGORIES = [
-    "Demo", "Carpentry", "Electrical", "Plumbing", "Drywall/Mud/Taping", "Coatings", "Custom",
-  ];
   const [markupType, setMarkupType] = useState<"percentage" | "fixed">("percentage");
   const [markupValue, setMarkupValue] = useState("");
   const [taxRate, setTaxRate] = useState("");
   const [onlineServicingFee, setOnlineServicingFee] = useState(true);
+  const [installmentSchedule, setInstallmentSchedule] = useState<InstallmentScheduleItem[]>([]);
+  const [estimateSent, setEstimateSent] = useState(false);
+  const [estimateDelivery, setEstimateDelivery] = useState<{
+    id: string;
+    sent_at: string;
+    sent_to_email: string;
+    email_opened_at: string | null;
+    first_viewed_at: string | null;
+    recipient_name?: string;
+    snapshot_total: number;
+  } | null>(null);
+  const [showSendEstimate, setShowSendEstimate] = useState(false);
+  const [sendRecipients, setSendRecipients] = useState<
+    Array<{ id: string | null; email: string; name: string; status: "registered" | "invited" }>
+  >([]);
+  const [selectedRecipientEmail, setSelectedRecipientEmail] = useState("");
+  const [sendingEstimate, setSendingEstimate] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [previewClientView, setPreviewClientView] = useState(false);
+  const [savingClientVisibility, setSavingClientVisibility] = useState(false);
 
   function getEstimateBreakdown() {
     const subtotal = estimateTotal;
-    const markup = markupType === "percentage"
-      ? subtotal * ((parseFloat(markupValue) || 0) / 100)
-      : (parseFloat(markupValue) || 0);
-    const afterMarkup = subtotal + markup;
-    const tax = afterMarkup * ((parseFloat(taxRate) || 0) / 100);
-    const afterTax = afterMarkup + tax;
-    const servicingFee = onlineServicingFee ? afterTax * 0.035 : 0;
-    const total = afterTax + servicingFee;
-    return { subtotal, markup, afterMarkup, tax, afterTax, servicingFee, total };
+    return calculateEstimateBreakdown(subtotal, {
+      markup_type: markupType,
+      markup_value: parseFloat(markupValue) || 0,
+      tax_rate: parseFloat(taxRate) || 0,
+      servicing_fee: onlineServicingFee,
+    });
   }
 
   const [showAddTask, setShowAddTask] = useState(false);
@@ -195,7 +218,8 @@ export default function ProjectPage() {
   const canManageImages = userRole === "admin" || userRole === "employee";
   const canEdit = userRole === "admin";
   const canAddUpdates = userRole === "admin" || userRole === "employee";
-  const canViewEstimate = userRole !== "employee";
+  const canViewEstimate = userRole === "admin" || (userRole === "client" && estimateSent);
+  const canManageEstimate = userRole === "admin";
   const canSignProject = userRole === "admin" || userRole === "client";
 
   const fetchData = useCallback(async () => {
@@ -214,6 +238,7 @@ export default function ProjectPage() {
       const sessionData = await sessionRes.json();
 
       setProject(projectData.project);
+      setEstimateSent(Boolean(projectData.project.estimate_sent));
       setCurrentUser(sessionData.user);
 
       setEditForm({
@@ -228,7 +253,7 @@ export default function ProjectPage() {
       });
 
       // Fetch related data
-      const [tasksRes, teamRes, imagesRes, updatesRes, invitationsRes, estimateRes, signaturesRes, usersRes, assignmentsRes] = await Promise.all([
+      const [tasksRes, teamRes, imagesRes, updatesRes, invitationsRes, estimateRes, settingsRes, signaturesRes, usersRes, assignmentsRes] = await Promise.all([
         fetch(`/api/projects/${projectId}/tasks`),
         fetch(`/api/projects/${projectId}/team`),
         fetch(`/api/projects/${projectId}/images`),
@@ -236,9 +261,12 @@ export default function ProjectPage() {
         sessionData.user?.role === "admin"
           ? fetch(`/api/projects/${projectId}/invitations`)
           : Promise.resolve({ json: () => Promise.resolve({ invitations: [] }) }),
-        sessionData.user?.role !== "employee"
+        sessionData.user?.role === "admin" || projectData.project.estimate_sent
           ? fetch(`/api/projects/${projectId}/estimate`)
-          : Promise.resolve({ ok: false, json: () => Promise.resolve({ items: [], total: 0 }) }),
+          : Promise.resolve({ ok: false, json: () => Promise.resolve({ items: [], total: 0, estimate_sent: false }) }),
+        sessionData.user?.role === "admin"
+          ? fetch(`/api/projects/${projectId}/estimate/settings`)
+          : Promise.resolve({ ok: false, json: () => Promise.resolve({ settings: null }) }),
         sessionData.user?.role !== "employee"
           ? fetch(`/api/projects/${projectId}/signatures`)
           : Promise.resolve({ ok: false, json: () => Promise.resolve({ signatures: [] }) }),
@@ -256,6 +284,7 @@ export default function ProjectPage() {
       const updatesData = await updatesRes.json();
       const invitationsData = await invitationsRes.json();
       const estimateData = await estimateRes.json();
+      const settingsData = settingsRes.ok ? await settingsRes.json() : { settings: null };
       const signaturesData = await signaturesRes.json();
       const usersData = await usersRes.json();
       const assignmentsData = await assignmentsRes.json();
@@ -266,8 +295,21 @@ export default function ProjectPage() {
       setImages(imagesData.images || []);
       setUpdates(updatesData.updates || []);
       setInvitations(invitationsData.invitations || []);
-      setEstimateItems(estimateData.items || []);
-      setEstimateTotal(estimateData.total || 0);
+      if (estimateRes.ok) {
+        setEstimateItems(estimateData.items || []);
+        setEstimateTotal(estimateData.total || 0);
+        setEstimateSent(Boolean(estimateData.estimate_sent));
+        setEstimateDelivery(estimateData.delivery || null);
+      }
+      if (settingsData.settings) {
+        const s = settingsData.settings;
+        setMarkupType(s.markup_type || "percentage");
+        setMarkupValue(String(s.markup_value || ""));
+        setTaxRate(String(s.tax_rate || ""));
+        setOnlineServicingFee(Boolean(s.servicing_fee));
+        setInstallmentSchedule(s.installment_schedule || []);
+        setSettingsLoaded(true);
+      }
       setProjectSignatures(signaturesData.signatures || []);
       setAllUsers(usersData.users || []);
       setAssignments(assignmentsData.assignments || []);
@@ -282,6 +324,99 @@ export default function ProjectPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  async function saveEstimateSettings() {
+    if (!canManageEstimate) return;
+    setSavingSettings(true);
+    try {
+      await fetch(`/api/projects/${projectId}/estimate/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          markup_type: markupType,
+          markup_value: parseFloat(markupValue) || 0,
+          tax_rate: parseFloat(taxRate) || 0,
+          servicing_fee: onlineServicingFee,
+          installment_schedule: installmentSchedule,
+        }),
+      });
+    } catch (error) {
+      console.error("Failed to save estimate settings:", error);
+    } finally {
+      setSavingSettings(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!canManageEstimate || !settingsLoaded) return;
+    const timer = setTimeout(() => {
+      saveEstimateSettings();
+    }, 800);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [markupType, markupValue, taxRate, onlineServicingFee, installmentSchedule, settingsLoaded]);
+
+  async function openSendEstimateModal() {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/estimate/send`);
+      const data = await res.json();
+      const recipients = data.recipients || data.clients || [];
+      setSendRecipients(recipients);
+      if (recipients.length === 1) {
+        setSelectedRecipientEmail(recipients[0].email);
+      }
+      setShowSendEstimate(true);
+    } catch (error) {
+      console.error("Failed to load recipients:", error);
+    }
+  }
+
+  async function handleSendEstimate() {
+    if (!canManageEstimate || estimateItems.length === 0) return;
+    const recipient = sendRecipients.find((r) => r.email === selectedRecipientEmail);
+    if (!selectedRecipientEmail) return;
+
+    setSendingEstimate(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/estimate/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipient_user_id: recipient?.id || undefined,
+          recipient_email: selectedRecipientEmail,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setShowSendEstimate(false);
+        fetchData();
+      } else {
+        alert(data.error || "Failed to send estimate");
+      }
+    } catch (error) {
+      console.error("Failed to send estimate:", error);
+      alert("Failed to send estimate");
+    } finally {
+      setSendingEstimate(false);
+    }
+  }
+
+  function updateInstallment(index: number, field: keyof InstallmentScheduleItem, value: string | number) {
+    setInstallmentSchedule((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
+    );
+  }
+
+  function addInstallmentRow() {
+    setInstallmentSchedule((prev) => [
+      ...prev,
+      { label: "Payment", percent: 0, due_description: "" },
+    ]);
+  }
+
+  function removeInstallmentRow(index: number) {
+    setInstallmentSchedule((prev) => prev.filter((_, i) => i !== index));
+  }
 
   async function handleAddTask(e: React.FormEvent) {
     e.preventDefault();
@@ -673,6 +808,36 @@ export default function ProjectPage() {
     }
   }
 
+  async function saveClientVisibility(updates: {
+    hide_line_item_prices_for_client?: boolean;
+    hide_markup_for_client?: boolean;
+  }) {
+    setSavingClientVisibility(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setProject(data.project);
+        setEditForm((prev) => ({
+          ...prev,
+          hide_line_item_prices_for_client: Boolean(
+            data.project.hide_line_item_prices_for_client
+          ),
+          hide_markup_for_client: Boolean(data.project.hide_markup_for_client),
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to save client visibility settings:", error);
+    } finally {
+      setSavingClientVisibility(false);
+    }
+  }
+
   async function handleUpdateProject(e: React.FormEvent) {
     e.preventDefault();
     const trimmedName = editForm.name.trim();
@@ -770,15 +935,6 @@ export default function ProjectPage() {
     return `${formatUsCentralDateTime(dateStr)} CT`;
   }
 
-  function formatCurrency(amount: number) {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -809,9 +965,14 @@ export default function ProjectPage() {
   );
   const adminSignature = projectSignatures.find((s) => s.signer_role === "admin");
   const clientSignature = projectSignatures.find((s) => s.signer_role === "client");
+  const applyClientVisibilityRules = userRole === "client" || previewClientView;
   const hideClientLineItemPricing =
-    userRole === "client" && project.hide_line_item_prices_for_client;
-  const hideClientMarkup = userRole === "client" && project.hide_markup_for_client;
+    applyClientVisibilityRules && project.hide_line_item_prices_for_client;
+  const hideClientMarkup = applyClientVisibilityRules && project.hide_markup_for_client;
+
+  const estimateItemGridClass = hideClientLineItemPricing
+    ? "md:grid md:grid-cols-[5.5rem_minmax(0,1fr)_2.75rem_5.75rem] md:gap-x-4 md:items-center"
+    : "md:grid md:grid-cols-[5.5rem_minmax(0,1fr)_5.5rem_2.75rem_6.5rem_5.75rem] md:gap-x-4 md:items-center";
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
@@ -858,7 +1019,7 @@ export default function ProjectPage() {
         <div className="flex items-center gap-2">
           {canViewEstimate && (
             <button
-              onClick={handleExportPdf}
+              onClick={() => window.open(`/api/projects/${projectId}/export-pdf`, "_blank")}
               disabled={exportingPdf}
               className="rounded-full border border-(--border)/30 px-4 py-2 text-sm font-medium text-(--text) hover:bg-(--bg) disabled:opacity-60"
             >
@@ -930,28 +1091,118 @@ export default function ProjectPage() {
           </div>
 
           {/* Estimate Builder */}
-          {canViewEstimate && (
+          {canManageEstimate && (
           <div className="tl-card p-6">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-lg font-semibold text-(--text)">
                 Estimate Builder
               </h2>
-              <div className="flex items-center gap-2 sm:gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <div className="rounded-full border border-(--border) bg-(--bg) px-4 py-1.5">
                   <p className="text-lg font-bold text-(--text) sm:text-xl">
-                    {formatCurrency(estimateTotal)}
+                    {formatCurrency(getEstimateBreakdown().total)}
                   </p>
                 </div>
-                {userRole === "admin" && (
+                <button
+                  onClick={() => setShowAddEstimateItem(true)}
+                  className="inline-flex items-center gap-2 rounded-full bg-(--tl-navy) px-4 py-2 text-sm font-semibold text-white transition hover:bg-(--tl-royal)"
+                >
+                  <span className="text-base leading-none">+</span>
+                  Add Item
+                </button>
+                {estimateItems.length > 0 && (
                   <button
-                    onClick={() => setShowAddEstimateItem(true)}
-                    className="inline-flex items-center gap-2 rounded-full bg-(--tl-navy) px-4 py-2 text-sm font-semibold text-white transition hover:bg-(--tl-royal)"
+                    onClick={openSendEstimateModal}
+                    className="inline-flex items-center gap-2 rounded-full border border-emerald-600 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
                   >
-                    <span className="text-base leading-none">+</span>
-                    Add Item
+                    Send to Client
                   </button>
                 )}
               </div>
+            </div>
+
+            {estimateDelivery && (
+              <div className="mb-5 border-b border-(--border) pb-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-(--text)/50 mb-2">
+                  Delivery Status
+                </p>
+                <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2 text-sm text-(--text)">
+                  <p><span className="text-(--text)/50">Sent</span> {formatDateTime(estimateDelivery.sent_at)} · {estimateDelivery.sent_to_email}</p>
+                  <p><span className="text-(--text)/50">Email opened</span> {estimateDelivery.email_opened_at ? formatDateTime(estimateDelivery.email_opened_at) : "Not yet"}</p>
+                  <p><span className="text-(--text)/50">Viewed in CRM</span> {estimateDelivery.first_viewed_at ? formatDateTime(estimateDelivery.first_viewed_at) : "Not yet"}</p>
+                  <p><span className="text-(--text)/50">Sent total</span> {formatCurrency(estimateDelivery.snapshot_total)}</p>
+                </div>
+              </div>
+            )}
+
+            <div className="mb-5 rounded-xl border border-(--border) bg-(--bg)/50 p-4">
+              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-(--text)">What clients see</p>
+                  <p className="mt-0.5 text-xs text-(--text)/60">
+                    Applies to sent emails, public estimate links, and the client CRM view.
+                  </p>
+                </div>
+                <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm text-(--text)">
+                  <input
+                    type="checkbox"
+                    checked={previewClientView}
+                    onChange={(e) => setPreviewClientView(e.target.checked)}
+                    className="h-4 w-4 rounded"
+                  />
+                  Preview client view
+                </label>
+              </div>
+              <div className="space-y-2.5">
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={project.hide_line_item_prices_for_client}
+                    disabled={savingClientVisibility}
+                    onChange={(e) =>
+                      saveClientVisibility({
+                        hide_line_item_prices_for_client: e.target.checked,
+                      })
+                    }
+                    className="mt-0.5 h-4 w-4 rounded"
+                  />
+                  <span className="text-sm text-(--text)">
+                    <span className="font-medium">Hide line-item prices</span>
+                    <span className="mt-0.5 block text-xs text-(--text)/60">
+                      Clients see scope and quantities only — total and payment schedule stay visible.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={project.hide_markup_for_client}
+                    disabled={savingClientVisibility}
+                    onChange={(e) =>
+                      saveClientVisibility({ hide_markup_for_client: e.target.checked })
+                    }
+                    className="mt-0.5 h-4 w-4 rounded"
+                  />
+                  <span className="text-sm text-(--text)">
+                    <span className="font-medium">Hide markup, tax &amp; fee breakdown</span>
+                    <span className="mt-0.5 block text-xs text-(--text)/60">
+                      Clients see the grand total without subtotal, markup, tax, or servicing fee lines.
+                    </span>
+                  </span>
+                </label>
+              </div>
+              {savingClientVisibility && (
+                <p className="mt-2 text-xs text-(--text)/40">Saving...</p>
+              )}
+              {(project.hide_line_item_prices_for_client || project.hide_markup_for_client) && (
+                <p className="mt-3 text-xs text-(--tl-royal)">
+                  {project.hide_line_item_prices_for_client && project.hide_markup_for_client
+                    ? "Clients will receive scope, total, and payment schedule only."
+                    : project.hide_line_item_prices_for_client
+                      ? "Clients will see line items without per-line pricing."
+                      : "Clients will see line-item prices but not markup/tax/fee details."}
+                </p>
+              )}
             </div>
 
             {estimateItems.length === 0 ? (
@@ -967,20 +1218,27 @@ export default function ProjectPage() {
             ) : (
               <div className="space-y-2.5">
                 {(hideClientLineItemPricing || hideClientMarkup) && (
-                  <div className="rounded-xl border border-(--border) bg-white px-4 py-2.5 text-xs text-(--text)">
-                    {hideClientLineItemPricing && "Line-item pricing is hidden for client view."}{" "}
-                    {hideClientMarkup && "Markup is hidden for client view."}
+                  <div className="rounded-xl border border-(--tl-royal)/20 bg-(--tl-royal)/5 px-4 py-2.5 text-xs text-(--text)">
+                    {previewClientView && (
+                      <span className="mr-2 font-semibold uppercase tracking-wide text-(--tl-royal)">
+                        Client preview
+                      </span>
+                    )}
+                    {hideClientLineItemPricing && "Line-item pricing hidden."}{" "}
+                    {hideClientMarkup && "Markup/tax/fee breakdown hidden."}
                   </div>
                 )}
-                {/* Table Header */}
-                <div className="hidden rounded-xl border border-(--border) bg-(--bg) md:grid grid-cols-12 gap-3 px-4 py-2 text-xs font-semibold text-(--text) uppercase tracking-wider">
-                  <div className="col-span-3">Category</div>
-                  <div className={hideClientLineItemPricing ? "col-span-7" : "col-span-4"}>Description</div>
-                  {!hideClientLineItemPricing && <div className="col-span-1 text-right">Rate</div>}
-                  <div className={hideClientLineItemPricing ? "col-span-2 text-right" : "col-span-1 text-right"}>Qty</div>
-                  {!hideClientLineItemPricing && <div className="col-span-2 text-right">Total</div>}
-                  {userRole === "admin" && <div className="col-span-1"></div>}
-                </div>
+                {/* Line items table */}
+                <div className="overflow-hidden rounded-xl border border-(--border)">
+                  <div className={`hidden border-b border-(--border) bg-(--bg)/80 px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-(--text)/55 ${estimateItemGridClass}`}>
+                    <div>Category</div>
+                    <div>Description</div>
+                    {!hideClientLineItemPricing && <div className="text-right">Rate</div>}
+                    <div className="text-right">Qty</div>
+                    {!hideClientLineItemPricing && <div className="text-right">Total</div>}
+                    {userRole === "admin" && <div className="text-right">Actions</div>}
+                  </div>
+                  <div className="divide-y divide-(--border)">
                 {estimateItems.map((item) => {
                   const isEditing = editingEstimateId === item.id;
                   const previewTotal =
@@ -990,148 +1248,237 @@ export default function ProjectPage() {
                   return (
                   <div
                     key={item.id}
-                    className={`grid grid-cols-1 items-center gap-2 rounded-xl border p-4 transition md:grid-cols-12 md:gap-3 ${
-                      isEditing
-                        ? "border-(--tl-royal)/40 bg-white shadow-sm"
-                        : "border-(--border) bg-(--bg)"
-                    }`}
+                    className={isEditing ? "bg-(--tl-royal)/5" : ""}
                   >
-                    <div className="md:col-span-3">
-                      <span className="md:hidden text-xs font-semibold text-(--text) uppercase">Category: </span>
-                      <span className="inline-flex rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-(--text)">
-                        {item.category === "custom" ? item.custom_category_name || "Custom" : item.category}
-                      </span>
-                    </div>
-                    <div className={hideClientLineItemPricing ? "md:col-span-7" : "md:col-span-4"}>
-                      {isEditing ? (
-                        <textarea
-                          value={estimateEditForm.description}
-                          onChange={(e) =>
-                            setEstimateEditForm((prev) => ({
-                              ...prev,
-                              description: e.target.value,
-                            }))
-                          }
-                          rows={2}
-                          className="w-full rounded-lg border border-(--border) bg-white px-2 py-1.5 text-sm text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
-                        />
-                      ) : (
-                        <p className="text-sm text-(--text) line-clamp-2">
-                          {item.description || "No description"}
-                        </p>
-                      )}
-                    </div>
-                    {!hideClientLineItemPricing && (
-                      <div className="md:col-span-1 md:text-right">
-                        <span className="md:hidden text-xs font-semibold text-(--text)">Rate: </span>
-                        {isEditing ? (
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={estimateEditForm.price_rate}
-                            onChange={(e) =>
-                              setEstimateEditForm((prev) => ({
-                                ...prev,
-                                price_rate: e.target.value,
-                              }))
-                            }
-                            className="w-full rounded-lg border border-(--border) bg-white px-2 py-1.5 text-right text-sm text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
-                          />
-                        ) : (
-                          <span className="text-sm text-(--text)">${item.price_rate.toLocaleString()}</span>
-                        )}
-                      </div>
-                    )}
-                    <div className={hideClientLineItemPricing ? "md:col-span-2 md:text-right" : "md:col-span-1 md:text-right"}>
-                      <span className="md:hidden text-xs font-semibold text-(--text)">Qty: </span>
-                      {isEditing ? (
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={estimateEditForm.quantity}
-                          onChange={(e) =>
-                            setEstimateEditForm((prev) => ({
-                              ...prev,
-                              quantity: e.target.value,
-                            }))
-                          }
-                          className="w-full rounded-lg border border-(--border) bg-white px-2 py-1.5 text-right text-sm text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
-                        />
-                      ) : (
-                        <span className="text-sm text-(--text)">{item.quantity}</span>
-                      )}
-                    </div>
-                    {!hideClientLineItemPricing && (
-                      <div className="md:col-span-2 md:text-right">
-                        <span className="md:hidden text-xs font-semibold text-(--text)">Total: </span>
-                        <span className="font-semibold text-(--tl-navy)">
-                          {formatCurrency(isEditing ? previewTotal : item.total)}
+                    {/* Mobile: stacked layout */}
+                    <div className="space-y-3 px-4 py-3 md:hidden">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="inline-flex rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-(--text)">
+                          {item.category === "custom" ? item.custom_category_name || "Custom" : item.category}
                         </span>
-                      </div>
-                    )}
-                    {userRole === "admin" && (
-                      <div className="md:col-span-1 flex flex-wrap gap-2 md:justify-end">
-                        {isEditing ? (
-                          <>
-                            <button
-                              onClick={() => handleSaveEstimateItem(item.id)}
-                              className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700"
-                            >
-                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                              </svg>
-                              Save
-                            </button>
-                            <button
-                              onClick={cancelEditEstimateItem}
-                              className="rounded-full border border-(--border) px-3 py-1.5 text-xs font-semibold text-(--text) transition hover:bg-(--bg)"
-                            >
-                              Cancel
-                            </button>
-                          </>
-                        ) : (
-                          <>
+                        {!isEditing && userRole === "admin" && (
+                          <div className="flex items-center gap-1.5">
                             <button
                               onClick={() => startEditEstimateItem(item)}
-                              className="rounded-full border border-(--border) px-3 py-1.5 text-xs font-semibold text-(--text) transition hover:border-(--tl-royal) hover:text-(--tl-royal)"
+                              className="rounded-full border border-(--border) px-3 py-1.5 text-xs font-semibold text-(--text)"
                             >
                               Edit
                             </button>
                             <button
                               onClick={() => handleDeleteEstimateItem(item.id)}
-                              className="inline-flex items-center justify-center rounded-full border border-red-200 bg-red-50 p-2 text-red-500 transition hover:bg-red-100 hover:text-red-700"
+                              className="rounded-full border border-red-200 bg-red-50 p-2 text-red-500"
                               aria-label="Delete line item"
                             >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                               </svg>
                             </button>
-                          </>
+                          </div>
                         )}
                       </div>
-                    )}
+                      {isEditing ? (
+                        <>
+                          <textarea
+                            value={estimateEditForm.description}
+                            onChange={(e) =>
+                              setEstimateEditForm((prev) => ({ ...prev, description: e.target.value }))
+                            }
+                            rows={2}
+                            placeholder="Description"
+                            className="w-full rounded-lg border border-(--border) bg-white px-3 py-2 text-sm text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
+                          />
+                          <div className="grid grid-cols-2 gap-3">
+                            {!hideClientLineItemPricing && (
+                              <div>
+                                <label className="mb-1 block text-xs font-medium text-(--text)/60">Rate</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={estimateEditForm.price_rate}
+                                  onChange={(e) =>
+                                    setEstimateEditForm((prev) => ({ ...prev, price_rate: e.target.value }))
+                                  }
+                                  className="w-full rounded-lg border border-(--border) bg-white px-3 py-2 text-sm text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
+                                />
+                              </div>
+                            )}
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-(--text)/60">Qty</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={estimateEditForm.quantity}
+                                onChange={(e) =>
+                                  setEstimateEditForm((prev) => ({ ...prev, quantity: e.target.value }))
+                                }
+                                className="w-full rounded-lg border border-(--border) bg-white px-3 py-2 text-sm text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
+                              />
+                            </div>
+                          </div>
+                          {!hideClientLineItemPricing && (
+                            <p className="text-sm font-semibold text-(--tl-navy)">
+                              Total: {formatCurrency(previewTotal)}
+                            </p>
+                          )}
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleSaveEstimateItem(item.id)}
+                              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={cancelEditEstimateItem}
+                              className="inline-flex flex-1 items-center justify-center rounded-full border border-(--border) px-4 py-2 text-sm font-semibold text-(--text)"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm text-(--text)">{item.description || "No description"}</p>
+                          <div className="flex flex-wrap gap-4 text-sm">
+                            {!hideClientLineItemPricing && (
+                              <span><span className="text-(--text)/60">Rate:</span> ${item.price_rate.toLocaleString()}</span>
+                            )}
+                            <span><span className="text-(--text)/60">Qty:</span> {item.quantity}</span>
+                            {!hideClientLineItemPricing && (
+                              <span className="font-semibold text-(--tl-navy)">{formatCurrency(item.total)}</span>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Desktop: aligned grid row */}
+                    <div className={`hidden px-4 py-3 ${estimateItemGridClass} ${isEditing ? "md:items-start md:py-3.5" : ""}`}>
+                      <div className="min-w-0 self-center">
+                        <span className="inline-flex rounded-md bg-white px-2 py-0.5 text-xs font-semibold text-(--tl-navy) ring-1 ring-(--border)/60">
+                          {item.category === "custom" ? item.custom_category_name || "Custom" : item.category}
+                        </span>
+                      </div>
+                      <div className="min-w-0 self-center">
+                        {isEditing ? (
+                          <textarea
+                            value={estimateEditForm.description}
+                            onChange={(e) =>
+                              setEstimateEditForm((prev) => ({ ...prev, description: e.target.value }))
+                            }
+                            rows={2}
+                            placeholder="Description"
+                            className="w-full rounded-lg border border-(--border) bg-white px-3 py-2 text-sm text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
+                          />
+                        ) : (
+                          <p className="text-sm leading-snug text-(--text) line-clamp-2">
+                            {item.description || "No description"}
+                          </p>
+                        )}
+                      </div>
+                      {!hideClientLineItemPricing && (
+                        <div className="self-center text-right">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={estimateEditForm.price_rate}
+                              onChange={(e) =>
+                                setEstimateEditForm((prev) => ({ ...prev, price_rate: e.target.value }))
+                              }
+                              className="w-full rounded-lg border border-(--border) bg-white px-2.5 py-2 text-right text-sm tabular-nums text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
+                            />
+                          ) : (
+                            <span className="text-sm tabular-nums text-(--text)">${item.price_rate.toLocaleString()}</span>
+                          )}
+                        </div>
+                      )}
+                      <div className="self-center text-right">
+                        {isEditing ? (
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={estimateEditForm.quantity}
+                            onChange={(e) =>
+                              setEstimateEditForm((prev) => ({ ...prev, quantity: e.target.value }))
+                            }
+                            className="w-full rounded-lg border border-(--border) bg-white px-2.5 py-2 text-right text-sm tabular-nums text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
+                          />
+                        ) : (
+                          <span className="text-sm tabular-nums text-(--text)">{item.quantity}</span>
+                        )}
+                      </div>
+                      {!hideClientLineItemPricing && (
+                        <div className="self-center text-right">
+                          <span className="text-sm font-semibold tabular-nums text-(--tl-navy)">
+                            {formatCurrency(isEditing ? previewTotal : item.total)}
+                          </span>
+                        </div>
+                      )}
+                      {userRole === "admin" && (
+                        <div className="flex shrink-0 items-center justify-end gap-1 self-center">
+                          {isEditing ? (
+                            <>
+                              <button
+                                onClick={() => handleSaveEstimateItem(item.id)}
+                                className="inline-flex h-8 items-center gap-1 rounded-lg bg-emerald-600 px-2.5 text-xs font-semibold text-white transition hover:bg-emerald-700"
+                                title="Save"
+                              >
+                                <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                </svg>
+                                Save
+                              </button>
+                              <button
+                                onClick={cancelEditEstimateItem}
+                                className="inline-flex h-8 items-center rounded-lg border border-(--border) px-2.5 text-xs font-semibold text-(--text) transition hover:bg-(--bg)"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => startEditEstimateItem(item)}
+                                className="inline-flex h-8 items-center rounded-lg border border-(--border) px-2.5 text-xs font-semibold text-(--text) transition hover:border-(--tl-royal) hover:text-(--tl-royal)"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteEstimateItem(item.id)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-(--text)/40 transition hover:bg-red-50 hover:text-red-500"
+                                aria-label="Delete line item"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   );
                 })}
-                {/* Subtotal */}
-                <div className="flex items-center justify-between p-3 rounded-xl bg-(--tl-sand)">
-                  <p className="text-sm font-semibold text-(--tl-navy)">Subtotal</p>
-                  <p className="text-lg font-bold text-(--tl-navy)">{formatCurrency(estimateTotal)}</p>
+                  </div>
                 </div>
 
-                {/* Markup, Tax, Fee - Admin only */}
-                {userRole === "admin" && (
-                  <>
-                    <div className="p-3 rounded-xl border border-(--tl-slate-300) space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-(--tl-navy)">Markup</p>
+                {/* Estimate summary — single block, no nested cards */}
+                <div className="mt-6 overflow-hidden rounded-xl border border-(--border)">
+                  {/* Adjustments */}
+                  {userRole === "admin" && (
+                    <div className="grid gap-4 border-b border-(--border) p-4 sm:grid-cols-3">
+                      <div>
+                        <label className="mb-1.5 block text-xs font-medium text-(--text)/60">Markup</label>
                         <div className="flex items-center gap-2">
                           <select
                             value={markupType}
                             onChange={(e) => setMarkupType(e.target.value as "percentage" | "fixed")}
-                            className="text-xs px-2 py-1 rounded-lg border border-(--border) bg-white text-(--tl-navy)"
+                            className="rounded-lg border border-(--border) bg-white px-2 py-2 text-sm text-(--tl-navy)"
                           >
                             <option value="percentage">%</option>
                             <option value="fixed">$</option>
@@ -1143,20 +1490,15 @@ export default function ProjectPage() {
                             placeholder="0"
                             step="0.01"
                             min="0"
-                            className="w-20 text-right text-sm px-2 py-1 rounded-lg border border-(--border) bg-white text-(--tl-navy)"
+                            className="min-w-0 flex-1 rounded-lg border border-(--border) bg-white px-3 py-2 text-right text-sm tabular-nums text-(--tl-navy)"
                           />
                         </div>
+                        {(parseFloat(markupValue) || 0) > 0 && (
+                          <p className="mt-1 text-xs text-(--tl-teal)">+{formatCurrency(getEstimateBreakdown().markup)}</p>
+                        )}
                       </div>
-                      {(parseFloat(markupValue) || 0) > 0 && (
-                        <p className="text-xs text-right text-(--tl-teal)">
-                          +{formatCurrency(getEstimateBreakdown().markup)}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="p-3 rounded-xl border border-(--tl-slate-300) space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-(--tl-navy)">Tax (%)</p>
+                      <div>
+                        <label className="mb-1.5 block text-xs font-medium text-(--text)/60">Tax (%)</label>
                         <input
                           type="number"
                           value={taxRate}
@@ -1164,47 +1506,164 @@ export default function ProjectPage() {
                           placeholder="0"
                           step="0.01"
                           min="0"
-                          className="w-20 text-right text-sm px-2 py-1 rounded-lg border border-(--border) bg-white text-(--tl-navy)"
+                          className="w-full rounded-lg border border-(--border) bg-white px-3 py-2 text-right text-sm tabular-nums text-(--tl-navy)"
                         />
+                        {(parseFloat(taxRate) || 0) > 0 && (
+                          <p className="mt-1 text-xs text-(--tl-teal)">+{formatCurrency(getEstimateBreakdown().tax)}</p>
+                        )}
                       </div>
-                      {(parseFloat(taxRate) || 0) > 0 && (
-                        <p className="text-xs text-right text-(--tl-teal)">
-                          +{formatCurrency(getEstimateBreakdown().tax)}
+                      <div>
+                        <label className="mb-1.5 flex cursor-pointer items-center justify-between text-xs font-medium text-(--text)/60">
+                          <span>Online fee (3.5%)</span>
+                          <input
+                            type="checkbox"
+                            checked={onlineServicingFee}
+                            onChange={(e) => setOnlineServicingFee(e.target.checked)}
+                            className="h-4 w-4"
+                          />
+                        </label>
+                        <p className="mt-2 text-sm text-(--text)/50">
+                          {onlineServicingFee
+                            ? `+${formatCurrency(getEstimateBreakdown().servicingFee)}`
+                            : "Disabled"}
                         </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Payment installments table */}
+                  {userRole === "admin" && (
+                    <div className="border-b border-(--border) p-4">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                          <h3 className="text-sm font-semibold text-(--tl-navy)">Payment Installments</h3>
+                          <p className="text-xs text-(--text)/50">
+                            {installmentSchedule.reduce((sum, row) => sum + row.percent, 0)}% allocated
+                            {installmentSchedule.reduce((sum, row) => sum + row.percent, 0) !== 100 && (
+                              <span className="ml-1 text-amber-600">— should total 100%</span>
+                            )}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={addInstallmentRow}
+                          className="shrink-0 text-xs font-semibold text-(--tl-royal) hover:underline"
+                        >
+                          + Add milestone
+                        </button>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <div className="min-w-[520px]">
+                          <div className="grid grid-cols-[minmax(6rem,1fr)_3.5rem_minmax(0,2fr)_6.5rem_2rem] gap-x-3 gap-y-1 px-1 pb-2 text-[11px] font-semibold uppercase tracking-wider text-(--text)/50">
+                            <div>Milestone</div>
+                            <div className="text-right">%</div>
+                            <div>Due when</div>
+                            <div className="text-right">Amount</div>
+                            <div />
+                          </div>
+                          <div className="space-y-1.5">
+                            {installmentSchedule.map((item, index) => {
+                              const amount = getEstimateBreakdown().total * (item.percent / 100);
+                              return (
+                                <div
+                                  key={index}
+                                  className="grid grid-cols-[minmax(6rem,1fr)_3.5rem_minmax(0,2fr)_6.5rem_2rem] items-center gap-x-3 rounded-lg bg-(--bg)/60 px-1 py-1"
+                                >
+                                  <input
+                                    value={item.label}
+                                    onChange={(e) => updateInstallment(index, "label", e.target.value)}
+                                    placeholder="Deposit"
+                                    className="min-w-0 rounded-md border border-(--border) bg-white px-2.5 py-1.5 text-sm"
+                                  />
+                                  <input
+                                    type="number"
+                                    value={item.percent}
+                                    onChange={(e) => updateInstallment(index, "percent", parseFloat(e.target.value) || 0)}
+                                    className="w-full rounded-md border border-(--border) bg-white px-2 py-1.5 text-right text-sm tabular-nums"
+                                  />
+                                  <input
+                                    value={item.due_description}
+                                    onChange={(e) => updateInstallment(index, "due_description", e.target.value)}
+                                    placeholder="Due on acceptance..."
+                                    className="min-w-0 rounded-md border border-(--border) bg-white px-2.5 py-1.5 text-sm"
+                                  />
+                                  <span className="text-right text-sm font-semibold tabular-nums text-(--tl-navy)">
+                                    {formatCurrency(amount)}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeInstallmentRow(index)}
+                                    className="flex h-7 w-7 items-center justify-center rounded-md text-(--text)/40 transition hover:bg-red-50 hover:text-red-500"
+                                    aria-label="Remove installment"
+                                    title="Remove"
+                                  >
+                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                      {savingSettings && (
+                        <p className="mt-2 text-xs text-(--text)/40">Saving...</p>
                       )}
                     </div>
+                  )}
 
-                    <div className="p-3 rounded-xl border border-(--tl-slate-300)">
-                      <label className="flex items-center justify-between cursor-pointer">
-                        <span className="text-sm font-medium text-(--tl-navy)">Online Servicing Fee (3.5%)</span>
-                        <input
-                          type="checkbox"
-                          checked={onlineServicingFee}
-                          onChange={(e) => setOnlineServicingFee(e.target.checked)}
-                          className="h-4 w-4"
-                        />
-                      </label>
-                      {onlineServicingFee && getEstimateBreakdown().servicingFee > 0 && (
-                        <p className="text-xs text-right text-(--tl-teal) mt-1">
-                          +{formatCurrency(getEstimateBreakdown().servicingFee)}
-                        </p>
-                      )}
+                  {/* Totals */}
+                  <div className="divide-y divide-(--border)">
+                    {!hideClientLineItemPricing && (
+                      <div className="flex items-center justify-between px-4 py-2.5 text-sm">
+                        <span className="text-(--text)/70">Subtotal</span>
+                        <span className="font-medium tabular-nums text-(--text)">{formatCurrency(estimateTotal)}</span>
+                      </div>
+                    )}
+                    {userRole === "admin" && !hideClientMarkup && getEstimateBreakdown().markup > 0 && (
+                      <div className="flex items-center justify-between px-4 py-2.5 text-sm">
+                        <span className="text-(--text)/70">Markup</span>
+                        <span className="tabular-nums text-(--tl-teal)">+{formatCurrency(getEstimateBreakdown().markup)}</span>
+                      </div>
+                    )}
+                    {userRole === "admin" && !hideClientMarkup && getEstimateBreakdown().tax > 0 && (
+                      <div className="flex items-center justify-between px-4 py-2.5 text-sm">
+                        <span className="text-(--text)/70">Tax</span>
+                        <span className="tabular-nums text-(--tl-teal)">+{formatCurrency(getEstimateBreakdown().tax)}</span>
+                      </div>
+                    )}
+                    {userRole === "admin" && !hideClientMarkup && getEstimateBreakdown().servicingFee > 0 && (
+                      <div className="flex items-center justify-between px-4 py-2.5 text-sm">
+                        <span className="text-(--text)/70">Online servicing fee</span>
+                        <span className="tabular-nums text-(--tl-teal)">+{formatCurrency(getEstimateBreakdown().servicingFee)}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between bg-(--tl-navy) px-4 py-3.5 text-white">
+                      <span className="font-semibold">Estimate Total</span>
+                      <span className="text-xl font-bold tabular-nums">{formatCurrency(getEstimateBreakdown().total)}</span>
                     </div>
-                  </>
-                )}
-
-                {/* Grand Total */}
-                <div className="flex items-center justify-between p-4 rounded-xl bg-gray-900 text-white">
-                  <p className="font-semibold">Estimate Total</p>
-                  <p className="text-2xl font-bold">
-                    {userRole === "admin"
-                      ? formatCurrency(getEstimateBreakdown().total)
-                      : formatCurrency(estimateTotal)}
-                  </p>
+                  </div>
                 </div>
               </div>
             )}
           </div>
+          )}
+
+          {userRole === "client" && estimateSent && (
+            <div className="tl-card p-6">
+              <h2 className="text-lg font-semibold text-(--text) mb-2">Project Estimate</h2>
+              <p className="text-sm text-(--text)/70 mb-4">
+                Your estimate has been prepared. View the full breakdown including payment schedule and terms.
+              </p>
+              <Link
+                href={`/dashboard/projects/${projectId}/estimate`}
+                className="inline-flex items-center gap-2 rounded-full bg-(--tl-navy) px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-(--tl-royal)"
+              >
+                View Estimate
+              </Link>
+            </div>
           )}
 
           {/* Photos */}
@@ -1938,7 +2397,7 @@ export default function ProjectPage() {
                       />
                     </div>
                   </div>
-                  <label className="flex items-center gap-3 cursor-pointer">
+                  <label className="flex cursor-pointer items-start gap-3">
                     <input
                       type="checkbox"
                       checked={editForm.hide_line_item_prices_for_client}
@@ -1948,13 +2407,16 @@ export default function ProjectPage() {
                           hide_line_item_prices_for_client: e.target.checked,
                         })
                       }
-                      className="w-5 h-5 rounded"
+                      className="mt-0.5 w-5 h-5 rounded"
                     />
-                    <span className="text-sm font-medium text-(--text)">
-                      Hide line-item prices for client users
+                    <span className="text-sm text-(--text)">
+                      <span className="font-medium">Hide line-item prices for clients</span>
+                      <span className="mt-0.5 block text-xs text-(--text)/60">
+                        Also in Estimate Builder — affects email and public links when sent.
+                      </span>
                     </span>
                   </label>
-                  <label className="flex items-center gap-3 cursor-pointer">
+                  <label className="flex cursor-pointer items-start gap-3">
                     <input
                       type="checkbox"
                       checked={editForm.hide_markup_for_client}
@@ -1964,10 +2426,13 @@ export default function ProjectPage() {
                           hide_markup_for_client: e.target.checked,
                         })
                       }
-                      className="w-5 h-5 rounded"
+                      className="mt-0.5 w-5 h-5 rounded"
                     />
-                    <span className="text-sm font-medium text-(--text)">
-                      Hide markup details for client users
+                    <span className="text-sm text-(--text)">
+                      <span className="font-medium">Hide markup details for clients</span>
+                      <span className="mt-0.5 block text-xs text-(--text)/60">
+                        Clients see grand total and payment schedule without markup/tax/fee lines.
+                      </span>
                     </span>
                   </label>
                   <label className="flex items-center gap-3 cursor-pointer">
@@ -2196,6 +2661,75 @@ export default function ProjectPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </ModalLayer>
+      )}
+
+      {showSendEstimate && (
+        <ModalLayer align="sheet" className="bg-black/50" onBackdropClick={() => setShowSendEstimate(false)}>
+          <div
+            className="tl-card w-full max-w-md overflow-hidden rounded-none md:rounded-3xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 border-b border-(--border)">
+              <h3 className="text-lg font-semibold text-(--text)">Send Estimate to Client</h3>
+              <p className="text-sm text-(--text)/70 mt-1">
+                Sends a full estimate breakdown by email. Recipients don&apos;t need a CRM account — pending invites work too.
+              </p>
+            </div>
+            <div className="p-6 space-y-4">
+              {sendRecipients.length === 0 ? (
+                <p className="text-sm text-(--text)/70">
+                  No clients or pending invitations. Invite a customer first, then send the estimate to their email.
+                </p>
+              ) : (
+                <div>
+                  <label className="text-sm font-medium text-(--text)">Recipient</label>
+                  <select
+                    value={selectedRecipientEmail}
+                    onChange={(e) => setSelectedRecipientEmail(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-(--border) px-3 py-2 text-sm"
+                  >
+                    <option value="">Select recipient...</option>
+                    {sendRecipients.map((recipient) => (
+                      <option key={recipient.email} value={recipient.email}>
+                        {recipient.name !== recipient.email ? `${recipient.name} (${recipient.email})` : recipient.email}
+                        {recipient.status === "invited" ? " — invite pending" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="rounded-xl bg-(--bg) p-4">
+                <p className="text-xs uppercase tracking-wider text-(--text)/60">Total to send</p>
+                <p className="text-2xl font-bold text-(--tl-navy)">{formatCurrency(getEstimateBreakdown().total)}</p>
+                {(project.hide_line_item_prices_for_client || project.hide_markup_for_client) && (
+                  <p className="mt-2 text-xs text-(--text)/60">
+                    Client will see{" "}
+                    {project.hide_line_item_prices_for_client && project.hide_markup_for_client
+                      ? "scope, total, and payment schedule only."
+                      : project.hide_line_item_prices_for_client
+                        ? "line items without per-line pricing."
+                        : "line-item prices without markup/tax/fee breakdown."}
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowSendEstimate(false)}
+                  className="flex-1 rounded-full border border-(--border) px-4 py-2.5 text-sm font-medium text-(--text)"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSendEstimate}
+                  disabled={sendingEstimate || !selectedRecipientEmail}
+                  className="flex-1 rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {sendingEstimate ? "Sending..." : "Send Estimate"}
+                </button>
+              </div>
+            </div>
           </div>
         </ModalLayer>
       )}

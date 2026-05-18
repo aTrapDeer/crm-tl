@@ -11,6 +11,7 @@ import {
   getMonthKey,
   getWeekEndSaturday,
 } from "@/lib/us-central-time";
+import { PREDEFINED_CATEGORIES } from "@/lib/estimate-categories";
 
 interface Project {
   id: string;
@@ -118,15 +119,6 @@ export default function AdminDashboard() {
   const [weeklySummary, setWeeklySummary] = useState<BonanHighlightSummary | null>(null);
   const [monthlySummary, setMonthlySummary] = useState<BonanHighlightSummary | null>(null);
   const [bonanHighlightsError, setBonanHighlightsError] = useState("");
-
-  const PREDEFINED_CATEGORIES = [
-    "Demo",
-    "Carpentry",
-    "Electrical",
-    "Plumbing",
-    "Drywall/Mud/Taping",
-    "Coatings",
-  ];
 
   const [newProject, setNewProject] = useState({
     name: "",

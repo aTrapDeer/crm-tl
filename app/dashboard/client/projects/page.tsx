@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import ProjectDetailsModal from "@/app/components/ProjectDetailsModal";
 import ClientDocumentPortal from "@/app/components/ClientDocumentPortal";
 
@@ -19,6 +20,7 @@ interface Project {
   on_hold_reason: string | null;
   expected_resume_date: string | null;
   created_at: string;
+  estimate_sent?: boolean;
 }
 
 interface ProjectUpdate {
@@ -314,14 +316,17 @@ export default function ClientDashboard() {
                         </p>
                       </div>
                     )}
-                    {selectedProject.budget_amount && (
-                      <div className="p-4 rounded-xl bg-(--bg)">
+                    {selectedProject.estimate_sent && (
+                      <div className="p-4 rounded-xl bg-(--bg) sm:col-span-2">
                         <p className="text-xs uppercase tracking-[0.2em] text-(--text)">
-                          Budget
+                          Project Estimate
                         </p>
-                        <p className="text-sm font-medium text-(--text) mt-1">
-                          ${selectedProject.budget_amount.toLocaleString()}
-                        </p>
+                        <Link
+                          href={`/dashboard/projects/${selectedProject.id}/estimate`}
+                          className="mt-2 inline-flex items-center gap-2 rounded-full bg-(--tl-navy) px-4 py-2 text-sm font-semibold text-white transition hover:bg-(--tl-royal)"
+                        >
+                          View Estimate
+                        </Link>
                       </div>
                     )}
                     <div className="p-4 rounded-xl bg-(--bg)">

@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { ModalLayer } from "@/app/components/ModalLayer";
+import { PREDEFINED_CATEGORIES } from "@/lib/estimate-categories";
 
 interface Project {
   id: string;
@@ -20,6 +21,7 @@ interface Project {
   on_hold_reason: string | null;
   expected_resume_date: string | null;
   created_at: string;
+  estimate_sent?: boolean;
 }
 
 interface Invitation {
@@ -131,6 +133,7 @@ export default function ProjectDetailsModal({
   // Estimate builder state
   const [estimateItems, setEstimateItems] = useState<EstimateLineItem[]>([]);
   const [estimateTotal, setEstimateTotal] = useState(0);
+  const [estimateSent, setEstimateSent] = useState(Boolean(project.estimate_sent));
   const [showAddEstimateItem, setShowAddEstimateItem] = useState(false);
   const [newEstimateItem, setNewEstimateItem] = useState({
     category: "Demo",
@@ -143,16 +146,6 @@ export default function ProjectDetailsModal({
   // AI task generation state
   const [generatingTasks, setGeneratingTasks] = useState(false);
   const [generateError, setGenerateError] = useState("");
-
-  const PREDEFINED_CATEGORIES = [
-    "Demo",
-    "Carpentry",
-    "Electrical",
-    "Plumbing",
-    "Drywall/Mud/Taping",
-    "Coatings",
-    "Custom",
-  ];
 
   // Change request state (for clients)
   const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
@@ -178,7 +171,8 @@ export default function ProjectDetailsModal({
   const canEditBudget = userRole === "admin";
   const canChangeStatus = userRole === "admin";
   const canInviteClients = userRole === "admin";
-  const canViewEstimate = userRole !== "employee";
+  const canViewEstimateBuilder = userRole === "admin";
+  const canViewEstimateLink = userRole === "client" && estimateSent;
   const changeRequestOptions = [
     { id: "name", label: "Project name" },
     { id: "description", label: "Description" },
@@ -195,9 +189,9 @@ export default function ProjectDetailsModal({
         fetch(`/api/projects/${project.id}/tasks`),
         fetch(`/api/projects/${project.id}/team`),
         fetch(`/api/projects/${project.id}/images`),
-        canViewEstimate
+        canViewEstimateBuilder || (userRole === "client" && project.estimate_sent)
           ? fetch(`/api/projects/${project.id}/estimate`)
-          : Promise.resolve({ json: () => Promise.resolve({ items: [], total: 0 }) }),
+          : Promise.resolve({ ok: false, json: () => Promise.resolve({ items: [], total: 0, estimate_sent: false }) }),
       ]);
 
       const tasksData = await tasksRes.json();
@@ -211,12 +205,13 @@ export default function ProjectDetailsModal({
       setImages(imagesData.images || []);
       setEstimateItems(estimateData.items || []);
       setEstimateTotal(estimateData.total || 0);
+      setEstimateSent(Boolean(estimateData.estimate_sent || project.estimate_sent));
     } catch (error) {
       console.error("Failed to fetch project details:", error);
     } finally {
       setLoading(false);
     }
-  }, [canViewEstimate, project.id]);
+  }, [canViewEstimateBuilder, userRole, project.id, project.estimate_sent]);
 
   useEffect(() => {
     fetchData();
@@ -909,8 +904,8 @@ export default function ProjectDetailsModal({
                 </p>
               </div>
 
-              {/* Estimate Builder */}
-              {canViewEstimate && (
+              {/* Estimate Builder (admin) or View link (client) */}
+              {canViewEstimateBuilder && (
               <div className="p-3 md:p-4 rounded-xl border border-(--border)">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold text-(--text)">
@@ -920,6 +915,12 @@ export default function ProjectDetailsModal({
                     <p className="text-lg font-bold text-(--text)">
                       {formatCurrency(estimateTotal)}
                     </p>
+                    <Link
+                      href={`/dashboard/projects/${project.id}`}
+                      className="text-xs text-(--tl-royal) hover:underline"
+                    >
+                      Full editor →
+                    </Link>
                     {canEditBudget && (
                       <button
                         onClick={() => setShowAddEstimateItem(true)}
@@ -1006,6 +1007,21 @@ export default function ProjectDetailsModal({
                   </div>
                 )}
               </div>
+              )}
+
+              {canViewEstimateLink && (
+                <div className="p-3 md:p-4 rounded-xl border border-(--border)">
+                  <h3 className="text-sm font-semibold text-(--text) mb-2">Project Estimate</h3>
+                  <p className="text-xs text-(--text)/70 mb-3">
+                    View your estimate including payment schedule and terms.
+                  </p>
+                  <Link
+                    href={`/dashboard/projects/${project.id}/estimate`}
+                    className="tl-btn inline-block px-4 py-2 text-xs"
+                  >
+                    View Estimate
+                  </Link>
+                </div>
               )}
 
               {/* Project Info */}

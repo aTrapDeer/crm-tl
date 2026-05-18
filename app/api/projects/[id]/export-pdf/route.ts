@@ -9,7 +9,15 @@ import {
   getProjectById,
   getProjectSignatures,
   getProjectsByUserId,
+  getProjectEstimateSettings,
+  getActiveEstimateDelivery,
 } from "@/lib/projects";
+import { DISCLOSURE_SECTIONS } from "@/lib/estimate-terms";
+import {
+  calculateEstimateBreakdown,
+  calculateInstallmentAmounts,
+  formatCurrency,
+} from "@/lib/estimate";
 
 type FontType = Awaited<ReturnType<PDFDocument["embedFont"]>>;
 
@@ -22,116 +30,6 @@ const COLOR_TEXT = rgb(0.12, 0.12, 0.12);
 const COLOR_MUTED = rgb(0.43, 0.45, 0.5);
 const COLOR_LINE = rgb(0.83, 0.85, 0.89);
 const COLOR_PANEL = rgb(0.96, 0.97, 0.99);
-
-const DISCLOSURE_SECTIONS: Array<{ title: string; lines: string[] }> = [
-  {
-    title: "COST ESTIMATE INCLUDES",
-    lines: [
-      "Cost for time, materials, and equipment.",
-      "Cost to prepare worksite, including protection of existing structures, finishes, materials, and components.",
-      "Cost for job cleanup and debris removal at job completion.",
-      "Labor setup time and mobilization time.",
-    ],
-  },
-  {
-    title: "PAYMENT TERMS",
-    lines: [
-      "50% due on acceptance of contract.",
-      "25% due after rough-in.",
-      "20% due after drywall is paint-ready.",
-      "5% due after final.",
-      "There may be down days due to trade scheduling and inspections outside contractor control.",
-    ],
-  },
-  {
-    title: "TIME AND MATERIAL",
-    lines: [
-      "Time and material items are billed at $150.00 per man, per hour, with a one-hour minimum, and collected at completion of those items.",
-    ],
-  },
-  {
-    title: "GENERAL CONDITIONS",
-    lines: [
-      "All work to be performed in a substantial, workmanlike manner in accordance with submitted drawings and specifications.",
-      "Unless otherwise specified in contract, 50% of total amount is due at acceptance, 25% due at rough-in completion, and remaining balance, including additional work, is due at completion.",
-      "Any alteration or deviation from specifications involving extra costs will be executed upon written or oral order and becomes an extra charge above this estimate.",
-      "The above prices, specifications, and conditions are accepted upon authorization to proceed.",
-    ],
-  },
-  {
-    title: "DEFAULT AND COLLECTION",
-    lines: [
-      "Upon customer default in payment or other obligation, contractor is entitled to all sums due under contract.",
-      "Contractor may recover interest at 18% per annum on unpaid sums until paid in full.",
-      "Contractor is entitled to reasonable costs of enforcement and collection, including attorney fees, with or without filing suit.",
-    ],
-  },
-  {
-    title: "WARRANTY",
-    lines: [
-      "Contractor warrants that labor and materials furnished, and work performed, are compliant with contract documents and authorized modifications.",
-      "Work is warranted against defects due to workmanship for one (1) year from date of completion/final payment.",
-    ],
-  },
-  {
-    title: "WARRANTY TERMS AND CONDITIONS",
-    lines: [
-      "Contractor has been paid in full for workmanship according to contract documents.",
-      "Warranty does not cover damage to person or property from use of products, materials, or methods in connection with the work.",
-      "Warranty is void if modifications or changes are made without prior written contractor consent.",
-      "Warranty is valid only if all project close-out documents are received by contractor.",
-    ],
-  },
-  {
-    title: "EXCLUSIONS",
-    lines: [
-      "Damage caused by negligence, intentional misuse, or failure to properly maintain the work.",
-      "Damage caused by conditions beyond contractor control, including acts of God, war, civil unrest, or governmental regulation.",
-      "Changes or modifications performed by parties other than authorized contractor representatives.",
-      "Damage due to cracks, crazing, mold, mildew, or other fungi.",
-      "Site preparation failures, including inadequate backfill, compaction, or drainage.",
-      "Costs associated with removal and/or reinstallation of work.",
-    ],
-  },
-  {
-    title: "CLAIMS",
-    lines: [
-      "Claims under warranty must be submitted in writing within 30 days of defect becoming apparent.",
-      "Claims must include proof of purchase and photographic evidence.",
-      "Contractor must be given reasonable opportunity to investigate and remedy defects.",
-      "Failure to provide timely notice may void warranty.",
-    ],
-  },
-  {
-    title: "RESOLUTION",
-    lines: [
-      "If a problem arises, contractor has a reasonable period, not to exceed 90 days, to remedy the problem.",
-      "Replacement products, if required, will be new and of similar type, quality, and function unless otherwise mutually agreed.",
-    ],
-  },
-  {
-    title: "NON-TRANSFERABLE",
-    lines: [
-      "Warranty is non-transferable and void if property ownership changes before warranty expiration.",
-    ],
-  },
-  {
-    title: "AGREED AND ACCEPTED",
-    lines: [
-      "By signing this agreement, client and contractor agree to these terms and warranty conditions.",
-      "By signing this document, customer agrees to the services and conditions outlined in this document.",
-    ],
-  },
-];
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
-}
 
 function formatInvoiceDate(value: Date): string {
   return value.toLocaleDateString("en-US", {
@@ -263,16 +161,32 @@ export async function GET(
       }
     }
 
+    const delivery = await getActiveEstimateDelivery(id);
+    if (user.role === "client" && !delivery) {
+      return Response.json({ error: "Estimate has not been sent yet" }, { status: 403 });
+    }
+
     const project = await getProjectById(id);
     if (!project) {
       return Response.json({ error: "Project not found" }, { status: 404 });
     }
 
-    const [lineItems, estimateTotal, signatures] = await Promise.all([
+    const [liveLineItems, liveTotal, signatures, settings, activeDelivery] = await Promise.all([
       getEstimateLineItems(id),
       getEstimateTotal(id),
       getProjectSignatures(id),
+      getProjectEstimateSettings(id),
+      user.role === "client" ? Promise.resolve(delivery) : getActiveEstimateDelivery(id),
     ]);
+
+    const useSnapshot = user.role === "client" && activeDelivery;
+    const resolvedDelivery = activeDelivery || delivery;
+    const lineItems = useSnapshot ? resolvedDelivery!.snapshot_line_items : liveLineItems;
+    const estimateSettings = useSnapshot ? resolvedDelivery!.snapshot_settings : settings;
+    const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
+    const breakdown = calculateEstimateBreakdown(subtotal, estimateSettings);
+    const grandTotal = useSnapshot ? resolvedDelivery!.snapshot_total : breakdown.total;
+    const installments = calculateInstallmentAmounts(grandTotal, estimateSettings.installment_schedule);
 
     const hideClientLineItemPricing =
       user.role === "client" && project.hide_line_item_prices_for_client;
@@ -525,6 +439,54 @@ export async function GET(
     }
 
     y = boxY - 20;
+
+    // Total + Payment Schedule (above line items)
+    page.drawRectangle({
+      x: MARGIN,
+      y: y - 72,
+      width: PAGE_WIDTH - MARGIN * 2,
+      height: 80,
+      color: COLOR_PANEL,
+      borderColor: COLOR_LINE,
+      borderWidth: 1,
+    });
+    page.drawText("TOTAL ESTIMATE", {
+      x: MARGIN + 12,
+      y: y - 22,
+      size: 10,
+      font: fontBold,
+      color: COLOR_NAVY,
+    });
+    page.drawText(formatCurrency(grandTotal), {
+      x: MARGIN + 12,
+      y: y - 42,
+      size: 22,
+      font: fontBold,
+      color: COLOR_NAVY,
+    });
+    page.drawText("PAYMENT SCHEDULE", {
+      x: MARGIN + 220,
+      y: y - 22,
+      size: 10,
+      font: fontBold,
+      color: COLOR_NAVY,
+    });
+    let installmentY = y - 36;
+    for (const inst of installments.slice(0, 4)) {
+      page.drawText(
+        `${inst.label}: ${formatCurrency(inst.amount)} (${inst.percent}%) — ${inst.due_description}`,
+        {
+          x: MARGIN + 220,
+          y: installmentY,
+          size: 8,
+          font: fontRegular,
+          color: COLOR_TEXT,
+        }
+      );
+      installmentY -= 11;
+    }
+
+    y -= 96;
     page.drawText("Description", {
       x: MARGIN,
       y,
@@ -718,7 +680,7 @@ export async function GET(
       font: fontBold,
       color: COLOR_NAVY,
     });
-    page.drawText(formatCurrency(estimateTotal), {
+    page.drawText(formatCurrency(subtotal), {
       x: totalsX + totalsW - 95,
       y: totalsTop - 20,
       size: 10,
@@ -732,7 +694,7 @@ export async function GET(
       font: fontBold,
       color: COLOR_NAVY,
     });
-    page.drawText(formatCurrency(estimateTotal), {
+    page.drawText(formatCurrency(grandTotal), {
       x: totalsX + totalsW - 95,
       y: totalsTop - 44,
       size: 12,
