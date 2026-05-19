@@ -975,10 +975,10 @@ export default function ProjectPage() {
     : "md:grid md:grid-cols-[5.5rem_minmax(0,1fr)_5.5rem_2.75rem_6.5rem_5.75rem] md:gap-x-4 md:items-center";
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
+    <div className="mx-auto w-full min-w-0 max-w-6xl space-y-6 md:space-y-8">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <Link
             href={`/dashboard/${userRole}`}
             className="text-sm text-(--text) hover:underline mb-2 inline-flex items-center gap-1"
@@ -998,8 +998,8 @@ export default function ProjectPage() {
             </svg>
             Back to Dashboard
           </Link>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold text-(--text)">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <h1 className="text-2xl font-bold text-(--text) sm:text-3xl break-words">
               {project.name}
             </h1>
             <span
@@ -1016,12 +1016,12 @@ export default function ProjectPage() {
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           {canViewEstimate && (
             <button
               onClick={() => window.open(`/api/projects/${projectId}/export-pdf`, "_blank")}
               disabled={exportingPdf}
-              className="rounded-full border border-(--border)/30 px-4 py-2 text-sm font-medium text-(--text) hover:bg-(--bg) disabled:opacity-60"
+              className="rounded-full border border-(--border)/30 px-3 py-2 text-sm font-medium text-(--text) hover:bg-(--bg) disabled:opacity-60 sm:px-4"
             >
               {exportingPdf ? "Exporting..." : "Export PDF"}
             </button>
@@ -1062,7 +1062,7 @@ export default function ProjectPage() {
         {/* Left Column */}
         <div className="lg:col-span-2 space-y-6">
           {/* Project Details */}
-          <div className="tl-card p-6">
+          <div className="tl-card p-4 sm:p-6">
             <h2 className="text-lg font-semibold text-(--text) mb-4">
               Project Details
             </h2>
@@ -1092,20 +1092,24 @@ export default function ProjectPage() {
 
           {/* Estimate Builder */}
           {canManageEstimate && (
-          <div className="tl-card p-6">
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="tl-card min-w-0 overflow-hidden p-4 sm:p-6">
+            <div className="mb-4 flex flex-col gap-4">
               <h2 className="text-lg font-semibold text-(--text)">
                 Estimate Builder
               </h2>
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <div className="rounded-full border border-(--border) bg-(--bg) px-4 py-1.5">
-                  <p className="text-lg font-bold text-(--text) sm:text-xl">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                <div className="flex items-center justify-between rounded-xl border border-(--border) bg-(--bg) px-4 py-3 sm:justify-center sm:rounded-full sm:py-1.5">
+                  <span className="text-xs font-medium uppercase tracking-wider text-(--text)/50 sm:hidden">
+                    Estimate total
+                  </span>
+                  <p className="text-xl font-bold text-(--text) sm:text-lg md:text-xl">
                     {formatCurrency(getEstimateBreakdown().total)}
                   </p>
                 </div>
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-1 sm:justify-end sm:gap-3">
                 <button
                   onClick={() => setShowAddEstimateItem(true)}
-                  className="inline-flex items-center gap-2 rounded-full bg-(--tl-navy) px-4 py-2 text-sm font-semibold text-white transition hover:bg-(--tl-royal)"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-(--tl-navy) px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-(--tl-royal)"
                 >
                   <span className="text-base leading-none">+</span>
                   Add Item
@@ -1113,11 +1117,12 @@ export default function ProjectPage() {
                 {estimateItems.length > 0 && (
                   <button
                     onClick={openSendEstimateModal}
-                    className="inline-flex items-center gap-2 rounded-full border border-emerald-600 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-emerald-600 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
                   >
                     Send to Client
                   </button>
                 )}
+                </div>
               </div>
             </div>
 
@@ -1126,11 +1131,11 @@ export default function ProjectPage() {
                 <p className="text-xs font-semibold uppercase tracking-wider text-(--text)/50 mb-2">
                   Delivery Status
                 </p>
-                <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2 text-sm text-(--text)">
-                  <p><span className="text-(--text)/50">Sent</span> {formatDateTime(estimateDelivery.sent_at)} · {estimateDelivery.sent_to_email}</p>
-                  <p><span className="text-(--text)/50">Email opened</span> {estimateDelivery.email_opened_at ? formatDateTime(estimateDelivery.email_opened_at) : "Not yet"}</p>
-                  <p><span className="text-(--text)/50">Viewed in CRM</span> {estimateDelivery.first_viewed_at ? formatDateTime(estimateDelivery.first_viewed_at) : "Not yet"}</p>
-                  <p><span className="text-(--text)/50">Sent total</span> {formatCurrency(estimateDelivery.snapshot_total)}</p>
+                <div className="grid gap-3 text-sm text-(--text) sm:grid-cols-2">
+                  <p className="min-w-0 break-words"><span className="text-(--text)/50">Sent </span>{formatDateTime(estimateDelivery.sent_at)} · {estimateDelivery.sent_to_email}</p>
+                  <p className="min-w-0"><span className="text-(--text)/50">Email opened </span>{estimateDelivery.email_opened_at ? formatDateTime(estimateDelivery.email_opened_at) : "Not yet"}</p>
+                  <p className="min-w-0"><span className="text-(--text)/50">Viewed in CRM </span>{estimateDelivery.first_viewed_at ? formatDateTime(estimateDelivery.first_viewed_at) : "Not yet"}</p>
+                  <p className="min-w-0"><span className="text-(--text)/50">Sent total </span>{formatCurrency(estimateDelivery.snapshot_total)}</p>
                 </div>
               </div>
             )}
@@ -1250,23 +1255,23 @@ export default function ProjectPage() {
                     key={item.id}
                     className={isEditing ? "bg-(--tl-royal)/5" : ""}
                   >
-                    {/* Mobile: stacked layout */}
-                    <div className="space-y-3 px-4 py-3 md:hidden">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="inline-flex rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-(--text)">
+                    {/* Mobile: card layout */}
+                    <div className="space-y-3 px-3 py-4 md:hidden">
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="inline-flex max-w-[65%] rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-(--text)">
                           {item.category === "custom" ? item.custom_category_name || "Custom" : item.category}
                         </span>
                         {!isEditing && userRole === "admin" && (
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex shrink-0 items-center gap-1.5">
                             <button
                               onClick={() => startEditEstimateItem(item)}
-                              className="rounded-full border border-(--border) px-3 py-1.5 text-xs font-semibold text-(--text)"
+                              className="min-h-9 rounded-full border border-(--border) px-3 py-2 text-xs font-semibold text-(--text)"
                             >
                               Edit
                             </button>
                             <button
                               onClick={() => handleDeleteEstimateItem(item.id)}
-                              className="rounded-full border border-red-200 bg-red-50 p-2 text-red-500"
+                              className="flex min-h-9 min-w-9 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-500"
                               aria-label="Delete line item"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1283,11 +1288,11 @@ export default function ProjectPage() {
                             onChange={(e) =>
                               setEstimateEditForm((prev) => ({ ...prev, description: e.target.value }))
                             }
-                            rows={2}
+                            rows={3}
                             placeholder="Description"
-                            className="w-full rounded-lg border border-(--border) bg-white px-3 py-2 text-sm text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
+                            className="w-full rounded-lg border border-(--border) bg-white px-3 py-2.5 text-base text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
                           />
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className={`grid gap-3 ${hideClientLineItemPricing ? "grid-cols-1" : "grid-cols-2"}`}>
                             {!hideClientLineItemPricing && (
                               <div>
                                 <label className="mb-1 block text-xs font-medium text-(--text)/60">Rate</label>
@@ -1295,11 +1300,12 @@ export default function ProjectPage() {
                                   type="number"
                                   step="0.01"
                                   min="0"
+                                  inputMode="decimal"
                                   value={estimateEditForm.price_rate}
                                   onChange={(e) =>
                                     setEstimateEditForm((prev) => ({ ...prev, price_rate: e.target.value }))
                                   }
-                                  className="w-full rounded-lg border border-(--border) bg-white px-3 py-2 text-sm text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
+                                  className="w-full rounded-lg border border-(--border) bg-white px-3 py-2.5 text-base text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
                                 />
                               </div>
                             )}
@@ -1309,29 +1315,31 @@ export default function ProjectPage() {
                                 type="number"
                                 step="0.01"
                                 min="0"
+                                inputMode="decimal"
                                 value={estimateEditForm.quantity}
                                 onChange={(e) =>
                                   setEstimateEditForm((prev) => ({ ...prev, quantity: e.target.value }))
                                 }
-                                className="w-full rounded-lg border border-(--border) bg-white px-3 py-2 text-sm text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
+                                className="w-full rounded-lg border border-(--border) bg-white px-3 py-2.5 text-base text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
                               />
                             </div>
                           </div>
                           {!hideClientLineItemPricing && (
-                            <p className="text-sm font-semibold text-(--tl-navy)">
-                              Total: {formatCurrency(previewTotal)}
-                            </p>
+                            <div className="flex items-center justify-between rounded-lg bg-(--bg) px-3 py-2.5">
+                              <span className="text-sm text-(--text)/60">Line total</span>
+                              <span className="text-base font-semibold text-(--tl-navy)">{formatCurrency(previewTotal)}</span>
+                            </div>
                           )}
-                          <div className="flex gap-2">
+                          <div className="grid grid-cols-2 gap-2">
                             <button
                               onClick={() => handleSaveEstimateItem(item.id)}
-                              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"
+                              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white"
                             >
                               Save
                             </button>
                             <button
                               onClick={cancelEditEstimateItem}
-                              className="inline-flex flex-1 items-center justify-center rounded-full border border-(--border) px-4 py-2 text-sm font-semibold text-(--text)"
+                              className="inline-flex min-h-11 items-center justify-center rounded-full border border-(--border) px-4 py-2.5 text-sm font-semibold text-(--text)"
                             >
                               Cancel
                             </button>
@@ -1339,14 +1347,23 @@ export default function ProjectPage() {
                         </>
                       ) : (
                         <>
-                          <p className="text-sm text-(--text)">{item.description || "No description"}</p>
-                          <div className="flex flex-wrap gap-4 text-sm">
+                          <p className="text-sm leading-relaxed text-(--text) break-words">{item.description || "No description"}</p>
+                          <div className={`grid gap-2 rounded-lg bg-(--bg)/80 p-3 text-sm ${hideClientLineItemPricing ? "grid-cols-1" : "grid-cols-3"}`}>
                             {!hideClientLineItemPricing && (
-                              <span><span className="text-(--text)/60">Rate:</span> ${item.price_rate.toLocaleString()}</span>
+                              <div>
+                                <p className="text-[11px] uppercase tracking-wide text-(--text)/50">Rate</p>
+                                <p className="mt-0.5 font-medium tabular-nums text-(--text)">${item.price_rate.toLocaleString()}</p>
+                              </div>
                             )}
-                            <span><span className="text-(--text)/60">Qty:</span> {item.quantity}</span>
+                            <div>
+                              <p className="text-[11px] uppercase tracking-wide text-(--text)/50">Qty</p>
+                              <p className="mt-0.5 font-medium tabular-nums text-(--text)">{item.quantity}</p>
+                            </div>
                             {!hideClientLineItemPricing && (
-                              <span className="font-semibold text-(--tl-navy)">{formatCurrency(item.total)}</span>
+                              <div>
+                                <p className="text-[11px] uppercase tracking-wide text-(--text)/50">Total</p>
+                                <p className="mt-0.5 font-semibold tabular-nums text-(--tl-navy)">{formatCurrency(item.total)}</p>
+                              </div>
                             )}
                           </div>
                         </>
@@ -1468,10 +1485,10 @@ export default function ProjectPage() {
                 </div>
 
                 {/* Estimate summary — single block, no nested cards */}
-                <div className="mt-6 overflow-hidden rounded-xl border border-(--border)">
+                <div className="mt-6 min-w-0 rounded-xl border border-(--border)">
                   {/* Adjustments */}
                   {userRole === "admin" && (
-                    <div className="grid gap-4 border-b border-(--border) p-4 sm:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-4 border-b border-(--border) p-4 sm:grid-cols-3">
                       <div>
                         <label className="mb-1.5 block text-xs font-medium text-(--text)/60">Markup</label>
                         <div className="flex items-center gap-2">
@@ -1531,11 +1548,11 @@ export default function ProjectPage() {
                     </div>
                   )}
 
-                  {/* Payment installments table */}
+                  {/* Payment installments */}
                   {userRole === "admin" && (
                     <div className="border-b border-(--border) p-4">
-                      <div className="mb-3 flex items-center justify-between gap-3">
-                        <div>
+                      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
                           <h3 className="text-sm font-semibold text-(--tl-navy)">Payment Installments</h3>
                           <p className="text-xs text-(--text)/50">
                             {installmentSchedule.reduce((sum, row) => sum + row.percent, 0)}% allocated
@@ -1547,65 +1564,129 @@ export default function ProjectPage() {
                         <button
                           type="button"
                           onClick={addInstallmentRow}
-                          className="shrink-0 text-xs font-semibold text-(--tl-royal) hover:underline"
+                          className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-full border border-(--border) px-4 py-2 text-xs font-semibold text-(--tl-royal) transition hover:bg-(--bg) sm:border-0 sm:px-0 sm:py-0 sm:hover:underline"
                         >
                           + Add milestone
                         </button>
                       </div>
 
-                      <div className="overflow-x-auto">
-                        <div className="min-w-[520px]">
-                          <div className="grid grid-cols-[minmax(6rem,1fr)_3.5rem_minmax(0,2fr)_6.5rem_2rem] gap-x-3 gap-y-1 px-1 pb-2 text-[11px] font-semibold uppercase tracking-wider text-(--text)/50">
-                            <div>Milestone</div>
-                            <div className="text-right">%</div>
-                            <div>Due when</div>
-                            <div className="text-right">Amount</div>
-                            <div />
-                          </div>
-                          <div className="space-y-1.5">
-                            {installmentSchedule.map((item, index) => {
-                              const amount = getEstimateBreakdown().total * (item.percent / 100);
-                              return (
-                                <div
-                                  key={index}
-                                  className="grid grid-cols-[minmax(6rem,1fr)_3.5rem_minmax(0,2fr)_6.5rem_2rem] items-center gap-x-3 rounded-lg bg-(--bg)/60 px-1 py-1"
+                      {/* Mobile: stacked milestone cards */}
+                      <div className="space-y-3 md:hidden">
+                        {installmentSchedule.map((item, index) => {
+                          const amount = getEstimateBreakdown().total * (item.percent / 100);
+                          return (
+                            <div
+                              key={index}
+                              className="space-y-3 rounded-xl border border-(--border) bg-(--bg)/50 p-3"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-(--text)/50">
+                                  Milestone {index + 1}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => removeInstallmentRow(index)}
+                                  className="flex min-h-9 min-w-9 items-center justify-center rounded-full text-(--text)/40 transition hover:bg-red-50 hover:text-red-500"
+                                  aria-label="Remove installment"
                                 >
-                                  <input
-                                    value={item.label}
-                                    onChange={(e) => updateInstallment(index, "label", e.target.value)}
-                                    placeholder="Deposit"
-                                    className="min-w-0 rounded-md border border-(--border) bg-white px-2.5 py-1.5 text-sm"
-                                  />
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
+                              <div>
+                                <label className="mb-1 block text-xs font-medium text-(--text)/60">Label</label>
+                                <input
+                                  value={item.label}
+                                  onChange={(e) => updateInstallment(index, "label", e.target.value)}
+                                  placeholder="Deposit"
+                                  className="w-full rounded-lg border border-(--border) bg-white px-3 py-2.5 text-base"
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="mb-1 block text-xs font-medium text-(--text)/60">Percent</label>
                                   <input
                                     type="number"
+                                    inputMode="decimal"
                                     value={item.percent}
                                     onChange={(e) => updateInstallment(index, "percent", parseFloat(e.target.value) || 0)}
-                                    className="w-full rounded-md border border-(--border) bg-white px-2 py-1.5 text-right text-sm tabular-nums"
+                                    className="w-full rounded-lg border border-(--border) bg-white px-3 py-2.5 text-right text-base tabular-nums"
                                   />
-                                  <input
-                                    value={item.due_description}
-                                    onChange={(e) => updateInstallment(index, "due_description", e.target.value)}
-                                    placeholder="Due on acceptance..."
-                                    className="min-w-0 rounded-md border border-(--border) bg-white px-2.5 py-1.5 text-sm"
-                                  />
-                                  <span className="text-right text-sm font-semibold tabular-nums text-(--tl-navy)">
-                                    {formatCurrency(amount)}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => removeInstallmentRow(index)}
-                                    className="flex h-7 w-7 items-center justify-center rounded-md text-(--text)/40 transition hover:bg-red-50 hover:text-red-500"
-                                    aria-label="Remove installment"
-                                    title="Remove"
-                                  >
-                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                  </button>
                                 </div>
-                              );
-                            })}
-                          </div>
+                                <div>
+                                  <label className="mb-1 block text-xs font-medium text-(--text)/60">Amount</label>
+                                  <div className="flex min-h-[46px] items-center justify-end rounded-lg bg-white px-3 py-2.5 text-base font-semibold tabular-nums text-(--tl-navy) ring-1 ring-(--border)">
+                                    {formatCurrency(amount)}
+                                  </div>
+                                </div>
+                              </div>
+                              <div>
+                                <label className="mb-1 block text-xs font-medium text-(--text)/60">Due when</label>
+                                <input
+                                  value={item.due_description}
+                                  onChange={(e) => updateInstallment(index, "due_description", e.target.value)}
+                                  placeholder="Due on acceptance..."
+                                  className="w-full rounded-lg border border-(--border) bg-white px-3 py-2.5 text-base"
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Desktop: grid table */}
+                      <div className="hidden md:block">
+                        <div className="grid grid-cols-[minmax(6rem,1fr)_3.5rem_minmax(0,2fr)_6.5rem_2rem] gap-x-3 gap-y-1 px-1 pb-2 text-[11px] font-semibold uppercase tracking-wider text-(--text)/50">
+                          <div>Milestone</div>
+                          <div className="text-right">%</div>
+                          <div>Due when</div>
+                          <div className="text-right">Amount</div>
+                          <div />
+                        </div>
+                        <div className="space-y-1.5">
+                          {installmentSchedule.map((item, index) => {
+                            const amount = getEstimateBreakdown().total * (item.percent / 100);
+                            return (
+                              <div
+                                key={index}
+                                className="grid grid-cols-[minmax(6rem,1fr)_3.5rem_minmax(0,2fr)_6.5rem_2rem] items-center gap-x-3 rounded-lg bg-(--bg)/60 px-1 py-1"
+                              >
+                                <input
+                                  value={item.label}
+                                  onChange={(e) => updateInstallment(index, "label", e.target.value)}
+                                  placeholder="Deposit"
+                                  className="min-w-0 rounded-md border border-(--border) bg-white px-2.5 py-1.5 text-sm"
+                                />
+                                <input
+                                  type="number"
+                                  value={item.percent}
+                                  onChange={(e) => updateInstallment(index, "percent", parseFloat(e.target.value) || 0)}
+                                  className="w-full rounded-md border border-(--border) bg-white px-2 py-1.5 text-right text-sm tabular-nums"
+                                />
+                                <input
+                                  value={item.due_description}
+                                  onChange={(e) => updateInstallment(index, "due_description", e.target.value)}
+                                  placeholder="Due on acceptance..."
+                                  className="min-w-0 rounded-md border border-(--border) bg-white px-2.5 py-1.5 text-sm"
+                                />
+                                <span className="text-right text-sm font-semibold tabular-nums text-(--tl-navy)">
+                                  {formatCurrency(amount)}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => removeInstallmentRow(index)}
+                                  className="flex h-7 w-7 items-center justify-center rounded-md text-(--text)/40 transition hover:bg-red-50 hover:text-red-500"
+                                  aria-label="Remove installment"
+                                  title="Remove"
+                                >
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                       {savingSettings && (
@@ -1640,9 +1721,9 @@ export default function ProjectPage() {
                         <span className="tabular-nums text-(--tl-teal)">+{formatCurrency(getEstimateBreakdown().servicingFee)}</span>
                       </div>
                     )}
-                    <div className="flex items-center justify-between bg-(--tl-navy) px-4 py-3.5 text-white">
+                    <div className="flex items-center justify-between gap-3 bg-(--tl-navy) px-4 py-4 text-white sm:py-3.5">
                       <span className="font-semibold">Estimate Total</span>
-                      <span className="text-xl font-bold tabular-nums">{formatCurrency(getEstimateBreakdown().total)}</span>
+                      <span className="text-lg font-bold tabular-nums sm:text-xl">{formatCurrency(getEstimateBreakdown().total)}</span>
                     </div>
                   </div>
                 </div>
