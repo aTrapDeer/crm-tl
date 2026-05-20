@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ModalLayer } from "@/app/components/ModalLayer";
@@ -14,6 +14,13 @@ import {
   formatCurrency,
   type InstallmentScheduleItem,
 } from "@/lib/estimate";
+import type { EstimateEngagementSummary } from "@/lib/estimate-engagement";
+import EstimateEngagementStatus from "@/app/components/EstimateEngagementStatus";
+import ClientProfileFields, {
+  emptyClientProfileForm,
+  type ClientProfileFormState,
+} from "@/app/components/ClientProfileFields";
+import { resolveClientAddresses } from "@/lib/client-addresses";
 
 interface Project {
   id: string;
@@ -105,6 +112,22 @@ interface ProjectSignature {
   signed_at: string;
 }
 
+interface CrmClientPickerItem {
+  id: string;
+  email: string;
+  full_name: string;
+  user_id: string | null;
+  invitation_status: "none" | "pending" | "accepted" | "expired";
+}
+
+type InviteClientOption = {
+  key: string;
+  label: string;
+  email: string;
+  status: "active" | "pending" | "profile";
+  crmClientId?: string;
+};
+
 export default function ProjectPage() {
   const params = useParams();
   const router = useRouter();
@@ -156,15 +179,7 @@ export default function ProjectPage() {
   const [onlineServicingFee, setOnlineServicingFee] = useState(true);
   const [installmentSchedule, setInstallmentSchedule] = useState<InstallmentScheduleItem[]>([]);
   const [estimateSent, setEstimateSent] = useState(false);
-  const [estimateDelivery, setEstimateDelivery] = useState<{
-    id: string;
-    sent_at: string;
-    sent_to_email: string;
-    email_opened_at: string | null;
-    first_viewed_at: string | null;
-    recipient_name?: string;
-    snapshot_total: number;
-  } | null>(null);
+  const [estimateEngagement, setEstimateEngagement] = useState<EstimateEngagementSummary | null>(null);
   const [showSendEstimate, setShowSendEstimate] = useState(false);
   const [sendRecipients, setSendRecipients] = useState<
     Array<{ id: string | null; email: string; name: string; status: "registered" | "invited" }>
@@ -198,6 +213,16 @@ export default function ProjectPage() {
   const [newImage, setNewImage] = useState({ filename: "", caption: "" });
   const [newUpdate, setNewUpdate] = useState({ title: "", content: "" });
   const [inviteEmail, setInviteEmail] = useState("");
+  const [crmClientsList, setCrmClientsList] = useState<CrmClientPickerItem[]>([]);
+  const [inviteClientsLoading, setInviteClientsLoading] = useState(false);
+  const [inviteClientsError, setInviteClientsError] = useState("");
+  const [inviteClientSearch, setInviteClientSearch] = useState("");
+  const [inviteMode, setInviteMode] = useState<"existing" | "new">("existing");
+  const [selectedCrmClientId, setSelectedCrmClientId] = useState("");
+  const [selectedInviteEmail, setSelectedInviteEmail] = useState("");
+  const [newClientForm, setNewClientForm] = useState<ClientProfileFormState>(
+    emptyClientProfileForm()
+  );
   const [generatingTasks, setGeneratingTasks] = useState(false);
   const [generateError, setGenerateError] = useState("");
   const [editForm, setEditForm] = useState({
@@ -299,7 +324,7 @@ export default function ProjectPage() {
         setEstimateItems(estimateData.items || []);
         setEstimateTotal(estimateData.total || 0);
         setEstimateSent(Boolean(estimateData.estimate_sent));
-        setEstimateDelivery(estimateData.delivery || null);
+        setEstimateEngagement(estimateData.engagement || null);
       }
       if (settingsData.settings) {
         const s = settingsData.settings;
@@ -877,16 +902,74 @@ export default function ProjectPage() {
     }
   }
 
+  async function openInviteCustomerModal() {
+    setShowInviteCustomer(true);
+    setInviteMode("existing");
+    setSelectedCrmClientId("");
+    setSelectedInviteEmail("");
+    setInviteClientSearch("");
+    setInviteClientsError("");
+    setNewClientForm(emptyClientProfileForm());
+    setInviteClientsLoading(true);
+    try {
+      const res = await fetch("/api/clients");
+      if (res.ok) {
+        const data = await res.json();
+        setCrmClientsList(data.clients || []);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setInviteClientsError(data.error || "Could not load CRM clients.");
+      }
+    } catch {
+      console.error("Failed to load CRM clients");
+      setInviteClientsError("Could not load CRM clients.");
+    } finally {
+      setInviteClientsLoading(false);
+    }
+  }
+
   async function handleInviteCustomer(e: React.FormEvent) {
     e.preventDefault();
-    if (!inviteEmail.trim()) return;
-
     setInviteLoading(true);
     try {
+      let body: Record<string, unknown>;
+      if (inviteMode === "existing") {
+        if (!selectedCrmClientId && !selectedInviteEmail) {
+          alert("Select a client to invite");
+          return;
+        }
+        body = selectedCrmClientId
+          ? { crm_client_id: selectedCrmClientId }
+          : { email: selectedInviteEmail };
+      } else {
+        if (!newClientForm.email.trim() || !newClientForm.fullName.trim()) {
+          alert("Full name and email are required");
+          return;
+        }
+        const addresses = resolveClientAddresses({
+          address: newClientForm.address,
+          serviceSameAsAddress: newClientForm.serviceSameAsAddress,
+          serviceAddress: newClientForm.serviceAddress,
+          billingSameAsAddress: newClientForm.billingSameAsAddress,
+          billingAddress: newClientForm.billingAddress,
+        });
+        body = {
+          client: {
+            email: newClientForm.email.trim(),
+            full_name: newClientForm.fullName.trim(),
+            address: addresses.address,
+            service_same_as_address: newClientForm.serviceSameAsAddress,
+            service_address: addresses.service_address,
+            billing_same_as_address: newClientForm.billingSameAsAddress,
+            billing_address: addresses.billing_address,
+          },
+        };
+      }
+
       const res = await fetch(`/api/projects/${projectId}/invitations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail.trim() }),
+        body: JSON.stringify(body),
       });
 
       if (res.ok) {
@@ -894,6 +977,11 @@ export default function ProjectPage() {
         setInvitations((prev) => [data.invitation, ...prev]);
         setInviteEmail("");
         setShowInviteCustomer(false);
+        const clientsRes = await fetch("/api/clients");
+        if (clientsRes.ok) {
+          const clientsData = await clientsRes.json();
+          setCrmClientsList(clientsData.clients || []);
+        }
       } else {
         const error = await res.json();
         alert(error.error || "Failed to send invitation");
@@ -922,6 +1010,53 @@ export default function ProjectPage() {
     on_hold: "On Hold",
     completed: "Completed",
   };
+
+  const inviteClientOptions = useMemo<InviteClientOption[]>(() => {
+    const options: InviteClientOption[] = [];
+    const seenEmails = new Set<string>();
+    const profilesByEmail = new Map(
+      crmClientsList.map((client) => [client.email.toLowerCase(), client])
+    );
+
+    for (const user of allUsers) {
+      if (user.role !== "client" || !user.email) continue;
+      const email = user.email.toLowerCase();
+      seenEmails.add(email);
+      const profile = profilesByEmail.get(email);
+      options.push({
+        key: `user-${user.id}`,
+        label:
+          profile?.full_name ||
+          `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
+          user.email,
+        email: user.email,
+        status: "active",
+        crmClientId: profile?.id,
+      });
+    }
+
+    for (const client of crmClientsList) {
+      const email = client.email.toLowerCase();
+      if (seenEmails.has(email)) continue;
+      seenEmails.add(email);
+      options.push({
+        key: `profile-${client.id}`,
+        label: client.full_name,
+        email: client.email,
+        status: client.invitation_status === "pending" ? "pending" : "profile",
+        crmClientId: client.id,
+      });
+    }
+
+    const query = inviteClientSearch.trim().toLowerCase();
+    if (!query) return options;
+    return options.filter(
+      (option) =>
+        option.label.toLowerCase().includes(query) ||
+        option.email.toLowerCase().includes(query) ||
+        option.status.includes(query)
+    );
+  }, [allUsers, crmClientsList, inviteClientSearch]);
 
   function formatDate(dateStr: string) {
     return new Date(dateStr).toLocaleDateString("en-US", {
@@ -1126,18 +1261,11 @@ export default function ProjectPage() {
               </div>
             </div>
 
-            {estimateDelivery && (
-              <div className="mb-5 border-b border-(--border) pb-4">
-                <p className="text-xs font-semibold uppercase tracking-wider text-(--text)/50 mb-2">
-                  Delivery Status
-                </p>
-                <div className="grid gap-3 text-sm text-(--text) sm:grid-cols-2">
-                  <p className="min-w-0 break-words"><span className="text-(--text)/50">Sent </span>{formatDateTime(estimateDelivery.sent_at)} · {estimateDelivery.sent_to_email}</p>
-                  <p className="min-w-0"><span className="text-(--text)/50">Email opened </span>{estimateDelivery.email_opened_at ? formatDateTime(estimateDelivery.email_opened_at) : "Not yet"}</p>
-                  <p className="min-w-0"><span className="text-(--text)/50">Viewed in CRM </span>{estimateDelivery.first_viewed_at ? formatDateTime(estimateDelivery.first_viewed_at) : "Not yet"}</p>
-                  <p className="min-w-0"><span className="text-(--text)/50">Sent total </span>{formatCurrency(estimateDelivery.snapshot_total)}</p>
-                </div>
-              </div>
+            {estimateEngagement && (
+              <EstimateEngagementStatus
+                engagement={estimateEngagement}
+                formatDateTime={formatDateTime}
+              />
             )}
 
             <div className="mb-5 rounded-xl border border-(--border) bg-(--bg)/50 p-4">
@@ -2128,7 +2256,8 @@ export default function ProjectPage() {
                   Customer Invitations
                 </h2>
                 <button
-                  onClick={() => setShowInviteCustomer(true)}
+                  type="button"
+                  onClick={openInviteCustomerModal}
                   className="tl-btn px-3 py-1.5 text-xs"
                 >
                   + Invite
@@ -2572,32 +2701,123 @@ export default function ProjectPage() {
           onBackdropClick={() => {
             setShowInviteCustomer(false);
             setInviteEmail("");
+            setSelectedCrmClientId("");
+            setSelectedInviteEmail("");
+            setInviteClientSearch("");
           }}
         >
           <div
-            className="tl-card p-4 md:p-6 w-full max-w-md rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto"
+            className="tl-card p-4 md:p-6 w-full max-w-xl rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold text-(--text) mb-4">
               Invite Customer
             </h3>
             <p className="text-sm text-(--text) mb-4">
-              Send an invitation to a customer to give them view access to this project.
+              Choose a client from your CRM directory or add a new profile, then send project access.
             </p>
+            <div className="mb-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setInviteMode("existing")}
+                className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold ${
+                  inviteMode === "existing"
+                    ? "bg-(--tl-navy) text-white"
+                    : "border border-(--border) text-(--text)"
+                }`}
+              >
+                From directory
+              </button>
+              <button
+                type="button"
+                onClick={() => setInviteMode("new")}
+                className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold ${
+                  inviteMode === "new"
+                    ? "bg-(--tl-navy) text-white"
+                    : "border border-(--border) text-(--text)"
+                }`}
+              >
+                Add new client
+              </button>
+            </div>
             <form onSubmit={handleInviteCustomer} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-(--text) mb-1">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  required
-                  placeholder="customer@example.com"
-                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text)"
-                />
-              </div>
+              {inviteMode === "existing" ? (
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-(--text) mb-1">
+                    Search active or pending clients
+                  </label>
+                  <input
+                    type="text"
+                    value={inviteClientSearch}
+                    onChange={(e) => setInviteClientSearch(e.target.value)}
+                    placeholder="Search by name, email, active, or pending"
+                    className="w-full rounded-xl border border-(--border) bg-(--bg) px-4 py-2.5 text-sm text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
+                  />
+                  {inviteClientsError && (
+                    <p className="text-xs text-red-600">{inviteClientsError}</p>
+                  )}
+                  {inviteClientsLoading ? (
+                    <div className="rounded-xl border border-(--border) bg-(--bg) px-4 py-4 text-sm text-(--text)/70">
+                      Loading clients…
+                    </div>
+                  ) : inviteClientOptions.length === 0 ? (
+                    <p className="mt-2 text-xs text-(--text)/60">
+                      No clients yet. Add one under Users → Client onboarding, or use Add new client.
+                    </p>
+                  ) : (
+                    <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                      {inviteClientOptions.map((client) => {
+                        const selected =
+                          (client.crmClientId && selectedCrmClientId === client.crmClientId) ||
+                          (!client.crmClientId && selectedInviteEmail === client.email);
+                        return (
+                          <button
+                            key={client.key}
+                            type="button"
+                            onClick={() => {
+                              setSelectedCrmClientId(client.crmClientId || "");
+                              setSelectedInviteEmail(client.crmClientId ? "" : client.email);
+                            }}
+                            className={`w-full rounded-xl border px-3 py-3 text-left transition ${
+                              selected
+                                ? "border-(--tl-royal) bg-blue-50"
+                                : "border-(--border) bg-white hover:bg-(--bg)"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-(--text)">
+                                  {client.label}
+                                </p>
+                                <p className="mt-0.5 truncate text-xs text-(--text)/65">
+                                  {client.email}
+                                </p>
+                              </div>
+                              <span
+                                className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${
+                                  client.status === "active"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : client.status === "pending"
+                                      ? "bg-amber-100 text-amber-800"
+                                      : "bg-slate-100 text-slate-700"
+                                }`}
+                              >
+                                {client.status === "active"
+                                  ? "Active"
+                                  : client.status === "pending"
+                                    ? "Pending"
+                                    : "Profile"}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <ClientProfileFields value={newClientForm} onChange={setNewClientForm} />
+              )}
               <div className="flex gap-3">
                 <button
                   type="button"

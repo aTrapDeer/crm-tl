@@ -10,8 +10,12 @@ import {
   clearProjectSignatures,
   getActiveEstimateDelivery,
   getProjectEstimateSettings,
+  getEstimateEvents,
 } from "@/lib/projects";
 import { calculateEstimateBreakdown, resolveClientVisibility } from "@/lib/estimate";
+import { buildEstimateEngagementSummary } from "@/lib/estimate-engagement";
+import { getTlCorpOrganization } from "@/lib/tl-corp-organization";
+import { getEstimateClientDisplayForEmail } from "@/lib/crm-clients";
 import { cookies } from "next/headers";
 
 export async function GET(
@@ -65,12 +69,14 @@ export async function GET(
       }
 
       const clientVisibility = resolveClientVisibility(delivery.snapshot_settings, project);
+      const organization = await getTlCorpOrganization();
       const hideClientLineItemPricing = clientVisibility.hide_line_item_prices_for_client;
       const visibleItems = hideClientLineItemPricing
         ? delivery.snapshot_line_items.map((item) => ({ ...item, price_rate: 0, total: 0 }))
         : delivery.snapshot_line_items;
 
       return Response.json({
+        organization,
         items: visibleItems,
         total: delivery.snapshot_total,
         settings: delivery.snapshot_settings,
@@ -84,16 +90,26 @@ export async function GET(
       });
     }
 
-    const [items, subtotal, settings, delivery] = await Promise.all([
+    const [items, subtotal, settings, delivery, organization] = await Promise.all([
       getEstimateLineItems(id),
       getEstimateTotal(id),
       getProjectEstimateSettings(id),
       getActiveEstimateDelivery(id),
+      getTlCorpOrganization(),
     ]);
 
     const breakdown = calculateEstimateBreakdown(subtotal, settings);
 
+    const events = delivery ? await getEstimateEvents(delivery.id) : [];
+    const engagement = delivery
+      ? buildEstimateEngagementSummary(delivery, events)
+      : null;
+    const clientDisplay = delivery
+      ? await getEstimateClientDisplayForEmail(delivery.sent_to_email)
+      : null;
+
     return Response.json({
+      organization,
       items,
       total: subtotal,
       breakdown,
@@ -109,6 +125,8 @@ export async function GET(
             snapshot_total: delivery.snapshot_total,
           }
         : null,
+      engagement,
+      client_display: clientDisplay,
       estimate_sent: Boolean(delivery),
       is_snapshot: false,
       hide_line_item_prices_for_client: project.hide_line_item_prices_for_client,

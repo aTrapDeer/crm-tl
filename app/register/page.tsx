@@ -7,6 +7,7 @@ import Link from "next/link";
 export default function RegisterPage() {
   const router = useRouter();
   const [employeeInviteToken, setEmployeeInviteToken] = useState<string | null>(null);
+  const [clientInviteToken, setClientInviteToken] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     firstName: "",
@@ -25,9 +26,16 @@ export default function RegisterPage() {
     expires_at: string | null;
   } | null>(null);
 
+  const [clientInviteLoading, setClientInviteLoading] = useState(false);
+  const [clientInviteError, setClientInviteError] = useState("");
+  const [clientInviteMeta, setClientInviteMeta] = useState<{
+    full_name: string;
+  } | null>(null);
+
   useEffect(() => {
-    const token = new URLSearchParams(window.location.search).get("employeeInvite");
-    setEmployeeInviteToken(token);
+    const params = new URLSearchParams(window.location.search);
+    setEmployeeInviteToken(params.get("employeeInvite"));
+    setClientInviteToken(params.get("clientInvite"));
   }, []);
 
   useEffect(() => {
@@ -73,6 +81,40 @@ export default function RegisterPage() {
       }
     }
 
+    if (clientInviteToken) {
+      async function validateClientInvite(token: string) {
+        setClientInviteLoading(true);
+        setClientInviteError("");
+        try {
+          const res = await fetch(`/api/clients/invitations/${token}`);
+          const data = await res.json();
+          if (!res.ok) {
+            if (!cancelled) setClientInviteError(data.error || "Invalid invitation");
+            return;
+          }
+          const parts = (data.full_name || "").trim().split(/\s+/);
+          if (!cancelled) {
+            setFormData((prev) => ({
+              ...prev,
+              role: "client",
+              email: data.email || prev.email,
+              firstName: parts[0] || prev.firstName,
+              lastName: parts.slice(1).join(" ") || prev.lastName,
+            }));
+            setClientInviteMeta({ full_name: data.full_name });
+          }
+        } catch {
+          if (!cancelled) setClientInviteError("Unable to validate invitation");
+        } finally {
+          if (!cancelled) setClientInviteLoading(false);
+        }
+      }
+      validateClientInvite(clientInviteToken);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     if (!employeeInviteToken) {
       setFormData((prev) => ({ ...prev, role: "client" }));
       setEmployeeInviteError("");
@@ -85,7 +127,7 @@ export default function RegisterPage() {
     return () => {
       cancelled = true;
     };
-  }, [employeeInviteToken]);
+  }, [employeeInviteToken, clientInviteToken]);
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -121,6 +163,8 @@ export default function RegisterPage() {
           role: formData.role,
           employeeInviteToken:
             formData.role === "employee" ? employeeInviteToken : undefined,
+          clientInviteToken:
+            formData.role === "client" ? clientInviteToken : undefined,
         }),
       });
 
@@ -161,6 +205,16 @@ export default function RegisterPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="glass rounded-3xl p-8 shadow-2xl">
+          {clientInviteMeta && (
+            <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              <p className="font-medium">Portal invitation for {clientInviteMeta.full_name}</p>
+            </div>
+          )}
+          {clientInviteError && (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {clientInviteError}
+            </div>
+          )}
           {employeeInviteLoading && (
             <div className="mb-6 p-4 bg-blue-500/10 border border-blue-300/40 rounded-2xl text-blue-100 text-sm">
               Validating employee invitation...
@@ -304,7 +358,7 @@ export default function RegisterPage() {
 
           <button
             type="submit"
-            disabled={loading || employeeInviteLoading}
+            disabled={loading || employeeInviteLoading || clientInviteLoading}
             className="mt-6 w-full tl-btn px-6 py-3 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Creating account..." : "Create Account"}

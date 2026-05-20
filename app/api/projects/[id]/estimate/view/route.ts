@@ -68,15 +68,20 @@ export async function POST(
       null;
     const userAgent = request.headers.get("user-agent");
 
+    if (user.role !== "client") {
+      return Response.json({ success: true, is_first_view: false });
+    }
+
     const { isFirstView } = await markEstimateViewedInApp({
       deliveryId: delivery.id,
       userId: user.id,
       userEmail: user.email,
       ipAddress,
       userAgent,
+      channel: "portal",
     });
 
-    if (user.role === "client" || isFirstView) {
+    if (isFirstView) {
       sendEstimateViewedNotification({
         projectId: id,
         projectName: project.name,

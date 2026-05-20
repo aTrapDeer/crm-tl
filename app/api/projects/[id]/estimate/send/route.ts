@@ -18,6 +18,8 @@ import {
 import {
   sendProjectEstimateEmail,
 } from "@/lib/email";
+import { getEstimateClientDisplayForEmail } from "@/lib/crm-clients";
+import { getTlCorpOrganization } from "@/lib/tl-corp-organization";
 import { cookies } from "next/headers";
 
 export async function POST(
@@ -135,10 +137,27 @@ export async function POST(
     });
     await clearProjectSignatures(id);
 
+    const [organization, clientDisplay] = await Promise.all([
+      getTlCorpOrganization(),
+      getEstimateClientDisplayForEmail(targetEmail),
+    ]);
+
     const emailSent = await sendProjectEstimateEmail({
       to: targetEmail,
       projectName: project.name,
-      clientName,
+      clientName: clientDisplay.clientName === targetEmail ? clientName : clientDisplay.clientName,
+      projectAddress: project.address,
+      billingAddress: clientDisplay.billingAddress,
+      serviceAddress: clientDisplay.serviceAddress || project.address,
+      organization: {
+        businessName: organization.business_name,
+        email: organization.email,
+        phone: organization.phone,
+        addressLine1: organization.address_line1,
+        cityState: organization.city_state,
+        postalCode: organization.postal_code,
+        website: organization.website,
+      },
       grandTotal: breakdown.total,
       subtotal,
       breakdown,

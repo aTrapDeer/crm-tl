@@ -1020,6 +1020,8 @@ export interface ProjectEstimateEvent {
   user_email: string | null;
   ip_address: string | null;
   user_agent: string | null;
+  /** logo | pixel | link for email_opened; public_link | portal for viewed_in_app */
+  channel: string | null;
   created_at: string;
   user_name?: string;
 }
@@ -1091,6 +1093,14 @@ async function ensureEstimateDeliveryTables(): Promise<void> {
     await turso.execute(
       "CREATE INDEX IF NOT EXISTS idx_estimate_events_delivery ON project_estimate_events(delivery_id)"
     );
+
+    try {
+      await turso.execute(
+        "ALTER TABLE project_estimate_events ADD COLUMN channel TEXT"
+      );
+    } catch {
+      // column already exists
+    }
 
     estimateDeliveryTablesReady = true;
   })();
@@ -1165,6 +1175,7 @@ function mapRowToEstimateEvent(row: Record<string, unknown>): ProjectEstimateEve
     user_email: row.user_email as string | null,
     ip_address: row.ip_address as string | null,
     user_agent: row.user_agent as string | null,
+    channel: (row.channel as string | null) || null,
     created_at: row.created_at as string,
     user_name: row.user_name as string | undefined,
   };
@@ -1366,14 +1377,15 @@ export async function createEstimateEvent(data: {
   user_email?: string | null;
   ip_address?: string | null;
   user_agent?: string | null;
+  channel?: string | null;
 }): Promise<ProjectEstimateEvent> {
   await ensureEstimateDeliveryTables();
   const id = crypto.randomUUID().replace(/-/g, "");
 
   await turso.execute({
     sql: `INSERT INTO project_estimate_events
-          (id, delivery_id, event_type, user_id, user_email, ip_address, user_agent)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          (id, delivery_id, event_type, user_id, user_email, ip_address, user_agent, channel)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       data.delivery_id,
@@ -1382,6 +1394,7 @@ export async function createEstimateEvent(data: {
       data.user_email || null,
       data.ip_address || null,
       data.user_agent || null,
+      data.channel || null,
     ],
   });
 
@@ -1412,7 +1425,8 @@ export async function getEstimateEvents(deliveryId: string): Promise<ProjectEsti
 export async function markEstimateEmailOpened(
   deliveryId: string,
   ipAddress?: string | null,
-  userAgent?: string | null
+  userAgent?: string | null,
+  channel?: string | null
 ): Promise<boolean> {
   await ensureEstimateDeliveryTables();
 
@@ -1430,6 +1444,7 @@ export async function markEstimateEmailOpened(
     user_email: delivery.sent_to_email,
     ip_address: ipAddress,
     user_agent: userAgent,
+    channel: channel || null,
   });
 
   return true;
@@ -1441,6 +1456,7 @@ export async function markEstimateViewedInApp(data: {
   userEmail?: string | null;
   ipAddress?: string | null;
   userAgent?: string | null;
+  channel?: "public_link" | "portal" | null;
 }): Promise<{ isFirstView: boolean; event: ProjectEstimateEvent }> {
   await ensureEstimateDeliveryTables();
 
@@ -1463,6 +1479,7 @@ export async function markEstimateViewedInApp(data: {
     user_email: data.userEmail,
     ip_address: data.ipAddress,
     user_agent: data.userAgent,
+    channel: data.channel || null,
   });
 
   return { isFirstView, event };
@@ -1498,6 +1515,7 @@ export interface ProjectEstimateRecipient {
 export async function getProjectEstimateRecipients(
   projectId: string
 ): Promise<ProjectEstimateRecipient[]> {
+  const { getCrmClientByEmail, getCrmClientByUserId } = await import("./crm-clients");
   const [clients, invitations] = await Promise.all([
     getProjectClientUsers(projectId),
     getProjectInvitations(projectId),
@@ -1509,10 +1527,15 @@ export async function getProjectEstimateRecipients(
   for (const client of clients) {
     const email = client.email.toLowerCase();
     seenEmails.add(email);
+    const profile = await getCrmClientByUserId(client.id);
+    const name =
+      profile?.full_name ||
+      `${client.first_name} ${client.last_name}`.trim() ||
+      client.email;
     recipients.push({
       id: client.id,
       email: client.email,
-      name: `${client.first_name} ${client.last_name}`.trim() || client.email,
+      name,
       status: "registered",
     });
   }
@@ -1522,10 +1545,11 @@ export async function getProjectEstimateRecipients(
     const email = invitation.email.toLowerCase();
     if (seenEmails.has(email)) continue;
     seenEmails.add(email);
+    const profile = await getCrmClientByEmail(invitation.email);
     recipients.push({
       id: null,
       email: invitation.email,
-      name: invitation.email,
+      name: profile?.full_name || invitation.email,
       status: "invited",
       invitation_token: invitation.token,
     });
@@ -1693,7 +1717,11 @@ export async function createProjectInvitation(data: {
   project_id: string;
   email: string;
   invited_by: string;
+  crm_client_id?: string | null;
 }): Promise<ProjectInvitation> {
+  const { ensureCrmClientsTable } = await import("./crm-clients");
+  await ensureCrmClientsTable();
+
   const id = crypto.randomUUID().replace(/-/g, "");
   const token = crypto.randomUUID().replace(/-/g, "");
 
@@ -1702,8 +1730,8 @@ export async function createProjectInvitation(data: {
   expiresAt.setDate(expiresAt.getDate() + 7);
 
   await turso.execute({
-    sql: `INSERT INTO project_invitations (id, project_id, email, token, invited_by, expires_at)
-          VALUES (?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO project_invitations (id, project_id, email, token, invited_by, expires_at, crm_client_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       data.project_id,
@@ -1711,6 +1739,7 @@ export async function createProjectInvitation(data: {
       token,
       data.invited_by,
       expiresAt.toISOString(),
+      data.crm_client_id || null,
     ],
   });
 

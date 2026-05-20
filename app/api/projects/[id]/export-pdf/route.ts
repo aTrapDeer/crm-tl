@@ -18,6 +18,12 @@ import {
   calculateInstallmentAmounts,
   formatCurrency,
 } from "@/lib/estimate";
+import {
+  formatTlCorpPhone,
+  getTlCorpOrganization,
+  type TlCorpOrganization,
+} from "@/lib/tl-corp-organization";
+import { getEstimateClientDisplayForEmail } from "@/lib/crm-clients";
 
 type FontType = Awaited<ReturnType<PDFDocument["embedFont"]>>;
 
@@ -30,6 +36,22 @@ const COLOR_TEXT = rgb(0.12, 0.12, 0.12);
 const COLOR_MUTED = rgb(0.43, 0.45, 0.5);
 const COLOR_LINE = rgb(0.83, 0.85, 0.89);
 const COLOR_PANEL = rgb(0.96, 0.97, 0.99);
+
+function buildOrganizationPdfLines(organization: TlCorpOrganization): string[] {
+  const lines = [
+    organization.business_name,
+    organization.registration_label,
+    organization.address_line1,
+    organization.city_state,
+    organization.postal_code,
+    formatTlCorpPhone(organization.phone),
+    organization.email,
+  ];
+  if (organization.website.trim()) {
+    lines.push(`Web: ${organization.website.trim()}`);
+  }
+  return lines.map((line) => line.trim()).filter(Boolean);
+}
 
 function formatInvoiceDate(value: Date): string {
   return value.toLocaleDateString("en-US", {
@@ -171,13 +193,15 @@ export async function GET(
       return Response.json({ error: "Project not found" }, { status: 404 });
     }
 
-    const [liveLineItems, liveTotal, signatures, settings, activeDelivery] = await Promise.all([
-      getEstimateLineItems(id),
-      getEstimateTotal(id),
-      getProjectSignatures(id),
-      getProjectEstimateSettings(id),
-      user.role === "client" ? Promise.resolve(delivery) : getActiveEstimateDelivery(id),
-    ]);
+    const [liveLineItems, liveTotal, signatures, settings, activeDelivery, organization] =
+      await Promise.all([
+        getEstimateLineItems(id),
+        getEstimateTotal(id),
+        getProjectSignatures(id),
+        getProjectEstimateSettings(id),
+        user.role === "client" ? Promise.resolve(delivery) : getActiveEstimateDelivery(id),
+        getTlCorpOrganization(),
+      ]);
 
     const useSnapshot = user.role === "client" && activeDelivery;
     const resolvedDelivery = activeDelivery || delivery;
@@ -190,6 +214,10 @@ export async function GET(
 
     const hideClientLineItemPricing =
       user.role === "client" && project.hide_line_item_prices_for_client;
+
+    const clientDisplay = resolvedDelivery
+      ? await getEstimateClientDisplayForEmail(resolvedDelivery.sent_to_email)
+      : null;
 
     const pdfDoc = await PDFDocument.create();
     const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -253,47 +281,16 @@ export async function GET(
       });
     }
 
-    page.drawText("TAYLOR LEONARD CONSTRUCTION CORP.", {
-      x: MARGIN + 64,
-      y: y - 2,
-      size: 11,
-      font: fontBold,
-      color: COLOR_NAVY,
-    });
-    page.drawText("4717 Don Ron Drive", {
-      x: MARGIN + 64,
-      y: y - 16,
-      size: 9,
-      font: fontRegular,
-      color: COLOR_TEXT,
-    });
-    page.drawText("St. Louis, MO 63123", {
-      x: MARGIN + 64,
-      y: y - 29,
-      size: 9,
-      font: fontRegular,
-      color: COLOR_TEXT,
-    });
-    page.drawText("Phone: (314) 489-3229", {
-      x: MARGIN + 64,
-      y: y - 42,
-      size: 9,
-      font: fontRegular,
-      color: COLOR_TEXT,
-    });
-    page.drawText("Email: taylorleonardcorp@gmail.com", {
-      x: MARGIN + 64,
-      y: y - 55,
-      size: 9,
-      font: fontRegular,
-      color: COLOR_TEXT,
-    });
-    page.drawText("Web: www.TLcorp.build", {
-      x: MARGIN + 64,
-      y: y - 68,
-      size: 9,
-      font: fontRegular,
-      color: COLOR_TEXT,
+    const orgLines = buildOrganizationPdfLines(organization);
+    orgLines.forEach((line, index) => {
+      const isBusinessName = index === 0;
+      page.drawText(line, {
+        x: MARGIN + 64,
+        y: y - 2 - index * 13,
+        size: isBusinessName ? 11 : 9,
+        font: isBusinessName ? fontBold : fontRegular,
+        color: isBusinessName ? COLOR_NAVY : COLOR_TEXT,
+      });
     });
 
     page.drawText("INVOICE", {
@@ -406,7 +403,10 @@ export async function GET(
       color: COLOR_NAVY,
     });
 
-    const serviceText = project.address?.trim() || "No service address provided";
+    const serviceText =
+      clientDisplay?.serviceAddress?.trim() ||
+      project.address?.trim() ||
+      "No service address provided";
     const serviceLines = wrapText(serviceText, boxW - 20, fontRegular, 9);
     let serviceY = boxTop - 31;
     for (const line of serviceLines.slice(0, 4)) {
@@ -420,12 +420,12 @@ export async function GET(
       serviceY -= 12;
     }
 
-    const billToLines = [
-      clientSignature?.signer_name || "Project Client",
-      project.name,
-      "St. Louis, MO",
-      "United States",
-    ];
+    const billToName =
+      clientDisplay?.clientName ||
+      clientSignature?.signer_name ||
+      "Project Client";
+    const billingText = clientDisplay?.billingAddress?.trim() || "—";
+    const billToLines = [billToName, ...wrapText(billingText, boxW - 20, fontRegular, 9).slice(0, 3)];
     let billY = boxTop - 31;
     for (const line of billToLines) {
       page.drawText(line, {

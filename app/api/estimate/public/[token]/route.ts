@@ -5,6 +5,8 @@ import {
 } from "@/lib/projects";
 import { sendEstimateViewedNotification } from "@/lib/email";
 import { resolveClientVisibility } from "@/lib/estimate";
+import { getTlCorpOrganization } from "@/lib/tl-corp-organization";
+import { getEstimateClientDisplayForEmail } from "@/lib/crm-clients";
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ token: string }> }
@@ -23,12 +25,19 @@ export async function GET(
     }
 
     const clientVisibility = resolveClientVisibility(delivery.snapshot_settings, project);
+    const organization = await getTlCorpOrganization();
+    const clientDisplay = await getEstimateClientDisplayForEmail(delivery.sent_to_email);
 
     return Response.json({
+      organization,
       project: {
         id: project.id,
         name: project.name,
         address: project.address,
+      },
+      client_display: {
+        ...clientDisplay,
+        clientName: delivery.recipient_name || clientDisplay.clientName,
       },
       delivery: {
         id: delivery.id,
@@ -76,6 +85,7 @@ export async function POST(
       userEmail: delivery.sent_to_email,
       ipAddress,
       userAgent,
+      channel: "public_link",
     });
 
     if (isFirstView) {

@@ -6,6 +6,10 @@ import { formatUsCentralDateTime } from "./us-central-time";
 import type { InstallmentWithAmount, EstimateBreakdown } from "./estimate";
 import { formatCurrency, getCategoryLabel } from "./estimate";
 import type { EstimateLineItem } from "./projects";
+import {
+  getEstimateTrackingLogoUrl,
+  getEstimateTrackingPixelUrl,
+} from "./estimate-tracking-assets";
 
 const AWS_REGION = process.env.AWS_REGION || "us-east-1";
 const SES_FROM_EMAIL = process.env.SES_FROM_EMAIL || "no-reply@tlcorp.build";
@@ -24,6 +28,9 @@ const APP_URL = (
   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
   "http://localhost:3000"
 ).replace(/\/+$/, ""); // strip trailing slash
+const MESSAGE_ID_DOMAIN = SES_FROM_EMAIL.includes("@")
+  ? SES_FROM_EMAIL.split("@")[1]
+  : "tlcorp.build";
 
 // Create reusable transporter
 const sesClient = new SESv2Client({ region: AWS_REGION });
@@ -37,6 +44,8 @@ interface SendEmailOptions {
   to: string | string[];
   subject: string;
   html: string;
+  headers?: Record<string, string>;
+  messageId?: string;
 }
 
 async function sendEmail(options: SendEmailOptions): Promise<boolean> {
@@ -57,6 +66,8 @@ async function sendEmail(options: SendEmailOptions): Promise<boolean> {
       to: recipients.join(", "),
       subject: options.subject,
       html: options.html,
+      headers: options.headers,
+      messageId: options.messageId,
     });
     console.log(`📧 Email sent to: ${recipients.join(", ")}`);
     return true;
@@ -66,7 +77,7 @@ async function sendEmail(options: SendEmailOptions): Promise<boolean> {
   }
 }
 
-// Get base email template
+// Get base email template (internal / admin notifications)
 function getEmailTemplate(content: string, title: string): string {
   return `
     <!DOCTYPE html>
@@ -112,6 +123,58 @@ function getEmailTemplate(content: string, title: string): string {
   `;
 }
 
+/** Client-facing emails (estimates, invitations to portal). */
+function getClientEmailTemplate(
+  content: string,
+  title: string,
+  options?: { logoUrl?: string }
+): string {
+  const logoUrl = options?.logoUrl ?? `${APP_URL}/NoTextLogoFIXED.png`;
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>${title}</title>
+    </head>
+    <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f7f8fb;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="min-width: 100%; background-color: #f7f8fb;">
+        <tr>
+          <td align="center" style="padding: 40px 20px;">
+            <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width: 600px; background-color: #ffffff; border-radius: 16px; box-shadow: 0 4px 24px rgba(1, 34, 79, 0.08);">
+              <tr>
+                <td style="padding: 32px 40px 24px; text-align: center; background: linear-gradient(135deg, #01224f 0%, #043271 100%); border-radius: 16px 16px 0 0;">
+                  <img src="${logoUrl}" alt="TL Corp" width="56" height="56" style="display: block; margin: 0 auto 16px; border: 0; border-radius: 12px;" />
+                  <p style="margin: 0; color: #ffffff; font-size: 22px; font-weight: 600; letter-spacing: 0.02em;">
+                    TL Corp
+                  </p>
+                  <p style="margin: 8px 0 0; color: #94a3b8; font-size: 13px; font-weight: 500;">
+                    Portal
+                  </p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 40px;">
+                  ${content}
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 24px 40px; border-top: 1px solid #e8edf4; text-align: center;">
+                  <p style="margin: 0; color: #7ba8b3; font-size: 12px;">
+                    &copy; ${new Date().getFullYear()} TL Corp. All rights reserved.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
+}
+
 // ============ HELPER FUNCTIONS ============
 
 async function getAdminEmails(): Promise<string[]> {
@@ -128,10 +191,17 @@ export async function sendInvitationEmail(data: {
   projectName: string;
   inviterName: string;
   inviteToken: string;
+  clientName?: string;
 }): Promise<boolean> {
   const signupUrl = `${APP_URL}/register?invite=${data.inviteToken}`;
+  const greeting = data.clientName?.trim()
+    ? `Hi ${data.clientName.trim()},`
+    : "Hello,";
 
   const content = `
+    <p style="margin: 0 0 16px; color: #0d3e8d; font-size: 16px; line-height: 1.6;">
+      ${greeting}
+    </p>
     <h2 style="margin: 0 0 16px; color: #01224f; font-size: 20px; font-weight: 600;">
       You've been invited to join a project!
     </h2>
@@ -163,7 +233,50 @@ export async function sendInvitationEmail(data: {
   return sendEmail({
     to: data.to,
     subject: `You've been invited to join "${data.projectName}"`,
-    html: getEmailTemplate(content, "Project Invitation"),
+    html: getClientEmailTemplate(content, "Project Invitation"),
+  });
+}
+
+export async function sendClientPortalInvitationEmail(data: {
+  to: string;
+  clientName: string;
+  inviterName: string;
+  inviteToken: string;
+}): Promise<boolean> {
+  const signupUrl = `${APP_URL}/register?clientInvite=${data.inviteToken}`;
+  const greeting = data.clientName.trim()
+    ? `Hi ${data.clientName.trim()},`
+    : "Hello,";
+
+  const content = `
+    <p style="margin: 0 0 16px; color: #0d3e8d; font-size: 16px; line-height: 1.6;">
+      ${greeting}
+    </p>
+    <h2 style="margin: 0 0 16px; color: #01224f; font-size: 20px; font-weight: 600;">
+      Welcome to the TL Corp Portal
+    </h2>
+    <p style="margin: 0 0 24px; color: #0d3e8d; font-size: 16px; line-height: 1.6;">
+      <strong>${data.inviterName}</strong> set up your client profile and invited you to create your Portal account.
+      You&apos;ll be able to view project updates and estimates once you sign up.
+    </p>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td align="center">
+          <a href="${signupUrl}" style="display: inline-block; padding: 16px 32px; background-color: #01224f; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; border-radius: 12px;">
+            Create Your Portal Account
+          </a>
+        </td>
+      </tr>
+    </table>
+    <p style="margin: 32px 0 0; color: #7ba8b3; font-size: 14px; line-height: 1.6;">
+      This invitation expires in 7 days. If you didn&apos;t expect this, you can ignore this email.
+    </p>
+  `;
+
+  return sendEmail({
+    to: data.to,
+    subject: "You're invited to the TL Corp Portal",
+    html: getClientEmailTemplate(content, "Portal Invitation"),
   });
 }
 
@@ -1115,6 +1228,18 @@ export async function sendProjectEstimateEmail(data: {
   to: string;
   projectName: string;
   clientName: string;
+  projectAddress?: string | null;
+  billingAddress?: string | null;
+  serviceAddress?: string | null;
+  organization?: {
+    businessName: string;
+    email: string;
+    phone: string;
+    addressLine1: string;
+    cityState: string;
+    postalCode: string;
+    website?: string | null;
+  };
   grandTotal: number;
   subtotal: number;
   breakdown: EstimateBreakdown;
@@ -1128,12 +1253,29 @@ export async function sendProjectEstimateEmail(data: {
 }): Promise<boolean> {
   const hideLineItemPricing = Boolean(data.hideLineItemPricing);
   const hideMarkup = Boolean(data.hideMarkup);
-  const publicEstimateUrl = `${APP_URL}/estimate/${data.deliveryToken}`;
-  const crmEstimateUrl = `${APP_URL}/dashboard/projects/${data.projectId}/estimate?delivery=${data.deliveryToken}`;
+  const publicEstimateUrl = `${APP_URL}/api/tracking/estimate/${data.deliveryToken}/view`;
+  const portalEstimateUrl = `${APP_URL}/dashboard/projects/${data.projectId}/estimate?delivery=${data.deliveryToken}`;
   const signupUrl = data.inviteToken
     ? `${APP_URL}/register?invite=${data.inviteToken}`
     : `${APP_URL}/register`;
-  const trackingPixelUrl = `${APP_URL}/api/tracking/estimate/${data.deliveryToken}/open`;
+  const trackingLogoUrl = getEstimateTrackingLogoUrl(data.deliveryToken);
+  const trackingPixelUrl = getEstimateTrackingPixelUrl(data.deliveryToken);
+  const estimateReference = data.deliveryToken.slice(0, 8).toUpperCase();
+  const estimateSubject = `TL Corp Estimate #${estimateReference}: ${data.projectName} — ${formatCurrency(data.grandTotal)}`;
+  const tlCorp = data.organization || {
+    businessName: "TL Corp",
+    email: "taylorleonardcorp@gmail.com",
+    phone: "3144893229",
+    addressLine1: "4717 Don Ron Drive",
+    cityState: "ST. LOUIS MO",
+    postalCode: "63123",
+    website: "www.TLcorp.build",
+  };
+  const serviceAddress = data.serviceAddress || data.projectAddress || "No service address provided";
+  const billingAddress = data.billingAddress || "No billing address provided";
+  const tlCorpAddress = [tlCorp.addressLine1, `${tlCorp.cityState} ${tlCorp.postalCode}`.trim()]
+    .filter(Boolean)
+    .join("<br />");
 
   const lineItemsHtml = data.lineItems
     .map(
@@ -1195,6 +1337,7 @@ export async function sendProjectEstimateEmail(data: {
     .join("");
 
   const content = `
+    <img src="${trackingPixelUrl}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0;margin:0;padding:0;" />
     <h2 style="margin: 0 0 16px; color: #01224f; font-size: 20px; font-weight: 600;">
       Your Project Estimate
     </h2>
@@ -1202,14 +1345,50 @@ export async function sendProjectEstimateEmail(data: {
       Hi ${data.clientName},
     </p>
     <p style="margin: 0 0 24px; color: #0d3e8d; font-size: 16px; line-height: 1.6;">
-      Taylor Leonard Construction Corp. has prepared an estimate for <strong>${data.projectName}</strong>.
+      TL Corp has prepared an estimate for <strong>${data.projectName}</strong>.
       ${hideLineItemPricing ? "Your total and payment schedule are below — scope details are included without per-line pricing." : "The full breakdown is below — no account required to view."}
     </p>
 
     <div style="background-color: #01224f; border-radius: 12px; padding: 20px; margin-bottom: 24px; text-align: center;">
       <p style="margin: 0 0 4px; color: #94a3b8; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;">Total Estimate</p>
       <p style="margin: 0; color: #ffffff; font-size: 32px; font-weight: 700;">${formatCurrency(data.grandTotal)}</p>
+      <p style="margin: 8px 0 0; color: #cbd5e1; font-size: 12px;">Estimate #${estimateReference}</p>
     </div>
+
+    <h3 style="margin: 0 0 12px; color: #01224f; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;">Billing Details</h3>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 24px;">
+      <tr>
+        <td style="padding: 0 6px 12px 0; vertical-align: top; width: 50%;">
+          <div style="background-color: #f7f8fb; border: 1px solid #e8edf4; border-radius: 12px; padding: 14px;">
+            <p style="margin: 0 0 6px; color: #6b7280; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;">Bill To</p>
+            <p style="margin: 0; color: #01224f; font-size: 14px; font-weight: 700;">${data.clientName}</p>
+            <p style="margin: 4px 0 0; color: #0d3e8d; font-size: 13px; line-height: 1.5;">${data.to}</p>
+          </div>
+        </td>
+        <td style="padding: 0 0 12px 6px; vertical-align: top; width: 50%;">
+          <div style="background-color: #f7f8fb; border: 1px solid #e8edf4; border-radius: 12px; padding: 14px;">
+            <p style="margin: 0 0 6px; color: #6b7280; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;">Billing Address</p>
+            <p style="margin: 0; color: #0d3e8d; font-size: 13px; line-height: 1.5;">${billingAddress}</p>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 0 6px 0 0; vertical-align: top; width: 50%;">
+          <div style="background-color: #f7f8fb; border: 1px solid #e8edf4; border-radius: 12px; padding: 14px;">
+            <p style="margin: 0 0 6px; color: #6b7280; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;">Service Address</p>
+            <p style="margin: 0; color: #0d3e8d; font-size: 13px; line-height: 1.5;">${serviceAddress}</p>
+          </div>
+        </td>
+        <td style="padding: 0 0 0 6px; vertical-align: top; width: 50%;">
+          <div style="background-color: #f7f8fb; border: 1px solid #e8edf4; border-radius: 12px; padding: 14px;">
+            <p style="margin: 0 0 6px; color: #6b7280; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;">TL Corp</p>
+            <p style="margin: 0; color: #01224f; font-size: 14px; font-weight: 700;">${tlCorp.businessName}</p>
+            <p style="margin: 4px 0 0; color: #0d3e8d; font-size: 13px; line-height: 1.5;">${tlCorpAddress}</p>
+            <p style="margin: 4px 0 0; color: #0d3e8d; font-size: 13px; line-height: 1.5;">${tlCorp.email}</p>
+          </div>
+        </td>
+      </tr>
+    </table>
 
     <h3 style="margin: 0 0 12px; color: #01224f; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;">Scope &amp; Line Items</h3>
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 24px; border: 1px solid #e8edf4; border-radius: 8px; overflow: hidden;">
@@ -1248,31 +1427,42 @@ export async function sendProjectEstimateEmail(data: {
     ${
       data.inviteToken
         ? `<p style="margin: 0 0 16px; color: #0d3e8d; font-size: 14px; line-height: 1.6; text-align: center;">
-             Want ongoing project updates? <a href="${signupUrl}" style="color: #01224f; font-weight: 600;">Create your CRM account</a> using this email.
+             Want ongoing project updates? <a href="${signupUrl}" style="color: #01224f; font-weight: 600;">Create your Portal account</a> using this email.
            </p>`
         : `<p style="margin: 0 0 16px; color: #7ba8b3; font-size: 13px; line-height: 1.6; text-align: center;">
-             Already have an account? <a href="${crmEstimateUrl}" style="color: #01224f;">View in CRM</a>
+             Already have an account? <a href="${portalEstimateUrl}" style="color: #01224f;">View in Portal</a>
            </p>`
     }
-    <img src="${trackingPixelUrl}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0;" />
   `;
 
   return sendEmail({
     to: data.to,
-    subject: `Project Estimate: ${data.projectName} — ${formatCurrency(data.grandTotal)}`,
-    html: getEmailTemplate(content, "Project Estimate"),
+    subject: estimateSubject,
+    html: getClientEmailTemplate(content, "Project Estimate", {
+      logoUrl: trackingLogoUrl,
+    }),
+    messageId: `<estimate-${data.deliveryToken}@${MESSAGE_ID_DOMAIN}>`,
+    headers: {
+      "X-Entity-Ref-ID": `estimate-${data.deliveryToken}`,
+      "X-TL-Corp-Estimate-ID": data.deliveryToken,
+      "Thread-Topic": estimateSubject,
+    },
   });
 }
 
 export async function sendEstimateEmailOpenedNotification(data: {
   projectId: string;
+  projectName: string;
+  estimateTotal: number;
   recipientEmail: string;
   recipientName?: string;
+  openDescription?: string;
 }): Promise<boolean> {
   const adminEmails = await getAdminEmails();
   if (adminEmails.length === 0) return true;
 
   const projectUrl = `${APP_URL}/dashboard/projects/${data.projectId}`;
+  const recipientLabel = data.recipientName || data.recipientEmail;
 
   const content = `
     <div style="background-color: #2563eb15; border-left: 4px solid #2563eb; padding: 16px; border-radius: 0 12px 12px 0; margin-bottom: 24px;">
@@ -1281,13 +1471,24 @@ export async function sendEstimateEmailOpenedNotification(data: {
       </p>
     </div>
     <p style="margin: 0 0 16px; color: #0d3e8d; font-size: 16px; line-height: 1.6;">
-      ${data.recipientName || data.recipientEmail} opened the estimate notification email.
+      <strong>${recipientLabel}</strong> ${data.openDescription ?? "opened the estimate email"} for:
     </p>
+    <div style="background-color: #f7f8fb; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+      <p style="margin: 0 0 8px; color: #01224f; font-size: 18px; font-weight: 600;">
+        ${data.projectName}
+      </p>
+      <p style="margin: 0; color: #0d3e8d; font-size: 15px;">
+        Invoice total: <strong>${formatCurrency(data.estimateTotal)}</strong>
+      </p>
+      <p style="margin: 8px 0 0; color: #6b7280; font-size: 13px;">
+        ${data.recipientEmail}
+      </p>
+    </div>
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
       <tr>
         <td align="center">
           <a href="${projectUrl}" style="display: inline-block; padding: 14px 28px; background-color: #01224f; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 12px;">
-            View Project
+            Open Project
           </a>
         </td>
       </tr>
@@ -1296,7 +1497,7 @@ export async function sendEstimateEmailOpenedNotification(data: {
 
   return sendEmail({
     to: adminEmails,
-    subject: `Estimate email opened — ${data.recipientName || data.recipientEmail}`,
+    subject: `Estimate email opened — ${data.projectName} — ${recipientLabel}`,
     html: getEmailTemplate(content, "Estimate Email Opened"),
   });
 }

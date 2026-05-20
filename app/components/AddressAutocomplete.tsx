@@ -23,7 +23,12 @@ interface AddressAutocompleteProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  /** Bias suggestions toward this lat/lon (e.g. browser geolocation). */
+  proximity?: { lat: number; lon: number } | null;
 }
+
+/** ~30 mile radius in degrees (rough, mid-US). */
+const PROXIMITY_RADIUS_DEG = 30 / 69;
 
 export default function AddressAutocomplete({
   value,
@@ -31,14 +36,36 @@ export default function AddressAutocomplete({
   placeholder = "Start typing an address...",
   className = "",
   disabled = false,
+  proximity = null,
 }: AddressAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [userProximity, setUserProximity] = useState<{ lat: number; lon: number } | null>(
+    proximity
+  );
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (proximity) {
+      setUserProximity(proximity);
+      return;
+    }
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserProximity({
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+        });
+      },
+      () => {},
+      { maximumAge: 600_000, timeout: 8000 }
+    );
+  }, [proximity]);
 
   const fetchSuggestions = useCallback(async (query: string) => {
     if (query.length < 3) {
@@ -55,9 +82,15 @@ export default function AddressAutocomplete({
         q: query,
         format: "json",
         addressdetails: "1",
-        limit: "5",
-        countrycodes: "us", // Limit to US addresses
+        limit: "8",
+        countrycodes: "us",
       });
+
+      if (userProximity) {
+        const { lat, lon } = userProximity;
+        const d = PROXIMITY_RADIUS_DEG;
+        params.set("viewbox", `${lon - d},${lat + d},${lon + d},${lat - d}`);
+      }
 
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?${params}`,
@@ -81,7 +114,7 @@ export default function AddressAutocomplete({
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [userProximity]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
@@ -249,7 +282,7 @@ export default function AddressAutocomplete({
             </button>
           ))}
           <div className="px-4 py-2 text-xs text-(--text) bg-(--bg) border-t border-(--border)">
-            Powered by OpenStreetMap
+            {userProximity ? "Nearby results prioritized · " : ""}Powered by OpenStreetMap
           </div>
         </div>
       )}

@@ -8,7 +8,8 @@ import {
   getCategoryLabel,
   type InstallmentScheduleItem,
 } from "@/lib/estimate";
-import { DISCLOSURE_SECTIONS, TL_CORP_INFO } from "@/lib/estimate-terms";
+import { DISCLOSURE_SECTIONS } from "@/lib/estimate-terms";
+import { formatTlCorpPhone, type TlCorpOrganization } from "@/lib/tl-corp-organization";
 import type { EstimateLineItem } from "@/lib/projects";
 import type { EstimateSettingsInput } from "@/lib/estimate";
 
@@ -17,9 +18,12 @@ interface EstimateViewerProps {
   projectAddress: string | null;
   clientName: string;
   clientEmail?: string;
+  billingAddress?: string | null;
+  serviceAddress?: string | null;
   lineItems: EstimateLineItem[];
   settings: EstimateSettingsInput;
   grandTotal: number;
+  organization: TlCorpOrganization;
   hideLineItemPricing?: boolean;
   hideMarkup?: boolean;
   sentAt?: string | null;
@@ -30,9 +34,12 @@ export default function EstimateViewer({
   projectAddress,
   clientName,
   clientEmail,
+  billingAddress,
+  serviceAddress,
   lineItems,
   settings,
   grandTotal,
+  organization,
   hideLineItemPricing = false,
   hideMarkup = false,
   sentAt,
@@ -62,11 +69,18 @@ export default function EstimateViewer({
                 />
               </div>
               <div>
-                <p className="text-lg font-bold tracking-wide">{TL_CORP_INFO.name}</p>
-                <p className="mt-1 text-sm text-white/80">{TL_CORP_INFO.address}</p>
-                <p className="text-sm text-white/80">{TL_CORP_INFO.cityState}</p>
-                <p className="text-sm text-white/80">{TL_CORP_INFO.phone}</p>
-                <p className="text-sm text-white/80">{TL_CORP_INFO.email}</p>
+                <p className="text-lg font-bold tracking-wide">{organization.business_name}</p>
+                {organization.registration_label && (
+                  <p className="mt-1 text-sm text-white/80">{organization.registration_label}</p>
+                )}
+                <p className="text-sm text-white/80">{formatTlCorpPhone(organization.phone)}</p>
+                <p className="text-sm text-white/80">{organization.email}</p>
+                <p className="text-sm text-white/80">{organization.address_line1}</p>
+                <p className="text-sm text-white/80">{organization.city_state}</p>
+                <p className="text-sm text-white/80">{organization.postal_code}</p>
+                {organization.website && (
+                  <p className="text-sm text-white/80">{organization.website}</p>
+                )}
               </div>
             </div>
             <div className="text-right">
@@ -119,18 +133,32 @@ export default function EstimateViewer({
           </div>
         </div>
 
-        {/* Client / Service info */}
-        <div className="grid gap-4 border-b border-(--border) px-6 py-6 sm:grid-cols-2">
-          <div className="rounded-xl bg-(--bg) p-4">
-            <p className="text-xs uppercase tracking-wider text-(--text)/60">Service Address</p>
-            <p className="mt-1 text-sm font-medium text-(--text)">
-              {projectAddress || "No service address provided"}
+        {/* Addresses */}
+        <div className="grid gap-3 border-b border-(--border) px-6 py-6 sm:grid-cols-2">
+          <div className="rounded-xl bg-(--bg) p-4 sm:col-span-2">
+            <p className="text-xs uppercase tracking-wider text-(--text)/60">TL Corp</p>
+            <p className="mt-1 text-sm font-medium text-(--text)">{organization.business_name}</p>
+            <p className="text-sm text-(--text)/70">{organization.address_line1}</p>
+            <p className="text-sm text-(--text)/70">
+              {[organization.city_state, organization.postal_code].filter(Boolean).join(" ")}
             </p>
           </div>
           <div className="rounded-xl bg-(--bg) p-4">
             <p className="text-xs uppercase tracking-wider text-(--text)/60">Bill To</p>
             <p className="mt-1 text-sm font-medium text-(--text)">{clientName}</p>
             {clientEmail && <p className="text-sm text-(--text)/70">{clientEmail}</p>}
+          </div>
+          <div className="rounded-xl bg-(--bg) p-4">
+            <p className="text-xs uppercase tracking-wider text-(--text)/60">Billing Address</p>
+            <p className="mt-1 text-sm font-medium text-(--text)">
+              {billingAddress || "—"}
+            </p>
+          </div>
+          <div className="rounded-xl bg-(--bg) p-4 sm:col-span-2">
+            <p className="text-xs uppercase tracking-wider text-(--text)/60">Service Address</p>
+            <p className="mt-1 text-sm font-medium text-(--text)">
+              {serviceAddress || projectAddress || "No service address provided"}
+            </p>
           </div>
         </div>
 

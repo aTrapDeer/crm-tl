@@ -1,3 +1,5 @@
+import { DEFAULT_TL_CORP_ORGANIZATION } from "./tl-corp-organization";
+
 export interface DisclosureSection {
   title: string;
   lines: string[];
@@ -104,11 +106,12 @@ export const DISCLOSURE_SECTIONS: DisclosureSection[] = [
   },
 ];
 
+/** @deprecated Use TlCorpOrganization from the database via getTlCorpOrganization() */
 export const TL_CORP_INFO = {
-  name: "TAYLOR LEONARD CONSTRUCTION CORP.",
-  address: "4717 Don Ron Drive",
-  cityState: "St. Louis, MO 63123",
-  phone: "(314) 489-3229",
-  email: "taylorleonardcorp@gmail.com",
-  web: "www.TLcorp.build",
+  name: DEFAULT_TL_CORP_ORGANIZATION.business_name,
+  address: DEFAULT_TL_CORP_ORGANIZATION.address_line1,
+  cityState: `${DEFAULT_TL_CORP_ORGANIZATION.city_state} ${DEFAULT_TL_CORP_ORGANIZATION.postal_code}`.trim(),
+  phone: DEFAULT_TL_CORP_ORGANIZATION.phone,
+  email: DEFAULT_TL_CORP_ORGANIZATION.email,
+  web: DEFAULT_TL_CORP_ORGANIZATION.website,
 } as const;

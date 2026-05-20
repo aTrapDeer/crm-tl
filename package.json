@@ -17,7 +17,8 @@
     "db:migrate-bonan": "tsx scripts/migrate-bonan-reports.ts",
     "db:migrate-bonan-client-access": "tsx scripts/migrate-bonan-client-access.ts",
     "db:migrate-publication-status": "tsx scripts/migrate-publication-status.ts",
-    "db:migrate-monthly-fire-extinguisher-statuses": "tsx scripts/migrate-monthly-fire-extinguisher-statuses.ts"
+    "db:migrate-monthly-fire-extinguisher-statuses": "tsx scripts/migrate-monthly-fire-extinguisher-statuses.ts",
+    "db:migrate-tl-corp-organization": "tsx scripts/migrate-tl-corp-organization.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.993.0",

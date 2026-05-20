@@ -7,6 +7,7 @@ import EstimateViewer from "@/app/components/EstimateViewer";
 import type { EstimateLineItem } from "@/lib/projects";
 import type { EstimateSettingsInput } from "@/lib/estimate";
 import { DEFAULT_ESTIMATE_SETTINGS } from "@/lib/estimate";
+import type { TlCorpOrganization } from "@/lib/tl-corp-organization";
 
 export default function PublicEstimatePage() {
   const params = useParams();
@@ -15,7 +16,13 @@ export default function PublicEstimatePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [data, setData] = useState<{
+    organization: TlCorpOrganization;
     project: { id: string; name: string; address: string | null };
+    client_display?: {
+      clientName: string;
+      billingAddress: string | null;
+      serviceAddress: string | null;
+    };
     delivery: {
       sent_at: string;
       sent_to_email: string;
@@ -75,7 +82,7 @@ export default function PublicEstimatePage() {
       <div className="mx-auto max-w-4xl space-y-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs uppercase tracking-[0.2em] text-(--text)/50">
-            Taylor Leonard Construction Corp.
+            {data.organization.business_name}
           </p>
           <Link
             href="/login"
@@ -88,11 +95,18 @@ export default function PublicEstimatePage() {
         <EstimateViewer
           projectName={data.project.name}
           projectAddress={data.project.address}
-          clientName={data.delivery.recipient_name || data.delivery.sent_to_email}
+          clientName={
+            data.client_display?.clientName ||
+            data.delivery.recipient_name ||
+            data.delivery.sent_to_email
+          }
           clientEmail={data.delivery.sent_to_email}
+          billingAddress={data.client_display?.billingAddress}
+          serviceAddress={data.client_display?.serviceAddress}
           lineItems={data.delivery.snapshot_line_items}
           settings={data.delivery.snapshot_settings || DEFAULT_ESTIMATE_SETTINGS}
           grandTotal={data.delivery.snapshot_total}
+          organization={data.organization}
           hideLineItemPricing={Boolean(data.delivery.hide_line_item_prices_for_client)}
           hideMarkup={Boolean(data.delivery.hide_markup_for_client)}
           sentAt={data.delivery.sent_at}

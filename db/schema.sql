@@ -651,7 +651,45 @@ CREATE TABLE IF NOT EXISTS project_estimate_events (
   user_email TEXT,
   ip_address TEXT,
   user_agent TEXT,
+  channel TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_estimate_events_delivery ON project_estimate_events(delivery_id);
+
+-- ============ CRM CLIENT PROFILES ============
+
+CREATE TABLE IF NOT EXISTS crm_clients (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  email TEXT NOT NULL UNIQUE,
+  full_name TEXT NOT NULL,
+  address TEXT,
+  service_address TEXT,
+  billing_address TEXT,
+  user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  invitation_token TEXT,
+  invitation_status TEXT NOT NULL DEFAULT 'none'
+    CHECK (invitation_status IN ('none', 'pending', 'accepted', 'expired')),
+  invitation_expires_at TEXT,
+  invited_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_crm_clients_email ON crm_clients(email);
+CREATE INDEX IF NOT EXISTS idx_crm_clients_user ON crm_clients(user_id);
+
+-- ============ TL CORP ORGANIZATION (singleton) ============
+
+CREATE TABLE IF NOT EXISTS tl_corp_organization (
+  id TEXT PRIMARY KEY DEFAULT 'default',
+  registration_label TEXT NOT NULL DEFAULT 'Business Registered at',
+  business_name TEXT NOT NULL DEFAULT 'TAYLOR LEONARD CONSTRUCTION CORP.',
+  phone TEXT NOT NULL DEFAULT '3144893229',
+  email TEXT NOT NULL DEFAULT 'taylorleonardcorp@gmail.com',
+  address_line1 TEXT NOT NULL DEFAULT '4717 Don Ron Drive',
+  city_state TEXT NOT NULL DEFAULT 'ST. LOUIS MO',
+  postal_code TEXT NOT NULL DEFAULT '63123',
+  website TEXT NOT NULL DEFAULT 'www.TLcorp.build',
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);

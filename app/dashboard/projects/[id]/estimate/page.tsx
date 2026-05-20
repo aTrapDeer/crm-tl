@@ -7,10 +7,12 @@ import EstimateViewer from "@/app/components/EstimateViewer";
 import type { EstimateLineItem } from "@/lib/projects";
 import type { EstimateSettingsInput } from "@/lib/estimate";
 import { DEFAULT_ESTIMATE_SETTINGS } from "@/lib/estimate";
+import type { TlCorpOrganization } from "@/lib/tl-corp-organization";
 
 interface EstimateResponse {
   items: EstimateLineItem[];
   total: number;
+  organization?: TlCorpOrganization;
   settings?: EstimateSettingsInput;
   delivery_id?: string;
   tracking_token?: string;
@@ -18,6 +20,11 @@ interface EstimateResponse {
   estimate_sent?: boolean;
   hide_line_item_prices_for_client?: boolean;
   hide_markup_for_client?: boolean;
+  client_display?: {
+    clientName: string;
+    billingAddress: string | null;
+    serviceAddress: string | null;
+  } | null;
   error?: string;
 }
 
@@ -100,7 +107,7 @@ export default function ProjectEstimatePage() {
     );
   }
 
-  if (error || !project || !estimate) {
+  if (error || !project || !estimate || !estimate.organization) {
     return (
       <div className="mx-auto max-w-lg py-16 text-center">
         <h1 className="text-xl font-semibold text-(--text)">Estimate Not Available</h1>
@@ -139,11 +146,14 @@ export default function ProjectEstimatePage() {
       <EstimateViewer
         projectName={project.name}
         projectAddress={project.address}
-        clientName={clientInfo.name}
+        clientName={estimate.client_display?.clientName || clientInfo.name}
         clientEmail={clientInfo.email}
+        billingAddress={estimate.client_display?.billingAddress}
+        serviceAddress={estimate.client_display?.serviceAddress}
         lineItems={estimate.items}
         settings={estimate.settings || DEFAULT_ESTIMATE_SETTINGS}
         grandTotal={estimate.total}
+        organization={estimate.organization}
         hideLineItemPricing={estimate.hide_line_item_prices_for_client}
         hideMarkup={estimate.hide_markup_for_client}
         sentAt={estimate.sent_at}
