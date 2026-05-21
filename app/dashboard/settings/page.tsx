@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   DEFAULT_TL_CORP_ORGANIZATION,
   type TlCorpOrganizationInput,
-} from "@/lib/tl-corp-organization";
+} from "@/lib/tl-corp-organization-shared";
 
 interface SessionUser {
   id: string;

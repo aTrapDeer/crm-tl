@@ -1,4 +1,4 @@
-import { DEFAULT_TL_CORP_ORGANIZATION } from "./tl-corp-organization";
+import { DEFAULT_TL_CORP_ORGANIZATION } from "./tl-corp-organization-shared";
 
 export interface DisclosureSection {
   title: string;

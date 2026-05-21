@@ -6,10 +6,12 @@ import {
   calculateInstallmentAmounts,
   formatCurrency,
   getCategoryLabel,
-  type InstallmentScheduleItem,
 } from "@/lib/estimate";
 import { DISCLOSURE_SECTIONS } from "@/lib/estimate-terms";
-import { formatTlCorpPhone, type TlCorpOrganization } from "@/lib/tl-corp-organization";
+import {
+  formatTlCorpPhone,
+  type TlCorpOrganization,
+} from "@/lib/tl-corp-organization-shared";
 import type { EstimateLineItem } from "@/lib/projects";
 import type { EstimateSettingsInput } from "@/lib/estimate";
 

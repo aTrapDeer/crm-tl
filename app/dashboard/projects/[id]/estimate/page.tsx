@@ -7,7 +7,7 @@ import EstimateViewer from "@/app/components/EstimateViewer";
 import type { EstimateLineItem } from "@/lib/projects";
 import type { EstimateSettingsInput } from "@/lib/estimate";
 import { DEFAULT_ESTIMATE_SETTINGS } from "@/lib/estimate";
-import type { TlCorpOrganization } from "@/lib/tl-corp-organization";
+import type { TlCorpOrganization } from "@/lib/tl-corp-organization-shared";
 
 interface EstimateResponse {
   items: EstimateLineItem[];

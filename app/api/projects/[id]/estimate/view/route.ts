@@ -54,7 +54,7 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const deliveryToken = body.delivery_token as string | undefined;
 
-    let delivery = deliveryToken
+    const delivery = deliveryToken
       ? await getEstimateDeliveryByToken(deliveryToken)
       : await getActiveEstimateDelivery(id);
 

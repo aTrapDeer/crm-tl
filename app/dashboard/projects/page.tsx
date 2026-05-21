@@ -20,6 +20,11 @@ interface Project {
   created_at: string;
 }
 
+interface SessionUser {
+  id: string;
+  role: "admin" | "employee" | "client";
+}
+
 const statusConfig: Record<
   string,
   { label: string; badge: string; dot: string; ring: string }
@@ -86,6 +91,7 @@ export default function ProjectsHubPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -94,9 +100,14 @@ export default function ProjectsHubPage() {
   useEffect(() => {
     async function fetchProjects() {
       try {
-        const res = await fetch("/api/projects");
-        const data = await res.json();
-        setProjects(data.projects || []);
+        const [projectsRes, sessionRes] = await Promise.all([
+          fetch("/api/projects"),
+          fetch("/api/auth/session"),
+        ]);
+        const projectsData = await projectsRes.json();
+        const sessionData = await sessionRes.json().catch(() => ({}));
+        setProjects(projectsData.projects || []);
+        setUser(sessionData.user || null);
       } catch (error) {
         console.error("Failed to fetch projects:", error);
       } finally {
@@ -194,7 +205,16 @@ export default function ProjectsHubPage() {
               in a fresh detail page without losing your place.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="flex flex-col gap-3">
+            {user?.role === "admin" && (
+              <Link
+                href="/dashboard/projects/new"
+                className="inline-flex items-center justify-center rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#01224f] hover:bg-white/90"
+              >
+                + New Project
+              </Link>
+            )}
+            <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="rounded-2xl bg-white/10 px-4 py-3 backdrop-blur">
               <p className="text-white/70 text-xs uppercase tracking-[0.2em]">
                 Total
@@ -218,6 +238,7 @@ export default function ProjectsHubPage() {
                 Funded
               </p>
               <p className="text-2xl font-semibold">{stats.funded}</p>
+            </div>
             </div>
           </div>
         </div>

@@ -81,7 +81,16 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { name, description, status, address, start_date, end_date, budget_amount } = body;
+    const {
+      name,
+      description,
+      status,
+      address,
+      start_date,
+      end_date,
+      budget_amount,
+      funding_notes,
+    } = body;
 
     if (!name) {
       return Response.json({ error: "Project name is required" }, { status: 400 });
@@ -95,6 +104,7 @@ export async function POST(request: Request) {
       start_date,
       end_date,
       budget_amount,
+      funding_notes,
     });
 
     return Response.json({ project });

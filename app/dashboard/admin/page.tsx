@@ -4,14 +4,11 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ProjectDetailsModal from "@/app/components/ProjectDetailsModal";
-import AddressAutocomplete from "@/app/components/AddressAutocomplete";
-import { ModalLayer } from "@/app/components/ModalLayer";
 import {
   formatUsCentralDateTime,
   getMonthKey,
   getWeekEndSaturday,
 } from "@/lib/us-central-time";
-import { PREDEFINED_CATEGORIES } from "@/lib/estimate-categories";
 
 interface Project {
   id: string;
@@ -43,22 +40,6 @@ interface Assignment {
   first_name: string;
   last_name: string;
   role: string;
-}
-
-interface EstimateItem {
-  category: string;
-  customName: string;
-  description: string;
-  priceRate: string;
-  quantity: string;
-}
-
-interface EstimateCustomEntry {
-  id: string;
-  name: string;
-  description: string | null;
-  default_price_rate: number;
-  default_quantity: number;
 }
 
 type BonanReportStatus = "draft" | "submitted";
@@ -107,31 +88,15 @@ export default function AdminDashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showNewProject, setShowNewProject] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
-  const [customEntries, setCustomEntries] = useState<EstimateCustomEntry[]>([]);
-  const [savingCustomEntryIndex, setSavingCustomEntryIndex] = useState<number | null>(null);
   const [latestWeeklyReport, setLatestWeeklyReport] = useState<BonanHighlightReport | null>(null);
   const [latestMonthlyReport, setLatestMonthlyReport] = useState<BonanHighlightReport | null>(null);
   const [weeklySummary, setWeeklySummary] = useState<BonanHighlightSummary | null>(null);
   const [monthlySummary, setMonthlySummary] = useState<BonanHighlightSummary | null>(null);
   const [bonanHighlightsError, setBonanHighlightsError] = useState("");
-
-  const [newProject, setNewProject] = useState({
-    name: "",
-    description: "",
-    status: "planning",
-    address: "",
-  });
-  const [estimateItems, setEstimateItems] = useState<EstimateItem[]>([]);
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [markupType, setMarkupType] = useState<"percentage" | "fixed">("percentage");
-  const [markupValue, setMarkupValue] = useState("");
-  const [taxRate, setTaxRate] = useState("");
-  const [onlineServicingFee, setOnlineServicingFee] = useState(true);
 
   useEffect(() => {
     fetchData();
@@ -139,16 +104,14 @@ export default function AdminDashboard() {
 
   async function fetchData() {
     try {
-      const [projectsRes, usersRes, customEntriesRes, weeklyReportsRes, monthlyReportsRes] = await Promise.all([
+      const [projectsRes, usersRes, weeklyReportsRes, monthlyReportsRes] = await Promise.all([
         fetch("/api/projects"),
         fetch("/api/users"),
-        fetch("/api/estimate/custom-entries"),
         fetch("/api/bonan/reports?report_type=weekly"),
         fetch("/api/bonan/reports?report_type=monthly"),
       ]);
       const projectsData = await projectsRes.json();
       const usersData = await usersRes.json();
-      const customEntriesData = customEntriesRes.ok ? await customEntriesRes.json() : { entries: [] };
       const weeklyReportsData = weeklyReportsRes.ok ? await weeklyReportsRes.json() : { reports: [] };
       const monthlyReportsData = monthlyReportsRes.ok ? await monthlyReportsRes.json() : { reports: [] };
 
@@ -159,7 +122,6 @@ export default function AdminDashboard() {
 
       setProjects(projectsData.projects || []);
       setUsers(usersData.users || []);
-      setCustomEntries(customEntriesData.entries || []);
       setLatestWeeklyReport(newestWeekly);
       setLatestMonthlyReport(newestMonthly);
 
@@ -199,192 +161,6 @@ export default function AdminDashboard() {
       setBonanHighlightsError("Bonan highlights are temporarily unavailable.");
     } finally {
       setLoading(false);
-    }
-  }
-
-  function toggleCategory(cat: string) {
-    if (selectedCategories.includes(cat)) {
-      setSelectedCategories((prev) => prev.filter((c) => c !== cat));
-      setEstimateItems((prev) => prev.filter((item) => item.category !== cat));
-    } else {
-      setSelectedCategories((prev) => [...prev, cat]);
-      setEstimateItems((prev) => [
-        ...prev,
-        { category: cat, customName: "", description: "", priceRate: "", quantity: "1" },
-      ]);
-    }
-  }
-
-  function addCustomLineItem(template?: EstimateCustomEntry) {
-    setEstimateItems((prev) => [
-      ...prev,
-      {
-        category: "custom",
-        customName: template?.name || "",
-        description: template?.description || "",
-        priceRate:
-          template?.default_price_rate !== undefined
-            ? String(template.default_price_rate)
-            : "",
-        quantity:
-          template?.default_quantity !== undefined
-            ? String(template.default_quantity)
-            : "1",
-      },
-    ]);
-  }
-
-  function removeEstimateItem(index: number) {
-    setEstimateItems((prev) => {
-      const item = prev[index];
-      const next = prev.filter((_, idx) => idx !== index);
-
-      if (item && item.category !== "custom") {
-        setSelectedCategories((current) =>
-          current.filter((category) => category !== item.category)
-        );
-      }
-
-      return next;
-    });
-  }
-
-  async function handleSaveCustomEntry(index: number) {
-    const item = estimateItems[index];
-    if (!item || item.category !== "custom") return;
-
-    const trimmedName = item.customName.trim();
-    if (!trimmedName) {
-      window.alert("Custom entry name is required before saving.");
-      return;
-    }
-
-    setSavingCustomEntryIndex(index);
-    try {
-      const res = await fetch("/api/estimate/custom-entries", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: trimmedName,
-          description: item.description.trim(),
-          default_price_rate: parseFloat(item.priceRate) || 0,
-          default_quantity: parseFloat(item.quantity) || 1,
-        }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        window.alert(data.error || "Failed to save custom entry");
-        return;
-      }
-
-      setCustomEntries((prev) => {
-        const withoutCurrent = prev.filter((entry) => entry.id !== data.entry.id);
-        return [...withoutCurrent, data.entry].sort((a, b) =>
-          a.name.localeCompare(b.name)
-        );
-      });
-    } catch (error) {
-      console.error("Failed to save custom entry:", error);
-      window.alert("Failed to save custom entry");
-    } finally {
-      setSavingCustomEntryIndex(null);
-    }
-  }
-
-  function updateEstimateItem(index: number, field: keyof EstimateItem, value: string) {
-    setEstimateItems((prev) => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
-      return updated;
-    });
-  }
-
-  function getItemTotal(item: EstimateItem): number {
-    const rate = parseFloat(item.priceRate) || 0;
-    const qty = parseFloat(item.quantity) || 0;
-    return rate * qty;
-  }
-
-  function getEstimateGrandTotal(): number {
-    return estimateItems.reduce((sum, item) => sum + getItemTotal(item), 0);
-  }
-
-  function getEstimateBreakdown() {
-    const subtotal = getEstimateGrandTotal();
-    const markup = markupType === "percentage"
-      ? subtotal * ((parseFloat(markupValue) || 0) / 100)
-      : (parseFloat(markupValue) || 0);
-    const afterMarkup = subtotal + markup;
-    const tax = afterMarkup * ((parseFloat(taxRate) || 0) / 100);
-    const afterTax = afterMarkup + tax;
-    const servicingFee = onlineServicingFee ? afterTax * 0.035 : 0;
-    const total = afterTax + servicingFee;
-    return { subtotal, markup, afterMarkup, tax, afterTax, servicingFee, total };
-  }
-
-  async function handleCreateProject(e: React.FormEvent) {
-    e.preventDefault();
-
-    const hasUnnamedCustomItem = estimateItems.some(
-      (item) => item.category === "custom" && !item.customName.trim()
-    );
-    if (hasUnnamedCustomItem) {
-      window.alert("Every custom budget entry needs a name.");
-      return;
-    }
-
-    try {
-      // Calculate budget from estimate (including markup, tax, servicing fee)
-      const breakdown = getEstimateBreakdown();
-      const budgetTotal = breakdown.total > 0 ? breakdown.total : getEstimateGrandTotal();
-
-      const res = await fetch("/api/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...newProject,
-          budget_amount: budgetTotal > 0 ? budgetTotal : null,
-          funding_notes: budgetTotal > 0 ? `Estimate Total: $${budgetTotal.toLocaleString()}` : null,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const projectId = data.project.id;
-
-        // Create estimate line items for the new project
-        for (const item of estimateItems) {
-          await fetch(`/api/projects/${projectId}/estimate`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              category: item.category,
-              custom_category_name: item.category === "custom" ? item.customName : undefined,
-              description: item.description,
-              price_rate: parseFloat(item.priceRate) || 0,
-              quantity: parseFloat(item.quantity) || 1,
-            }),
-          });
-        }
-
-        setShowNewProject(false);
-        setNewProject({
-          name: "",
-          description: "",
-          status: "planning",
-          address: "",
-        });
-        setEstimateItems([]);
-        setSelectedCategories([]);
-        setMarkupType("percentage");
-        setMarkupValue("");
-        setTaxRate("");
-        setOnlineServicingFee(true);
-        fetchData();
-      }
-    } catch (error) {
-      console.error("Failed to create project:", error);
     }
   }
 
@@ -558,12 +334,12 @@ export default function AdminDashboard() {
           </p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
-          <button
-            onClick={() => setShowNewProject(true)}
+          <Link
+            href="/dashboard/projects/new"
             className="flex-1 sm:flex-initial tl-btn px-4 md:px-6 py-2.5 text-sm"
           >
             + New Project
-          </button>
+          </Link>
         </div>
       </div>
 
@@ -1080,334 +856,6 @@ export default function AdminDashboard() {
           </table>
         </div>
       </div>
-
-      {/* New Project Modal */}
-      {showNewProject && (
-        <ModalLayer align="sheet" className="bg-black/50" onBackdropClick={() => setShowNewProject(false)}>
-          <div
-            className="tl-card p-4 md:p-8 w-full max-w-lg max-h-[95vh] md:max-h-[90vh] overflow-y-auto rounded-t-3xl md:rounded-3xl rounded-b-none md:rounded-b-3xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg md:text-xl font-semibold text-(--text) mb-4 md:mb-6">
-              Create New Project
-            </h3>
-            <form onSubmit={handleCreateProject} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-(--text) mb-2">
-                  Project Name
-                </label>
-                <input
-                  type="text"
-                  value={newProject.name}
-                  onChange={(e) =>
-                    setNewProject({ ...newProject, name: e.target.value })
-                  }
-                  required
-                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-(--text) mb-2">
-                  Description
-                </label>
-                <textarea
-                  value={newProject.description}
-                  onChange={(e) =>
-                    setNewProject({ ...newProject, description: e.target.value })
-                  }
-                  rows={3}
-                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-(--text) mb-2">
-                  Address
-                </label>
-                <AddressAutocomplete
-                  value={newProject.address}
-                  onChange={(value) =>
-                    setNewProject({ ...newProject, address: value })
-                  }
-                  placeholder="Start typing an address..."
-                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-(--text) mb-2">
-                  Status
-                </label>
-                <select
-                  value={newProject.status}
-                  onChange={(e) =>
-                    setNewProject({ ...newProject, status: e.target.value })
-                  }
-                  className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text) focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                >
-                  <option value="planning">Planning</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="on_hold">On Hold</option>
-                  <option value="completed">Completed</option>
-                </select>
-              </div>
-
-              {/* Estimate Builder */}
-              <div className="pt-4 border-t border-(--border)">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-semibold text-(--text)">
-                    Estimate Builder
-                  </p>
-                  {getEstimateGrandTotal() > 0 && (
-                    <p className="text-lg font-bold text-(--text)">
-                      {formatCurrency(getEstimateBreakdown().total)}
-                    </p>
-                  )}
-                </div>
-                <p className="text-xs text-(--text) mb-4">
-                  Select line items to build the project estimate
-                </p>
-
-                {/* Category Checkboxes */}
-                <div className="grid grid-cols-2 gap-2 mb-4">
-                  {PREDEFINED_CATEGORIES.map((cat) => (
-                    <label
-                      key={cat}
-                      className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm cursor-pointer transition ${
-                        selectedCategories.includes(cat)
-                          ? "border-blue-400 bg-blue-50"
-                          : "border-(--border) hover:bg-(--bg)"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedCategories.includes(cat)}
-                        onChange={() => toggleCategory(cat)}
-                        className="h-4 w-4"
-                      />
-                      <span className="text-(--text)">{cat}</span>
-                    </label>
-                  ))}
-                </div>
-
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <button
-                    type="button"
-                    onClick={() => addCustomLineItem()}
-                    className="rounded-xl border border-purple-300 bg-purple-50 px-3 py-2 text-xs font-medium text-purple-700 hover:bg-purple-100"
-                  >
-                    + Add Custom Budget Entry
-                  </button>
-                  {customEntries.map((entry) => (
-                    <button
-                      key={entry.id}
-                      type="button"
-                      onClick={() => addCustomLineItem(entry)}
-                      className="rounded-xl border border-(--border) bg-white px-3 py-2 text-xs text-(--text) hover:bg-(--bg)"
-                      title={entry.description || entry.name}
-                    >
-                      + {entry.name}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Line Items */}
-                {estimateItems.length > 0 && (
-                  <div className="space-y-4">
-                    {estimateItems.map((item, idx) => (
-                      <div
-                        key={`${item.category}-${idx}`}
-                        className="p-3 rounded-xl border border-(--border) bg-(--bg) space-y-3"
-                      >
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-semibold text-(--text)">
-                            {item.category === "custom" ? (
-                              <input
-                                type="text"
-                                value={item.customName}
-                                onChange={(e) => updateEstimateItem(idx, "customName", e.target.value)}
-                                placeholder="Custom category name"
-                                className="px-2 py-1 rounded-lg border border-(--border) bg-white text-(--text) text-sm focus:outline-none focus:ring-2 focus:ring-(--ring) w-48"
-                              />
-                            ) : (
-                              item.category
-                            )}
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-bold text-(--text)">
-                              {formatCurrency(getItemTotal(item))}
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() => removeEstimateItem(idx)}
-                              className="h-7 w-7 rounded-full border border-red-200 bg-white text-red-600 hover:bg-red-50"
-                              title="Remove line item"
-                              aria-label="Remove line item"
-                            >
-                              X
-                            </button>
-                          </div>
-                        </div>
-                        <div>
-                          <textarea
-                            value={item.description}
-                            onChange={(e) => updateEstimateItem(idx, "description", e.target.value)}
-                            rows={2}
-                            placeholder="Description - details about this line item..."
-                            className="w-full px-3 py-2 rounded-lg border border-(--border) bg-white text-(--text) text-sm focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs font-medium text-(--text) mb-1">
-                              Price Rate ($)
-                            </label>
-                            <input
-                              type="number"
-                              value={item.priceRate}
-                              onChange={(e) => updateEstimateItem(idx, "priceRate", e.target.value)}
-                              placeholder="0.00"
-                              step="0.01"
-                              min="0"
-                              className="w-full px-3 py-2 rounded-lg border border-(--border) bg-white text-(--text) text-sm focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-(--text) mb-1">
-                              Quantity
-                            </label>
-                            <input
-                              type="number"
-                              value={item.quantity}
-                              onChange={(e) => updateEstimateItem(idx, "quantity", e.target.value)}
-                              placeholder="1"
-                              step="0.01"
-                              min="0"
-                              className="w-full px-3 py-2 rounded-lg border border-(--border) bg-white text-(--text) text-sm focus:outline-none focus:ring-2 focus:ring-(--ring)"
-                            />
-                          </div>
-                        </div>
-                        {item.category === "custom" && (
-                          <button
-                            type="button"
-                            onClick={() => handleSaveCustomEntry(idx)}
-                            disabled={savingCustomEntryIndex === idx}
-                            className="rounded-lg border border-(--border) bg-white px-3 py-1.5 text-xs font-medium text-(--text) hover:bg-(--bg) disabled:opacity-60"
-                          >
-                            {savingCustomEntryIndex === idx
-                              ? "Saving..."
-                              : "Save Entry for Future Projects"}
-                          </button>
-                        )}
-                      </div>
-                    ))}
-
-                    {/* Subtotal */}
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-(--tl-sand)">
-                      <p className="text-sm font-semibold text-(--tl-navy)">Subtotal</p>
-                      <p className="text-lg font-bold text-(--tl-navy)">
-                        {formatCurrency(getEstimateGrandTotal())}
-                      </p>
-                    </div>
-
-                    {/* Markup */}
-                    <div className="p-3 rounded-xl border border-(--border) space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-(--tl-navy)">Markup</p>
-                        <div className="flex items-center gap-2">
-                          <select
-                            value={markupType}
-                            onChange={(e) => setMarkupType(e.target.value as "percentage" | "fixed")}
-                            className="text-xs px-2 py-1 rounded-lg border border-(--border) bg-white text-(--tl-navy)"
-                          >
-                            <option value="percentage">%</option>
-                            <option value="fixed">$</option>
-                          </select>
-                          <input
-                            type="number"
-                            value={markupValue}
-                            onChange={(e) => setMarkupValue(e.target.value)}
-                            placeholder="0"
-                            step="0.01"
-                            min="0"
-                            className="w-20 text-right text-sm px-2 py-1 rounded-lg border border-(--border) bg-white text-(--tl-navy)"
-                          />
-                        </div>
-                      </div>
-                      {(parseFloat(markupValue) || 0) > 0 && (
-                        <p className="text-xs text-right text-(--tl-teal)">
-                          +{formatCurrency(getEstimateBreakdown().markup)}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Tax */}
-                    <div className="p-3 rounded-xl border border-(--border) space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-(--tl-navy)">Tax (%)</p>
-                        <input
-                          type="number"
-                          value={taxRate}
-                          onChange={(e) => setTaxRate(e.target.value)}
-                          placeholder="0"
-                          step="0.01"
-                          min="0"
-                          className="w-20 text-right text-sm px-2 py-1 rounded-lg border border-(--border) bg-white text-(--tl-navy)"
-                        />
-                      </div>
-                      {(parseFloat(taxRate) || 0) > 0 && (
-                        <p className="text-xs text-right text-(--tl-teal)">
-                          +{formatCurrency(getEstimateBreakdown().tax)}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Online Servicing Fee */}
-                    <div className="p-3 rounded-xl border border-(--border)">
-                      <label className="flex items-center justify-between cursor-pointer">
-                        <span className="text-sm font-medium text-(--tl-navy)">Online Servicing Fee (3.5%)</span>
-                        <input
-                          type="checkbox"
-                          checked={onlineServicingFee}
-                          onChange={(e) => setOnlineServicingFee(e.target.checked)}
-                          className="h-4 w-4"
-                        />
-                      </label>
-                      {onlineServicingFee && getEstimateBreakdown().servicingFee > 0 && (
-                        <p className="text-xs text-right text-(--tl-teal) mt-1">
-                          +{formatCurrency(getEstimateBreakdown().servicingFee)}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Grand Total */}
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-gray-900 text-white">
-                      <p className="text-sm font-semibold">Estimate Total</p>
-                      <p className="text-xl font-bold">
-                        {formatCurrency(getEstimateBreakdown().total)}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setShowNewProject(false)}
-                  className="flex-1 rounded-full border border-(--border)/30 px-4 py-2.5 text-sm font-medium text-(--text) hover:bg-(--bg) transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 tl-btn px-4 py-2.5 text-sm"
-                >
-                  Create Project
-                </button>
-              </div>
-            </form>
-          </div>
-        </ModalLayer>
-      )}
 
       {/* Project Details Modal */}
       {showDetailsModal && selectedProject && (
