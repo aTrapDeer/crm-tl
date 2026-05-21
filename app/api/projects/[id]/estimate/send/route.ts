@@ -137,15 +137,17 @@ export async function POST(
     });
     await clearProjectSignatures(id);
 
-    const [organization, clientDisplay] = await Promise.all([
+    const [organization, clientDisplay, targetUser] = await Promise.all([
       getTlCorpOrganization(),
       getEstimateClientDisplayForEmail(targetEmail),
+      targetUserId ? getUserById(targetUserId) : Promise.resolve(null),
     ]);
 
     const emailSent = await sendProjectEstimateEmail({
       to: targetEmail,
       projectName: project.name,
       clientName: clientDisplay.clientName === targetEmail ? clientName : clientDisplay.clientName,
+      clientPhone: targetUser?.phone,
       projectAddress: project.address,
       billingAddress: clientDisplay.billingAddress,
       serviceAddress: clientDisplay.serviceAddress || project.address,

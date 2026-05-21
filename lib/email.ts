@@ -175,6 +175,34 @@ function getClientEmailTemplate(
   `;
 }
 
+function getEstimateInvoiceEmailTemplate(content: string, title: string): string {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>${title}</title>
+    </head>
+    <body style="margin: 0; padding: 0; font-family: Arial, Helvetica, sans-serif; background-color: #eef2f7;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="min-width: 100%; background-color: #eef2f7;">
+        <tr>
+          <td align="center" style="padding: 28px 12px;">
+            <table role="presentation" width="720" cellspacing="0" cellpadding="0" style="max-width: 720px; background-color: #ffffff; border: 1px solid #d9e1ec; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);">
+              <tr>
+                <td style="padding: 28px 32px;">
+                  ${content}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
+}
+
 // ============ HELPER FUNCTIONS ============
 
 async function getAdminEmails(): Promise<string[]> {
@@ -1228,6 +1256,7 @@ export async function sendProjectEstimateEmail(data: {
   to: string;
   projectName: string;
   clientName: string;
+  clientPhone?: string | null;
   projectAddress?: string | null;
   billingAddress?: string | null;
   serviceAddress?: string | null;
@@ -1261,6 +1290,12 @@ export async function sendProjectEstimateEmail(data: {
   const trackingLogoUrl = getEstimateTrackingLogoUrl(data.deliveryToken);
   const trackingPixelUrl = getEstimateTrackingPixelUrl(data.deliveryToken);
   const estimateReference = data.deliveryToken.slice(0, 8).toUpperCase();
+  const invoiceNumber = `EST-${estimateReference}`;
+  const invoiceDate = new Date().toLocaleDateString("en-US", {
+    month: "2-digit",
+    day: "2-digit",
+    year: "numeric",
+  });
   const estimateSubject = `TL Corp Estimate #${estimateReference}: ${data.projectName} — ${formatCurrency(data.grandTotal)}`;
   const tlCorp = data.organization || {
     businessName: "TL Corp",
@@ -1273,9 +1308,8 @@ export async function sendProjectEstimateEmail(data: {
   };
   const serviceAddress = data.serviceAddress || data.projectAddress || "No service address provided";
   const billingAddress = data.billingAddress || "No billing address provided";
-  const tlCorpAddress = [tlCorp.addressLine1, `${tlCorp.cityState} ${tlCorp.postalCode}`.trim()]
-    .filter(Boolean)
-    .join("<br />");
+  const tlCorpCityLine = `${tlCorp.cityState} ${tlCorp.postalCode}`.trim();
+  const clientPhone = data.clientPhone || "Not on file";
 
   const lineItemsHtml = data.lineItems
     .map(
@@ -1305,14 +1339,14 @@ export async function sendProjectEstimateEmail(data: {
     .join("");
 
   const lineItemTableHeaders = hideLineItemPricing
-    ? `<th style="padding: 10px 8px; text-align: left; color: #6b7280; font-size: 11px; text-transform: uppercase;">Category</th>
-          <th style="padding: 10px 8px; text-align: left; color: #6b7280; font-size: 11px; text-transform: uppercase;">Description</th>
-          <th style="padding: 10px 8px; text-align: right; color: #6b7280; font-size: 11px; text-transform: uppercase;">Qty</th>`
-    : `<th style="padding: 10px 8px; text-align: left; color: #6b7280; font-size: 11px; text-transform: uppercase;">Category</th>
-          <th style="padding: 10px 8px; text-align: left; color: #6b7280; font-size: 11px; text-transform: uppercase;">Description</th>
-          <th style="padding: 10px 8px; text-align: right; color: #6b7280; font-size: 11px; text-transform: uppercase;">Qty</th>
-          <th style="padding: 10px 8px; text-align: right; color: #6b7280; font-size: 11px; text-transform: uppercase;">Rate</th>
-          <th style="padding: 10px 8px; text-align: right; color: #6b7280; font-size: 11px; text-transform: uppercase;">Total</th>`;
+    ? `<th style="padding: 10px 8px; text-align: left; color: #ffffff; font-size: 11px; text-transform: uppercase;">Category</th>
+          <th style="padding: 10px 8px; text-align: left; color: #ffffff; font-size: 11px; text-transform: uppercase;">Description/Area</th>
+          <th style="padding: 10px 8px; text-align: right; color: #ffffff; font-size: 11px; text-transform: uppercase;">Qty</th>`
+    : `<th style="padding: 10px 8px; text-align: left; color: #ffffff; font-size: 11px; text-transform: uppercase;">Category</th>
+          <th style="padding: 10px 8px; text-align: left; color: #ffffff; font-size: 11px; text-transform: uppercase;">Description/Area</th>
+          <th style="padding: 10px 8px; text-align: right; color: #ffffff; font-size: 11px; text-transform: uppercase;">Qty</th>
+          <th style="padding: 10px 8px; text-align: right; color: #ffffff; font-size: 11px; text-transform: uppercase;">Rate</th>
+          <th style="padding: 10px 8px; text-align: right; color: #ffffff; font-size: 11px; text-transform: uppercase;">Amount</th>`;
 
   const pricingSummaryHtml = hideLineItemPricing
     ? ""
@@ -1338,62 +1372,74 @@ export async function sendProjectEstimateEmail(data: {
 
   const content = `
     <img src="${trackingPixelUrl}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0;margin:0;padding:0;" />
-    <h2 style="margin: 0 0 16px; color: #01224f; font-size: 20px; font-weight: 600;">
-      Your Project Estimate
-    </h2>
-    <p style="margin: 0 0 16px; color: #0d3e8d; font-size: 16px; line-height: 1.6;">
-      Hi ${data.clientName},
-    </p>
-    <p style="margin: 0 0 24px; color: #0d3e8d; font-size: 16px; line-height: 1.6;">
-      TL Corp has prepared an estimate for <strong>${data.projectName}</strong>.
-      ${hideLineItemPricing ? "Your total and payment schedule are below — scope details are included without per-line pricing." : "The full breakdown is below — no account required to view."}
-    </p>
-
-    <div style="background-color: #01224f; border-radius: 12px; padding: 20px; margin-bottom: 24px; text-align: center;">
-      <p style="margin: 0 0 4px; color: #94a3b8; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;">Total Estimate</p>
-      <p style="margin: 0; color: #ffffff; font-size: 32px; font-weight: 700;">${formatCurrency(data.grandTotal)}</p>
-      <p style="margin: 8px 0 0; color: #cbd5e1; font-size: 12px;">Estimate #${estimateReference}</p>
-    </div>
-
-    <h3 style="margin: 0 0 12px; color: #01224f; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;">Billing Details</h3>
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 24px;">
       <tr>
-        <td style="padding: 0 6px 12px 0; vertical-align: top; width: 50%;">
-          <div style="background-color: #f7f8fb; border: 1px solid #e8edf4; border-radius: 12px; padding: 14px;">
-            <p style="margin: 0 0 6px; color: #6b7280; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;">Bill To</p>
-            <p style="margin: 0; color: #01224f; font-size: 14px; font-weight: 700;">${data.clientName}</p>
-            <p style="margin: 4px 0 0; color: #0d3e8d; font-size: 13px; line-height: 1.5;">${data.to}</p>
-          </div>
+        <td style="vertical-align: top; width: 56%; padding-right: 20px;">
+          <img src="${trackingLogoUrl}" alt="TL Corp" width="64" height="64" style="display:block;border:0;margin:0 0 12px;" />
+          <p style="margin: 0 0 8px; color: #01224f; font-size: 15px; font-weight: 700; letter-spacing: 0.02em;">${tlCorp.businessName}</p>
+          <p style="margin: 0; color: #1f2937; font-size: 12px; line-height: 1.45;">${tlCorp.addressLine1}</p>
+          <p style="margin: 0; color: #1f2937; font-size: 12px; line-height: 1.45;">${tlCorpCityLine}</p>
+          <p style="margin: 5px 0 0; color: #1f2937; font-size: 12px; line-height: 1.45;">${tlCorp.email}</p>
+          <p style="margin: 0; color: #1f2937; font-size: 12px; line-height: 1.45;">Phone: ${tlCorp.phone}</p>
         </td>
-        <td style="padding: 0 0 12px 6px; vertical-align: top; width: 50%;">
-          <div style="background-color: #f7f8fb; border: 1px solid #e8edf4; border-radius: 12px; padding: 14px;">
-            <p style="margin: 0 0 6px; color: #6b7280; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;">Billing Address</p>
-            <p style="margin: 0; color: #0d3e8d; font-size: 13px; line-height: 1.5;">${billingAddress}</p>
-          </div>
-        </td>
-      </tr>
-      <tr>
-        <td style="padding: 0 6px 0 0; vertical-align: top; width: 50%;">
-          <div style="background-color: #f7f8fb; border: 1px solid #e8edf4; border-radius: 12px; padding: 14px;">
-            <p style="margin: 0 0 6px; color: #6b7280; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;">Service Address</p>
-            <p style="margin: 0; color: #0d3e8d; font-size: 13px; line-height: 1.5;">${serviceAddress}</p>
-          </div>
-        </td>
-        <td style="padding: 0 0 0 6px; vertical-align: top; width: 50%;">
-          <div style="background-color: #f7f8fb; border: 1px solid #e8edf4; border-radius: 12px; padding: 14px;">
-            <p style="margin: 0 0 6px; color: #6b7280; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;">TL Corp</p>
-            <p style="margin: 0; color: #01224f; font-size: 14px; font-weight: 700;">${tlCorp.businessName}</p>
-            <p style="margin: 4px 0 0; color: #0d3e8d; font-size: 13px; line-height: 1.5;">${tlCorpAddress}</p>
-            <p style="margin: 4px 0 0; color: #0d3e8d; font-size: 13px; line-height: 1.5;">${tlCorp.email}</p>
+        <td align="right" style="vertical-align: top; width: 44%;">
+          <div style="display:inline-block; min-width: 190px;">
+            <div style="border: 2px solid #111827; padding: 10px 14px; text-align: center;">
+              <p style="margin: 0 0 4px; color: #111827; font-size: 12px; font-weight: 700;">Invoice Estimate</p>
+              <p style="margin: 0; color: #111827; font-size: 14px; font-weight: 700;">${invoiceNumber}</p>
+            </div>
+            <div style="margin-top: 8px; border: 1px solid #9ca3af; padding: 8px 12px; text-align: center;">
+              <p style="margin: 0; color: #111827; font-size: 12px; font-weight: 700;">Project: ${data.projectName}</p>
+            </div>
+            <p style="margin: 10px 0 0; color: #111827; font-size: 12px; line-height: 1.5;">Date: ${invoiceDate}</p>
           </div>
         </td>
       </tr>
     </table>
 
-    <h3 style="margin: 0 0 12px; color: #01224f; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;">Scope &amp; Line Items</h3>
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 24px; border: 1px solid #e8edf4; border-radius: 8px; overflow: hidden;">
+    <p style="margin: 0 0 18px; color: #374151; font-size: 13px; line-height: 1.55;">
+      Hi ${data.clientName}, TL Corp has prepared the following invoice estimate.
+    </p>
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 22px;">
+      <tr>
+        <td style="vertical-align: top; width: 50%; padding-right: 8px;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border: 1px solid #e5e7eb;">
+            <tr>
+              <td style="background-color: #f3f4f6; padding: 9px 11px; color: #111827; font-size: 13px; font-weight: 700;">Customer Information</td>
+            </tr>
+            <tr>
+              <td style="padding: 12px; color: #111827; font-size: 12px; line-height: 1.55;">
+                <strong>Name:</strong> ${data.clientName}<br />
+                <strong>Email Address:</strong> ${data.to}<br />
+                <strong>Phone:</strong> ${clientPhone}<br />
+                <strong>Billing Address:</strong> ${billingAddress}
+              </td>
+            </tr>
+          </table>
+        </td>
+        <td style="vertical-align: top; width: 50%; padding-left: 8px;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border: 1px solid #e5e7eb;">
+            <tr>
+              <td style="background-color: #f3f4f6; padding: 9px 11px; color: #111827; font-size: 13px; font-weight: 700;">Service Site Details</td>
+            </tr>
+            <tr>
+              <td style="padding: 12px; color: #111827; font-size: 12px; line-height: 1.55;">
+                <strong>Project:</strong> ${data.projectName}<br />
+                <strong>Service Address:</strong> ${serviceAddress}<br />
+                <strong>Contact Name:</strong> ${data.clientName}<br />
+                <strong>Email:</strong> ${data.to}<br />
+                <strong>Phone:</strong> ${clientPhone}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 20px; border: 1px solid #cbd5e1; border-collapse: collapse;">
       <thead>
-        <tr style="background-color: #f7f8fb;">
+        <tr style="background-color: #2f668c;">
           ${lineItemTableHeaders}
         </tr>
       </thead>
@@ -1438,9 +1484,7 @@ export async function sendProjectEstimateEmail(data: {
   return sendEmail({
     to: data.to,
     subject: estimateSubject,
-    html: getClientEmailTemplate(content, "Project Estimate", {
-      logoUrl: trackingLogoUrl,
-    }),
+    html: getEstimateInvoiceEmailTemplate(content, "Project Estimate"),
     messageId: `<estimate-${data.deliveryToken}@${MESSAGE_ID_DOMAIN}>`,
     headers: {
       "X-Entity-Ref-ID": `estimate-${data.deliveryToken}`,

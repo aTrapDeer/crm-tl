@@ -186,6 +186,8 @@ export default function ProjectPage() {
   >([]);
   const [selectedRecipientEmail, setSelectedRecipientEmail] = useState("");
   const [sendingEstimate, setSendingEstimate] = useState(false);
+  const [sendRecipientsLoading, setSendRecipientsLoading] = useState(false);
+  const [sendRecipientsError, setSendRecipientsError] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [previewClientView, setPreviewClientView] = useState(false);
@@ -382,17 +384,29 @@ export default function ProjectPage() {
   }, [markupType, markupValue, taxRate, onlineServicingFee, installmentSchedule, settingsLoaded]);
 
   async function openSendEstimateModal() {
+    setShowInviteCustomer(false);
+    setShowSendEstimate(true);
+    setSendRecipientsLoading(true);
+    setSendRecipientsError("");
+    setSelectedRecipientEmail("");
+    setSendRecipients([]);
     try {
       const res = await fetch(`/api/projects/${projectId}/estimate/send`);
       const data = await res.json();
+      if (!res.ok) {
+        setSendRecipientsError(data.error || "Failed to load estimate recipients.");
+        return;
+      }
       const recipients = data.recipients || data.clients || [];
       setSendRecipients(recipients);
       if (recipients.length === 1) {
         setSelectedRecipientEmail(recipients[0].email);
       }
-      setShowSendEstimate(true);
     } catch (error) {
       console.error("Failed to load recipients:", error);
+      setSendRecipientsError("Failed to load estimate recipients.");
+    } finally {
+      setSendRecipientsLoading(false);
     }
   }
 
@@ -903,6 +917,7 @@ export default function ProjectPage() {
   }
 
   async function openInviteCustomerModal() {
+    setShowSendEstimate(false);
     setShowInviteCustomer(true);
     setInviteMode("existing");
     setSelectedCrmClientId("");
@@ -2696,8 +2711,8 @@ export default function ProjectPage() {
       {/* Invite Customer Modal */}
       {showInviteCustomer && (
         <ModalLayer
-          align="sheet"
-          className="bg-black/50"
+          align="center"
+          className="bg-black/60"
           onBackdropClick={() => {
             setShowInviteCustomer(false);
             setInviteEmail("");
@@ -2707,7 +2722,7 @@ export default function ProjectPage() {
           }}
         >
           <div
-            className="tl-card p-4 md:p-6 w-full max-w-xl rounded-none md:rounded-3xl max-h-svh md:max-h-[90vh] overflow-y-auto"
+            className="tl-card w-full max-w-xl rounded-3xl p-4 md:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold text-(--text) mb-4">
@@ -2967,9 +2982,9 @@ export default function ProjectPage() {
       )}
 
       {showSendEstimate && (
-        <ModalLayer align="sheet" className="bg-black/50" onBackdropClick={() => setShowSendEstimate(false)}>
+        <ModalLayer align="center" className="bg-black/60" onBackdropClick={() => setShowSendEstimate(false)}>
           <div
-            className="tl-card w-full max-w-md overflow-hidden rounded-none md:rounded-3xl"
+            className="tl-card w-full max-w-md overflow-hidden rounded-3xl max-h-[calc(100dvh-2rem)] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 border-b border-(--border)">
@@ -2979,10 +2994,32 @@ export default function ProjectPage() {
               </p>
             </div>
             <div className="p-6 space-y-4">
-              {sendRecipients.length === 0 ? (
-                <p className="text-sm text-(--text)/70">
-                  No clients or pending invitations. Invite a customer first, then send the estimate to their email.
-                </p>
+              {sendRecipientsLoading ? (
+                <div className="rounded-xl border border-(--border) bg-(--bg) p-4 text-sm text-(--text)/70">
+                  Loading client recipients...
+                </div>
+              ) : sendRecipientsError ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                  {sendRecipientsError}
+                </div>
+              ) : sendRecipients.length === 0 ? (
+                <div className="rounded-xl border border-(--border) bg-(--bg) p-4">
+                  <p className="text-sm text-(--text)/70">
+                    No clients or pending invitations are attached to this project yet.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSendEstimate(false);
+                    setTimeout(() => {
+                      void openInviteCustomerModal();
+                    }, 0);
+                    }}
+                    className="mt-3 rounded-full bg-(--tl-navy) px-4 py-2 text-xs font-semibold text-white hover:bg-(--tl-royal)"
+                  >
+                    Invite or add client
+                  </button>
+                </div>
               ) : (
                 <div>
                   <label className="text-sm font-medium text-(--text)">Recipient</label>
@@ -3017,14 +3054,16 @@ export default function ProjectPage() {
               </div>
               <div className="flex gap-3">
                 <button
+                  type="button"
                   onClick={() => setShowSendEstimate(false)}
                   className="flex-1 rounded-full border border-(--border) px-4 py-2.5 text-sm font-medium text-(--text)"
                 >
                   Cancel
                 </button>
                 <button
+                  type="button"
                   onClick={handleSendEstimate}
-                  disabled={sendingEstimate || !selectedRecipientEmail}
+                  disabled={sendRecipientsLoading || sendingEstimate || !selectedRecipientEmail}
                   className="flex-1 rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                 >
                   {sendingEstimate ? "Sending..." : "Send Estimate"}
