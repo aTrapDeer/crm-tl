@@ -2,9 +2,6 @@
 
 import { useEffect, useState } from "react";
 import AddressAutocomplete from "@/app/components/AddressAutocomplete";
-import ContactImportButton, {
-  type ImportedContact,
-} from "@/app/components/ContactImportButton";
 
 export interface ClientProfileFormState {
   fullName: string;
@@ -21,7 +18,6 @@ interface ClientProfileFieldsProps {
   onChange: (next: ClientProfileFormState) => void;
   emailDisabled?: boolean;
   showEmail?: boolean;
-  showContactImport?: boolean;
 }
 
 const inputClass =
@@ -32,7 +28,6 @@ export default function ClientProfileFields({
   onChange,
   emailDisabled = false,
   showEmail = true,
-  showContactImport = true,
 }: ClientProfileFieldsProps) {
   const [proximity, setProximity] = useState<{ lat: number; lon: number } | null>(null);
 
@@ -55,26 +50,8 @@ export default function ClientProfileFields({
     onChange({ ...value, ...partial });
   }
 
-  function handleImportedContact(contact: ImportedContact) {
-    const next: ClientProfileFormState = { ...value };
-    if (contact.fullName) next.fullName = contact.fullName;
-    if (contact.email && !emailDisabled) next.email = contact.email;
-    if (contact.address) {
-      next.address = contact.address;
-      if (next.serviceSameAsAddress) next.serviceAddress = contact.address;
-      if (next.billingSameAsAddress) next.billingAddress = contact.address;
-    }
-    onChange(next);
-  }
-
   return (
     <div className="space-y-3 sm:space-y-4">
-      {showContactImport && (
-        <div className="flex justify-end">
-          <ContactImportButton onImport={handleImportedContact} />
-        </div>
-      )}
-
       <div>
         <label className="mb-1 block text-xs font-medium text-(--text)/70">
           Full name

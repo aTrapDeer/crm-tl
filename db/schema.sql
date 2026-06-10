@@ -337,7 +337,7 @@ CREATE INDEX IF NOT EXISTS idx_work_orders_site ON work_orders(site);
 
 CREATE TABLE IF NOT EXISTS entity_photos (
   id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-  entity_type TEXT NOT NULL CHECK (entity_type IN ('work_order', 'incident_report')),
+  entity_type TEXT NOT NULL CHECK (entity_type IN ('work_order', 'incident_report', 'estimate_line_item')),
   entity_id TEXT NOT NULL,
   photo_role TEXT NOT NULL DEFAULT 'general' CHECK (photo_role IN ('before', 'after', 'general')),
   filename TEXT NOT NULL,
@@ -691,5 +691,6 @@ CREATE TABLE IF NOT EXISTS tl_corp_organization (
   city_state TEXT NOT NULL DEFAULT 'ST. LOUIS MO',
   postal_code TEXT NOT NULL DEFAULT '63123',
   website TEXT NOT NULL DEFAULT 'www.TLcorp.build',
+  invoice_footer TEXT NOT NULL DEFAULT '',
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

@@ -162,6 +162,13 @@ export default function ProjectPage() {
     price_rate: number;
     quantity: number;
     total: number;
+    photos?: Array<{
+      id: string;
+      photo_role: "before" | "after" | "general";
+      filename: string;
+      caption: string | null;
+      s3_url: string | null;
+    }>;
   }
   const [estimateItems, setEstimateItems] = useState<EstimateLineItem[]>([]);
   const [estimateTotal, setEstimateTotal] = useState(0);
@@ -192,6 +199,7 @@ export default function ProjectPage() {
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [previewClientView, setPreviewClientView] = useState(false);
   const [savingClientVisibility, setSavingClientVisibility] = useState(false);
+  const [uploadingEstimatePhotoFor, setUploadingEstimatePhotoFor] = useState<string | null>(null);
 
   function getEstimateBreakdown() {
     const subtotal = estimateTotal;
@@ -334,7 +342,7 @@ export default function ProjectPage() {
         setMarkupValue(String(s.markup_value || ""));
         setTaxRate(String(s.tax_rate || ""));
         setOnlineServicingFee(Boolean(s.servicing_fee));
-        setInstallmentSchedule(s.installment_schedule || []);
+        setInstallmentSchedule(normalizeInstallmentPercentages(s.installment_schedule || []));
         setSettingsLoaded(true);
       }
       setProjectSignatures(signaturesData.signatures || []);
@@ -440,21 +448,77 @@ export default function ProjectPage() {
     }
   }
 
+  function roundPercent(value: number) {
+    return Math.round(value * 100) / 100;
+  }
+
+  function normalizeInstallmentPercentages(
+    rows: InstallmentScheduleItem[],
+    changedIndex = rows.length - 1
+  ): InstallmentScheduleItem[] {
+    if (rows.length === 0) return rows;
+    if (rows.length === 1) return [{ ...rows[0], percent: 100 }];
+
+    const safeRows = rows.map((row) => ({
+      ...row,
+      percent: Math.max(0, Math.min(100, Number(row.percent) || 0)),
+    }));
+    const balanceIndex =
+      changedIndex === safeRows.length - 1 ? safeRows.length - 2 : safeRows.length - 1;
+
+    const next = [...safeRows];
+    const fixedIndices = next
+      .map((_, index) => index)
+      .filter((index) => index !== changedIndex && index !== balanceIndex);
+    let fixedTotal = fixedIndices.reduce((sum, index) => sum + next[index].percent, 0);
+    const maxChanged = Math.max(0, 100 - fixedTotal);
+    next[changedIndex] = {
+      ...next[changedIndex],
+      percent: roundPercent(Math.min(next[changedIndex].percent, maxChanged)),
+    };
+
+    const availableForFixed = Math.max(0, 100 - next[changedIndex].percent);
+    if (fixedTotal > availableForFixed && fixedTotal > 0) {
+      const scale = availableForFixed / fixedTotal;
+      fixedIndices.forEach((index) => {
+        next[index] = { ...next[index], percent: roundPercent(next[index].percent * scale) };
+      });
+      fixedTotal = fixedIndices.reduce((sum, index) => sum + next[index].percent, 0);
+    }
+    next[balanceIndex] = {
+      ...next[balanceIndex],
+      percent: roundPercent(Math.max(0, 100 - next[changedIndex].percent - fixedTotal)),
+    };
+
+    const total = roundPercent(next.reduce((sum, row) => sum + row.percent, 0));
+    const drift = roundPercent(100 - total);
+    next[balanceIndex] = {
+      ...next[balanceIndex],
+      percent: roundPercent(next[balanceIndex].percent + drift),
+    };
+    return next;
+  }
+
   function updateInstallment(index: number, field: keyof InstallmentScheduleItem, value: string | number) {
-    setInstallmentSchedule((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
-    );
+    setInstallmentSchedule((prev) => {
+      const next = prev.map((item, i) => (i === index ? { ...item, [field]: value } : item));
+      return field === "percent" ? normalizeInstallmentPercentages(next, index) : next;
+    });
   }
 
   function addInstallmentRow() {
-    setInstallmentSchedule((prev) => [
-      ...prev,
-      { label: "Payment", percent: 0, due_description: "" },
-    ]);
+    setInstallmentSchedule((prev) =>
+      normalizeInstallmentPercentages([
+        ...prev,
+        { label: "Payment", percent: 0, due_description: "" },
+      ])
+    );
   }
 
   function removeInstallmentRow(index: number) {
-    setInstallmentSchedule((prev) => prev.filter((_, i) => i !== index));
+    setInstallmentSchedule((prev) =>
+      normalizeInstallmentPercentages(prev.filter((_, i) => i !== index))
+    );
   }
 
   async function handleAddTask(e: React.FormEvent) {
@@ -659,6 +723,49 @@ export default function ProjectPage() {
       }
     } catch (error) {
       console.error("Failed to update estimate item:", error);
+    }
+  }
+
+  async function handleEstimateItemPhotoUpload(
+    itemId: string,
+    role: "before" | "after" | "general",
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("photo_role", role);
+    formData.append(
+      "caption",
+      role === "before" ? "Before photo" : role === "after" ? "Material photo" : "Line item photo"
+    );
+
+    setUploadingEstimatePhotoFor(itemId);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/estimate/items/${itemId}/photos`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || "Failed to upload photo");
+        return;
+      }
+      setEstimateItems((prev) =>
+        prev.map((item) =>
+          item.id === itemId
+            ? { ...item, photos: [...(item.photos || []), data.photo] }
+            : item
+        )
+      );
+    } catch (error) {
+      console.error("Failed to upload line item photo:", error);
+      alert("Failed to upload photo");
+    } finally {
+      setUploadingEstimatePhotoFor(null);
     }
   }
 
@@ -1120,10 +1227,6 @@ export default function ProjectPage() {
     applyClientVisibilityRules && project.hide_line_item_prices_for_client;
   const hideClientMarkup = applyClientVisibilityRules && project.hide_markup_for_client;
 
-  const estimateItemGridClass = hideClientLineItemPricing
-    ? "md:grid md:grid-cols-[5.5rem_minmax(0,1fr)_2.75rem_5.75rem] md:gap-x-4 md:items-center"
-    : "md:grid md:grid-cols-[5.5rem_minmax(0,1fr)_5.5rem_2.75rem_6.5rem_5.75rem] md:gap-x-4 md:items-center";
-
   return (
     <div className="mx-auto w-full min-w-0 max-w-6xl space-y-6 md:space-y-8">
       {/* Header */}
@@ -1376,269 +1479,290 @@ export default function ProjectPage() {
                     {hideClientMarkup && "Markup/tax/fee breakdown hidden."}
                   </div>
                 )}
-                {/* Line items table */}
-                <div className="overflow-hidden rounded-xl border border-(--border)">
-                  <div className={`hidden border-b border-(--border) bg-(--bg)/80 px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-(--text)/55 ${estimateItemGridClass}`}>
-                    <div>Category</div>
-                    <div>Description</div>
-                    {!hideClientLineItemPricing && <div className="text-right">Rate</div>}
-                    <div className="text-right">Qty</div>
-                    {!hideClientLineItemPricing && <div className="text-right">Total</div>}
-                    {userRole === "admin" && <div className="text-right">Actions</div>}
-                  </div>
-                  <div className="divide-y divide-(--border)">
-                {estimateItems.map((item) => {
-                  const isEditing = editingEstimateId === item.id;
-                  const previewTotal =
-                    (parseFloat(estimateEditForm.price_rate) || 0) *
-                    (parseFloat(estimateEditForm.quantity) || 0);
+                {/* Line item editor */}
+                <div className="space-y-3">
+                  {estimateItems.map((item, index) => {
+                    const isEditing = editingEstimateId === item.id;
+                    const previewTotal =
+                      (parseFloat(estimateEditForm.price_rate) || 0) *
+                      (parseFloat(estimateEditForm.quantity) || 0);
+                    const categoryLabel =
+                      item.category === "custom" ? item.custom_category_name || "Custom" : item.category;
+                    const visiblePhotos = (item.photos || []).filter((photo) => photo.s3_url);
+                    const itemTotal = isEditing ? previewTotal : item.total;
 
-                  return (
-                  <div
-                    key={item.id}
-                    className={isEditing ? "bg-(--tl-royal)/5" : ""}
-                  >
-                    {/* Mobile: card layout */}
-                    <div className="space-y-3 px-3 py-4 md:hidden">
-                      <div className="flex items-start justify-between gap-3">
-                        <span className="inline-flex max-w-[65%] rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-(--text)">
-                          {item.category === "custom" ? item.custom_category_name || "Custom" : item.category}
-                        </span>
-                        {!isEditing && userRole === "admin" && (
-                          <div className="flex shrink-0 items-center gap-1.5">
-                            <button
-                              onClick={() => startEditEstimateItem(item)}
-                              className="min-h-9 rounded-full border border-(--border) px-3 py-2 text-xs font-semibold text-(--text)"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => handleDeleteEstimateItem(item.id)}
-                              className="flex min-h-9 min-w-9 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-500"
-                              aria-label="Delete line item"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
+                    return (
+                      <article
+                        key={item.id}
+                        className={`overflow-hidden rounded-xl border bg-white shadow-md shadow-(--tl-navy)/5 transition ${
+                          isEditing
+                            ? "border-(--tl-royal) ring-2 ring-(--tl-royal)/15"
+                            : "border-(--border)"
+                        }`}
+                      >
+                        <div className="flex flex-col gap-3 border-b border-(--border) bg-(--tl-navy)/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs font-semibold uppercase tracking-[0.16em] text-(--text)/45">
+                                Line {index + 1}
+                              </span>
+                              <span className="max-w-full break-words rounded-md border border-(--tl-navy)/20 bg-white px-2.5 py-1 text-xs font-semibold text-(--tl-navy)">
+                                {categoryLabel}
+                              </span>
+                              {visiblePhotos.length > 0 && (
+                                <span className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                                  {visiblePhotos.length} photo{visiblePhotos.length === 1 ? "" : "s"}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        )}
-                      </div>
-                      {isEditing ? (
-                        <>
-                          <textarea
-                            value={estimateEditForm.description}
-                            onChange={(e) =>
-                              setEstimateEditForm((prev) => ({ ...prev, description: e.target.value }))
-                            }
-                            rows={3}
-                            placeholder="Description"
-                            className="w-full rounded-lg border border-(--border) bg-white px-3 py-2.5 text-base text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
-                          />
-                          <div className={`grid gap-3 ${hideClientLineItemPricing ? "grid-cols-1" : "grid-cols-2"}`}>
-                            {!hideClientLineItemPricing && (
-                              <div>
-                                <label className="mb-1 block text-xs font-medium text-(--text)/60">Rate</label>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  inputMode="decimal"
-                                  value={estimateEditForm.price_rate}
+                          {userRole === "admin" && (
+                            <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
+                              {isEditing ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveEstimateItem(item.id)}
+                                    className="inline-flex min-h-10 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                                  >
+                                    Save changes
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={cancelEditEstimateItem}
+                                    className="inline-flex min-h-10 items-center justify-center rounded-lg border border-(--border) bg-white px-4 py-2 text-sm font-semibold text-(--text) transition hover:bg-(--bg)"
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditEstimateItem(item)}
+                                    className="inline-flex min-h-10 items-center justify-center rounded-lg border border-(--border) bg-white px-4 py-2 text-sm font-semibold text-(--text) transition hover:border-(--tl-royal) hover:text-(--tl-royal)"
+                                  >
+                                    Edit scope
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteEstimateItem(item.id)}
+                                    className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition hover:bg-red-100"
+                                    aria-label="Delete line item"
+                                  >
+                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_17rem]">
+                          <div className="min-w-0 space-y-4">
+                            <section className="rounded-xl border border-(--border) bg-sky-50/60 p-4">
+                              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-(--tl-navy)">
+                                Scope description
+                              </p>
+                              {isEditing ? (
+                                <textarea
+                                  value={estimateEditForm.description}
                                   onChange={(e) =>
-                                    setEstimateEditForm((prev) => ({ ...prev, price_rate: e.target.value }))
+                                    setEstimateEditForm((prev) => ({ ...prev, description: e.target.value }))
                                   }
-                                  className="w-full rounded-lg border border-(--border) bg-white px-3 py-2.5 text-base text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
+                                  rows={5}
+                                  placeholder="Describe the work, area, materials, or client-visible scope for this line item."
+                                  className="min-h-32 w-full rounded-xl border border-(--border) bg-white px-4 py-3 text-base leading-relaxed text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
                                 />
-                              </div>
-                            )}
-                            <div>
-                              <label className="mb-1 block text-xs font-medium text-(--text)/60">Qty</label>
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                inputMode="decimal"
-                                value={estimateEditForm.quantity}
-                                onChange={(e) =>
-                                  setEstimateEditForm((prev) => ({ ...prev, quantity: e.target.value }))
-                                }
-                                className="w-full rounded-lg border border-(--border) bg-white px-3 py-2.5 text-base text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
-                              />
-                            </div>
-                          </div>
-                          {!hideClientLineItemPricing && (
-                            <div className="flex items-center justify-between rounded-lg bg-(--bg) px-3 py-2.5">
-                              <span className="text-sm text-(--text)/60">Line total</span>
-                              <span className="text-base font-semibold text-(--tl-navy)">{formatCurrency(previewTotal)}</span>
-                            </div>
-                          )}
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              onClick={() => handleSaveEstimateItem(item.id)}
-                              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white"
-                            >
-                              Save
-                            </button>
-                            <button
-                              onClick={cancelEditEstimateItem}
-                              className="inline-flex min-h-11 items-center justify-center rounded-full border border-(--border) px-4 py-2.5 text-sm font-semibold text-(--text)"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-sm leading-relaxed text-(--text) break-words">{item.description || "No description"}</p>
-                          <div className={`grid gap-2 rounded-lg bg-(--bg)/80 p-3 text-sm ${hideClientLineItemPricing ? "grid-cols-1" : "grid-cols-3"}`}>
-                            {!hideClientLineItemPricing && (
-                              <div>
-                                <p className="text-[11px] uppercase tracking-wide text-(--text)/50">Rate</p>
-                                <p className="mt-0.5 font-medium tabular-nums text-(--text)">${item.price_rate.toLocaleString()}</p>
-                              </div>
-                            )}
-                            <div>
-                              <p className="text-[11px] uppercase tracking-wide text-(--text)/50">Qty</p>
-                              <p className="mt-0.5 font-medium tabular-nums text-(--text)">{item.quantity}</p>
-                            </div>
-                            {!hideClientLineItemPricing && (
-                              <div>
-                                <p className="text-[11px] uppercase tracking-wide text-(--text)/50">Total</p>
-                                <p className="mt-0.5 font-semibold tabular-nums text-(--tl-navy)">{formatCurrency(item.total)}</p>
-                              </div>
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </div>
+                              ) : (
+                                <div className="min-h-20 rounded-xl border border-sky-200 bg-white px-4 py-3">
+                                  <p className="whitespace-pre-wrap break-words text-sm leading-6 text-(--text)">
+                                    {item.description || "No description added yet."}
+                                  </p>
+                                </div>
+                              )}
+                            </section>
 
-                    {/* Desktop: aligned grid row */}
-                    <div className={`hidden px-4 py-3 ${estimateItemGridClass} ${isEditing ? "md:items-start md:py-3.5" : ""}`}>
-                      <div className="min-w-0 self-center">
-                        <span className="inline-flex rounded-md bg-white px-2 py-0.5 text-xs font-semibold text-(--tl-navy) ring-1 ring-(--border)/60">
-                          {item.category === "custom" ? item.custom_category_name || "Custom" : item.category}
-                        </span>
-                      </div>
-                      <div className="min-w-0 self-center">
-                        {isEditing ? (
-                          <textarea
-                            value={estimateEditForm.description}
-                            onChange={(e) =>
-                              setEstimateEditForm((prev) => ({ ...prev, description: e.target.value }))
-                            }
-                            rows={2}
-                            placeholder="Description"
-                            className="w-full rounded-lg border border-(--border) bg-white px-3 py-2 text-sm text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
-                          />
-                        ) : (
-                          <p className="text-sm leading-snug text-(--text) line-clamp-2">
-                            {item.description || "No description"}
-                          </p>
-                        )}
-                      </div>
-                      {!hideClientLineItemPricing && (
-                        <div className="self-center text-right">
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={estimateEditForm.price_rate}
-                              onChange={(e) =>
-                                setEstimateEditForm((prev) => ({ ...prev, price_rate: e.target.value }))
-                              }
-                              className="w-full rounded-lg border border-(--border) bg-white px-2.5 py-2 text-right text-sm tabular-nums text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
-                            />
-                          ) : (
-                            <span className="text-sm tabular-nums text-(--text)">${item.price_rate.toLocaleString()}</span>
-                          )}
+                            {isEditing && (
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                {!hideClientLineItemPricing && (
+                                  <div>
+                                    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-(--text)/45">
+                                      Rate
+                                    </label>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      inputMode="decimal"
+                                      value={estimateEditForm.price_rate}
+                                      onChange={(e) =>
+                                        setEstimateEditForm((prev) => ({ ...prev, price_rate: e.target.value }))
+                                      }
+                                      className="w-full rounded-xl border border-(--border) bg-white px-4 py-3 text-base tabular-nums text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
+                                    />
+                                  </div>
+                                )}
+                                <div>
+                                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-(--text)/45">
+                                    Quantity
+                                  </label>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    inputMode="decimal"
+                                    value={estimateEditForm.quantity}
+                                    onChange={(e) =>
+                                      setEstimateEditForm((prev) => ({ ...prev, quantity: e.target.value }))
+                                    }
+                                    className="w-full rounded-xl border border-(--border) bg-white px-4 py-3 text-base tabular-nums text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            <section className="overflow-hidden rounded-xl border border-amber-200 bg-amber-50/50">
+                              <div className="flex flex-col gap-2 border-b border-amber-200 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                  <p className="text-sm font-semibold text-(--tl-navy)">Line item photos</p>
+                                  <p className="text-xs text-(--text)/55">
+                                    Before photos, material receipts, and supporting proof tied to this scope.
+                                  </p>
+                                </div>
+                                {visiblePhotos.length > 0 && (
+                                  <span className="text-xs font-semibold text-(--text)/55">
+                                    {visiblePhotos.length} attached
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="space-y-3 p-4">
+                                {visiblePhotos.length > 0 ? (
+                                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                                    {visiblePhotos.slice(0, 8).map((photo) => (
+                                      <a
+                                        key={photo.id}
+                                        href={photo.s3_url || "#"}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="group overflow-hidden rounded-lg border border-(--border) bg-(--bg)"
+                                      >
+                                        <div className="aspect-[4/3] overflow-hidden">
+                                          <img
+                                            src={photo.s3_url || ""}
+                                            alt={photo.caption || photo.filename}
+                                            className="h-full w-full object-cover transition group-hover:scale-105"
+                                          />
+                                        </div>
+                                        <div className="truncate px-2 py-1.5 text-[11px] font-medium text-(--text)/65">
+                                          {photo.caption || photo.filename}
+                                        </div>
+                                      </a>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="rounded-lg border border-dashed border-(--border) bg-(--bg)/45 px-4 py-5 text-sm text-(--text)/60">
+                                    No photos attached to this line item yet.
+                                  </div>
+                                )}
+
+                                {userRole === "admin" && (
+                                  <div className="grid gap-2 md:grid-cols-3">
+                                    {[
+                                      ["before", "Before", "Site condition"],
+                                      ["after", "Materials", "Receipts or supplies"],
+                                      ["general", "Other", "Supporting photos"],
+                                    ].map(([role, label, helper]) => (
+                                      <label
+                                        key={role}
+                                        className="group flex min-h-16 min-w-0 cursor-pointer flex-col justify-center overflow-hidden rounded-xl border border-amber-200 bg-white px-3 py-3 transition hover:border-(--tl-royal) hover:bg-(--tl-royal)/5"
+                                      >
+                                        <span className="min-w-0 break-words text-sm font-semibold leading-5 text-(--tl-navy)">
+                                          {uploadingEstimatePhotoFor === item.id ? "Uploading..." : `+ ${label}`}
+                                        </span>
+                                        <span className="mt-1 min-w-0 break-words text-xs leading-4 text-(--text)/55">
+                                          {helper}
+                                        </span>
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          className="hidden"
+                                          disabled={uploadingEstimatePhotoFor === item.id}
+                                          onChange={(event) =>
+                                            handleEstimateItemPhotoUpload(
+                                              item.id,
+                                              role as "before" | "after" | "general",
+                                              event
+                                            )
+                                          }
+                                        />
+                                      </label>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </section>
+                          </div>
+
+                          <aside className="space-y-3 rounded-xl border border-(--tl-navy)/20 bg-(--tl-navy)/5 p-4 xl:self-start">
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-(--tl-navy)">
+                              Pricing
+                            </p>
+                            <div className={`grid gap-3 ${hideClientLineItemPricing ? "grid-cols-1" : "grid-cols-2 xl:grid-cols-1"}`}>
+                              {!hideClientLineItemPricing && (
+                                <div className="rounded-lg bg-white px-3 py-2 ring-1 ring-(--border)">
+                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-(--text)/45">Rate</p>
+                                  <p className="mt-1 text-base font-semibold tabular-nums text-(--text)">
+                                    {formatCurrency(isEditing ? parseFloat(estimateEditForm.price_rate) || 0 : item.price_rate)}
+                                  </p>
+                                </div>
+                              )}
+                              <div className="rounded-lg bg-white px-3 py-2 ring-1 ring-(--border)">
+                                <p className="text-[11px] font-semibold uppercase tracking-wide text-(--text)/45">Qty</p>
+                                <p className="mt-1 text-base font-semibold tabular-nums text-(--text)">
+                                  {isEditing ? parseFloat(estimateEditForm.quantity) || 0 : item.quantity}
+                                </p>
+                              </div>
+                            </div>
+                            {!hideClientLineItemPricing && (
+                              <div className="rounded-xl bg-(--tl-navy) px-4 py-4 text-white">
+                                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/65">
+                                  Line total
+                                </p>
+                                <p className="mt-1 text-2xl font-bold tabular-nums">
+                                  {formatCurrency(itemTotal)}
+                                </p>
+                              </div>
+                            )}
+                          </aside>
                         </div>
-                      )}
-                      <div className="self-center text-right">
-                        {isEditing ? (
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={estimateEditForm.quantity}
-                            onChange={(e) =>
-                              setEstimateEditForm((prev) => ({ ...prev, quantity: e.target.value }))
-                            }
-                            className="w-full rounded-lg border border-(--border) bg-white px-2.5 py-2 text-right text-sm tabular-nums text-(--text) focus:border-(--tl-royal) focus:outline-none focus:ring-2 focus:ring-(--tl-royal)/20"
-                          />
-                        ) : (
-                          <span className="text-sm tabular-nums text-(--text)">{item.quantity}</span>
-                        )}
-                      </div>
-                      {!hideClientLineItemPricing && (
-                        <div className="self-center text-right">
-                          <span className="text-sm font-semibold tabular-nums text-(--tl-navy)">
-                            {formatCurrency(isEditing ? previewTotal : item.total)}
-                          </span>
-                        </div>
-                      )}
-                      {userRole === "admin" && (
-                        <div className="flex shrink-0 items-center justify-end gap-1 self-center">
-                          {isEditing ? (
-                            <>
-                              <button
-                                onClick={() => handleSaveEstimateItem(item.id)}
-                                className="inline-flex h-8 items-center gap-1 rounded-lg bg-emerald-600 px-2.5 text-xs font-semibold text-white transition hover:bg-emerald-700"
-                                title="Save"
-                              >
-                                <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                                </svg>
-                                Save
-                              </button>
-                              <button
-                                onClick={cancelEditEstimateItem}
-                                className="inline-flex h-8 items-center rounded-lg border border-(--border) px-2.5 text-xs font-semibold text-(--text) transition hover:bg-(--bg)"
-                              >
-                                Cancel
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => startEditEstimateItem(item)}
-                                className="inline-flex h-8 items-center rounded-lg border border-(--border) px-2.5 text-xs font-semibold text-(--text) transition hover:border-(--tl-royal) hover:text-(--tl-royal)"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => handleDeleteEstimateItem(item.id)}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-(--text)/40 transition hover:bg-red-50 hover:text-red-500"
-                                aria-label="Delete line item"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  );
-                })}
-                  </div>
+                      </article>
+                    );
+                  })}
                 </div>
 
                 {/* Estimate summary — single block, no nested cards */}
-                <div className="mt-6 min-w-0 rounded-xl border border-(--border)">
+                <div className="mt-6 min-w-0 overflow-hidden rounded-xl border border-(--border) bg-white shadow-md shadow-(--tl-navy)/5">
                   {/* Adjustments */}
                   {userRole === "admin" && (
-                    <div className="grid grid-cols-1 gap-4 border-b border-(--border) p-4 sm:grid-cols-3">
-                      <div>
-                        <label className="mb-1.5 block text-xs font-medium text-(--text)/60">Markup</label>
-                        <div className="flex items-center gap-2">
+                    <section className="border-b border-(--border) bg-sky-50/60 p-4">
+                      <div className="mb-4">
+                        <h3 className="text-sm font-semibold text-(--tl-navy)">Estimate Controls</h3>
+                        <p className="mt-1 text-xs text-(--text)/60">
+                          Configure markup, tax, and online payment servicing before sending.
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                      <div className="rounded-xl border border-sky-200 bg-white p-3">
+                        <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-(--tl-navy)">Markup</label>
+                        <div className="grid grid-cols-[4rem_minmax(0,1fr)] gap-2">
                           <select
                             value={markupType}
                             onChange={(e) => setMarkupType(e.target.value as "percentage" | "fixed")}
-                            className="rounded-lg border border-(--border) bg-white px-2 py-2 text-sm text-(--tl-navy)"
+                            className="min-h-11 rounded-lg border border-(--border) bg-white px-2 text-sm font-semibold text-(--tl-navy)"
                           >
                             <option value="percentage">%</option>
                             <option value="fixed">$</option>
@@ -1650,15 +1774,17 @@ export default function ProjectPage() {
                             placeholder="0"
                             step="0.01"
                             min="0"
-                            className="min-w-0 flex-1 rounded-lg border border-(--border) bg-white px-3 py-2 text-right text-sm tabular-nums text-(--tl-navy)"
+                            className="min-h-11 min-w-0 rounded-lg border border-(--border) bg-white px-3 text-right text-base tabular-nums text-(--tl-navy)"
                           />
                         </div>
-                        {(parseFloat(markupValue) || 0) > 0 && (
-                          <p className="mt-1 text-xs text-(--tl-teal)">+{formatCurrency(getEstimateBreakdown().markup)}</p>
-                        )}
+                        <p className="mt-2 text-xs font-medium text-(--tl-teal)">
+                          {(parseFloat(markupValue) || 0) > 0
+                            ? `Adds ${formatCurrency(getEstimateBreakdown().markup)}`
+                            : "No markup applied"}
+                        </p>
                       </div>
-                      <div>
-                        <label className="mb-1.5 block text-xs font-medium text-(--text)/60">Tax (%)</label>
+                      <div className="rounded-xl border border-sky-200 bg-white p-3">
+                        <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-(--tl-navy)">Tax rate</label>
                         <input
                           type="number"
                           value={taxRate}
@@ -1666,37 +1792,47 @@ export default function ProjectPage() {
                           placeholder="0"
                           step="0.01"
                           min="0"
-                          className="w-full rounded-lg border border-(--border) bg-white px-3 py-2 text-right text-sm tabular-nums text-(--tl-navy)"
+                          className="min-h-11 w-full rounded-lg border border-(--border) bg-white px-3 text-right text-base tabular-nums text-(--tl-navy)"
                         />
-                        {(parseFloat(taxRate) || 0) > 0 && (
-                          <p className="mt-1 text-xs text-(--tl-teal)">+{formatCurrency(getEstimateBreakdown().tax)}</p>
-                        )}
+                        <p className="mt-2 text-xs font-medium text-(--tl-teal)">
+                          {(parseFloat(taxRate) || 0) > 0
+                            ? `Adds ${formatCurrency(getEstimateBreakdown().tax)}`
+                            : "No tax applied"}
+                        </p>
                       </div>
-                      <div>
-                        <label className="mb-1.5 flex cursor-pointer items-center justify-between text-xs font-medium text-(--text)/60">
-                          <span>Online fee (3.5%)</span>
+                      <label className="flex cursor-pointer flex-col justify-between rounded-xl border border-emerald-200 bg-emerald-50/70 p-3">
+                        <span className="flex items-start justify-between gap-3">
+                          <span>
+                            <span className="block text-xs font-semibold uppercase tracking-[0.14em] text-emerald-800">
+                              Online fee
+                            </span>
+                            <span className="mt-1 block text-xs text-emerald-800/70">
+                              3.5% card servicing fee
+                            </span>
+                          </span>
                           <input
                             type="checkbox"
                             checked={onlineServicingFee}
                             onChange={(e) => setOnlineServicingFee(e.target.checked)}
-                            className="h-4 w-4"
+                            className="mt-0.5 h-4 w-4"
                           />
-                        </label>
-                        <p className="mt-2 text-sm text-(--text)/50">
+                        </span>
+                        <span className="mt-4 text-base font-semibold tabular-nums text-emerald-800">
                           {onlineServicingFee
                             ? `+${formatCurrency(getEstimateBreakdown().servicingFee)}`
                             : "Disabled"}
-                        </p>
+                        </span>
+                      </label>
                       </div>
-                    </div>
+                    </section>
                   )}
 
                   {/* Payment installments */}
                   {userRole === "admin" && (
-                    <div className="border-b border-(--border) p-4">
+                    <div className="border-b border-(--border) bg-amber-50/50 p-4">
                       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0">
-                          <h3 className="text-sm font-semibold text-(--tl-navy)">Payment Installments</h3>
+                          <h3 className="text-sm font-semibold text-(--tl-navy)">Payment Schedule</h3>
                           <p className="text-xs text-(--text)/50">
                             {installmentSchedule.reduce((sum, row) => sum + row.percent, 0)}% allocated
                             {installmentSchedule.reduce((sum, row) => sum + row.percent, 0) !== 100 && (
@@ -1707,29 +1843,29 @@ export default function ProjectPage() {
                         <button
                           type="button"
                           onClick={addInstallmentRow}
-                          className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-full border border-(--border) px-4 py-2 text-xs font-semibold text-(--tl-royal) transition hover:bg-(--bg) sm:border-0 sm:px-0 sm:py-0 sm:hover:underline"
+                          className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-(--tl-navy) transition hover:border-(--tl-royal) hover:text-(--tl-royal)"
                         >
                           + Add milestone
                         </button>
                       </div>
 
                       {/* Mobile: stacked milestone cards */}
-                      <div className="space-y-3 md:hidden">
+                      <div className="space-y-3 xl:hidden">
                         {installmentSchedule.map((item, index) => {
                           const amount = getEstimateBreakdown().total * (item.percent / 100);
                           return (
                             <div
                               key={index}
-                              className="space-y-3 rounded-xl border border-(--border) bg-(--bg)/50 p-3"
+                              className="space-y-3 rounded-xl border border-amber-200 bg-white p-3 shadow-sm shadow-amber-900/5"
                             >
                               <div className="flex items-center justify-between gap-2">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-(--text)/50">
+                                <p className="rounded-md bg-amber-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-amber-900">
                                   Milestone {index + 1}
                                 </p>
                                 <button
                                   type="button"
                                   onClick={() => removeInstallmentRow(index)}
-                                  className="flex min-h-9 min-w-9 items-center justify-center rounded-full text-(--text)/40 transition hover:bg-red-50 hover:text-red-500"
+                                  className="flex min-h-9 min-w-9 items-center justify-center rounded-lg border border-red-100 bg-red-50 text-red-600 transition hover:bg-red-100"
                                   aria-label="Remove installment"
                                 >
                                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1743,23 +1879,28 @@ export default function ProjectPage() {
                                   value={item.label}
                                   onChange={(e) => updateInstallment(index, "label", e.target.value)}
                                   placeholder="Deposit"
-                                  className="w-full rounded-lg border border-(--border) bg-white px-3 py-2.5 text-base"
+                                  className="min-h-11 w-full rounded-lg border border-(--border) bg-white px-3 text-base text-(--tl-navy)"
                                 />
                               </div>
                               <div className="grid grid-cols-2 gap-3">
                                 <div>
                                   <label className="mb-1 block text-xs font-medium text-(--text)/60">Percent</label>
-                                  <input
-                                    type="number"
-                                    inputMode="decimal"
-                                    value={item.percent}
-                                    onChange={(e) => updateInstallment(index, "percent", parseFloat(e.target.value) || 0)}
-                                    className="w-full rounded-lg border border-(--border) bg-white px-3 py-2.5 text-right text-base tabular-nums"
-                                  />
+                                  <div className="relative max-w-28">
+                                    <input
+                                      type="number"
+                                      inputMode="decimal"
+                                      value={item.percent}
+                                      onChange={(e) => updateInstallment(index, "percent", parseFloat(e.target.value) || 0)}
+                                      className="min-h-11 w-full rounded-lg border border-(--border) bg-white pl-3 pr-7 text-right text-base tabular-nums text-(--tl-navy)"
+                                    />
+                                    <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-sm font-semibold text-(--text)/45">
+                                      %
+                                    </span>
+                                  </div>
                                 </div>
                                 <div>
                                   <label className="mb-1 block text-xs font-medium text-(--text)/60">Amount</label>
-                                  <div className="flex min-h-[46px] items-center justify-end rounded-lg bg-white px-3 py-2.5 text-base font-semibold tabular-nums text-(--tl-navy) ring-1 ring-(--border)">
+                                  <div className="flex min-h-11 items-center justify-end rounded-lg bg-(--tl-navy)/5 px-3 text-base font-bold tabular-nums text-(--tl-navy) ring-1 ring-(--tl-navy)/15">
                                     {formatCurrency(amount)}
                                   </div>
                                 </div>
@@ -1770,7 +1911,7 @@ export default function ProjectPage() {
                                   value={item.due_description}
                                   onChange={(e) => updateInstallment(index, "due_description", e.target.value)}
                                   placeholder="Due on acceptance..."
-                                  className="w-full rounded-lg border border-(--border) bg-white px-3 py-2.5 text-base"
+                                  className="min-h-11 w-full rounded-lg border border-(--border) bg-white px-3 text-base text-(--tl-navy)"
                                 />
                               </div>
                             </div>
@@ -1779,8 +1920,8 @@ export default function ProjectPage() {
                       </div>
 
                       {/* Desktop: grid table */}
-                      <div className="hidden md:block">
-                        <div className="grid grid-cols-[minmax(6rem,1fr)_3.5rem_minmax(0,2fr)_6.5rem_2rem] gap-x-3 gap-y-1 px-1 pb-2 text-[11px] font-semibold uppercase tracking-wider text-(--text)/50">
+                      <div className="hidden xl:block">
+                        <div className="grid grid-cols-[minmax(6rem,1fr)_4rem_minmax(0,2fr)_6.5rem_2rem] gap-x-3 gap-y-1 px-1 pb-2 text-[11px] font-semibold uppercase tracking-wider text-(--text)/50">
                           <div>Milestone</div>
                           <div className="text-right">%</div>
                           <div>Due when</div>
@@ -1793,7 +1934,7 @@ export default function ProjectPage() {
                             return (
                               <div
                                 key={index}
-                                className="grid grid-cols-[minmax(6rem,1fr)_3.5rem_minmax(0,2fr)_6.5rem_2rem] items-center gap-x-3 rounded-lg bg-(--bg)/60 px-1 py-1"
+                                className="grid grid-cols-[minmax(6rem,1fr)_4rem_minmax(0,2fr)_6.5rem_2rem] items-center gap-x-3 rounded-lg bg-(--bg)/60 px-1 py-1"
                               >
                                 <input
                                   value={item.label}
@@ -1801,12 +1942,17 @@ export default function ProjectPage() {
                                   placeholder="Deposit"
                                   className="min-w-0 rounded-md border border-(--border) bg-white px-2.5 py-1.5 text-sm"
                                 />
-                                <input
-                                  type="number"
-                                  value={item.percent}
-                                  onChange={(e) => updateInstallment(index, "percent", parseFloat(e.target.value) || 0)}
-                                  className="w-full rounded-md border border-(--border) bg-white px-2 py-1.5 text-right text-sm tabular-nums"
-                                />
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    value={item.percent}
+                                    onChange={(e) => updateInstallment(index, "percent", parseFloat(e.target.value) || 0)}
+                                    className="w-full rounded-md border border-(--border) bg-white py-1.5 pl-2 pr-6 text-right text-sm tabular-nums"
+                                  />
+                                  <span className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-xs font-semibold text-(--text)/45">
+                                    %
+                                  </span>
+                                </div>
                                 <input
                                   value={item.due_description}
                                   onChange={(e) => updateInstallment(index, "due_description", e.target.value)}

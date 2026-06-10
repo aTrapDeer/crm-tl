@@ -26,6 +26,7 @@ import {
 import { getEstimateClientDisplayForEmail } from "@/lib/crm-clients";
 
 type FontType = Awaited<ReturnType<PDFDocument["embedFont"]>>;
+type EmbeddedImage = Awaited<ReturnType<PDFDocument["embedPng"]>>;
 
 const PAGE_WIDTH = 612;
 const PAGE_HEIGHT = 792;
@@ -143,6 +144,31 @@ function drawPageNumbers(pdfDoc: PDFDocument, font: FontType): void {
       color: COLOR_MUTED,
     });
   });
+}
+
+async function embedRemoteInvoicePhoto(
+  pdfDoc: PDFDocument,
+  url: string
+): Promise<EmbeddedImage | null> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const contentType = response.headers.get("content-type") || "";
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (contentType.includes("png") || url.toLowerCase().endsWith(".png")) {
+      return pdfDoc.embedPng(bytes);
+    }
+    if (
+      contentType.includes("jpeg") ||
+      contentType.includes("jpg") ||
+      /\.(jpe?g)(\?|$)/i.test(url)
+    ) {
+      return pdfDoc.embedJpg(bytes);
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export async function GET(
@@ -654,6 +680,109 @@ export async function GET(
       y -= rowHeight;
     }
 
+    const lineItemsWithPhotos = lineItems.filter((item) =>
+      (item.photos || []).some((photo) => photo.s3_url)
+    );
+
+    if (lineItemsWithPhotos.length > 0) {
+      page = newPage(pdfDoc);
+      y = PAGE_HEIGHT - MARGIN;
+      page.drawText("Line Item Photos", {
+        x: MARGIN,
+        y,
+        size: 16,
+        font: fontBold,
+        color: COLOR_NAVY,
+      });
+      y -= 26;
+
+      for (const item of lineItemsWithPhotos) {
+        const category =
+          item.category === "custom"
+            ? item.custom_category_name || "Custom"
+            : item.category;
+        const photos = (item.photos || []).filter((photo) => photo.s3_url).slice(0, 8);
+
+        if (y < MARGIN + 150) {
+          page = newPage(pdfDoc);
+          y = PAGE_HEIGHT - MARGIN;
+        }
+
+        page.drawText(category.toUpperCase(), {
+          x: MARGIN,
+          y,
+          size: 10,
+          font: fontBold,
+          color: COLOR_NAVY,
+        });
+        y -= 13;
+        if (item.description?.trim()) {
+          y = drawWrappedParagraph(
+            page,
+            item.description.trim(),
+            MARGIN,
+            y,
+            PAGE_WIDTH - MARGIN * 2,
+            fontRegular,
+            8,
+            10,
+            COLOR_MUTED
+          );
+          y -= 6;
+        }
+
+        let photoX = MARGIN;
+        const photoW = 118;
+        const photoH = 82;
+        const gap = 10;
+        for (const photo of photos) {
+          if (photoX + photoW > PAGE_WIDTH - MARGIN) {
+            photoX = MARGIN;
+            y -= photoH + 24;
+          }
+          if (y < MARGIN + photoH + 32) {
+            page = newPage(pdfDoc);
+            y = PAGE_HEIGHT - MARGIN;
+            photoX = MARGIN;
+          }
+
+          const embedded = photo.s3_url
+            ? await embedRemoteInvoicePhoto(pdfDoc, photo.s3_url)
+            : null;
+          page.drawRectangle({
+            x: photoX,
+            y: y - photoH,
+            width: photoW,
+            height: photoH,
+            color: rgb(1, 1, 1),
+            borderColor: COLOR_LINE,
+            borderWidth: 1,
+          });
+          if (embedded) {
+            const scale = Math.min(photoW / embedded.width, photoH / embedded.height);
+            const drawW = embedded.width * scale;
+            const drawH = embedded.height * scale;
+            page.drawImage(embedded, {
+              x: photoX + (photoW - drawW) / 2,
+              y: y - photoH + (photoH - drawH) / 2,
+              width: drawW,
+              height: drawH,
+            });
+          }
+          const label = photo.caption || photo.filename;
+          page.drawText(label.slice(0, 24), {
+            x: photoX,
+            y: y - photoH - 11,
+            size: 7,
+            font: fontRegular,
+            color: COLOR_MUTED,
+          });
+          photoX += photoW + gap;
+        }
+        y -= photoH + 32;
+      }
+    }
+
     if (y < MARGIN + 120) {
       page = newPage(pdfDoc);
       y = PAGE_HEIGHT - MARGIN - 10;
@@ -771,6 +900,32 @@ export async function GET(
       }
 
       y -= 8;
+    }
+
+    if (organization.invoice_footer.trim()) {
+      if (y < MARGIN + 120) {
+        page = newPage(pdfDoc);
+        y = PAGE_HEIGHT - MARGIN;
+      }
+      page.drawText("Invoice Footer", {
+        x: MARGIN,
+        y,
+        size: 12,
+        font: fontBold,
+        color: COLOR_NAVY,
+      });
+      y -= 16;
+      y = drawWrappedParagraph(
+        page,
+        organization.invoice_footer.trim(),
+        MARGIN,
+        y,
+        PAGE_WIDTH - MARGIN * 2,
+        fontRegular,
+        9,
+        12,
+        COLOR_TEXT
+      );
     }
 
     page = newPage(pdfDoc);

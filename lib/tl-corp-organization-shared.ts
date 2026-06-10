@@ -8,6 +8,7 @@ export interface TlCorpOrganization {
   city_state: string;
   postal_code: string;
   website: string;
+  invoice_footer: string;
   updated_at: string;
 }
 
@@ -22,6 +23,7 @@ export const DEFAULT_TL_CORP_ORGANIZATION: TlCorpOrganizationInput = {
   city_state: "ST. LOUIS MO",
   postal_code: "63123",
   website: "www.TLcorp.build",
+  invoice_footer: "",
 };
 
 export function formatTlCorpPhone(phone: string): string {

@@ -5,7 +5,6 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { ModalLayer } from "@/app/components/ModalLayer";
-import ContactImportButton from "@/app/components/ContactImportButton";
 import { PREDEFINED_CATEGORIES } from "@/lib/estimate-categories";
 
 interface Project {
@@ -1931,13 +1930,6 @@ export default function ProjectDetailsModal({
             )}
 
             <form onSubmit={handleInviteClient} className="space-y-4">
-              <div className="flex justify-end">
-                <ContactImportButton
-                  onImport={(contact) => {
-                    if (contact.email) setInviteEmail(contact.email);
-                  }}
-                />
-              </div>
               <div>
                 <label className="block text-sm font-medium text-(--text) mb-1">
                   Client Email

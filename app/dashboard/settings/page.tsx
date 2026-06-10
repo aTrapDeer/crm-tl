@@ -64,6 +64,7 @@ export default function SettingsPage() {
                 city_state: org.city_state,
                 postal_code: org.postal_code,
                 website: org.website,
+                invoice_footer: org.invoice_footer || "",
               });
             }
           } catch {
@@ -152,6 +153,7 @@ export default function SettingsPage() {
           city_state: data.organization.city_state,
           postal_code: data.organization.postal_code,
           website: data.organization.website,
+          invoice_footer: data.organization.invoice_footer || "",
         });
       }
 
@@ -421,6 +423,20 @@ export default function SettingsPage() {
                   }
                   className="w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text)"
                   placeholder="www.TLcorp.build"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-(--text) mb-1">
+                  Invoice Footer
+                </label>
+                <textarea
+                  value={orgForm.invoice_footer}
+                  onChange={(e) =>
+                    setOrgForm((prev) => ({ ...prev, invoice_footer: e.target.value }))
+                  }
+                  className="min-h-28 w-full px-4 py-2.5 rounded-xl border border-(--border) bg-(--bg) text-(--text)"
+                  placeholder="Disclosures, payment notes, warranty text, or other repeatable invoice footer language"
                 />
               </div>
 

@@ -193,7 +193,30 @@ export default function EstimateViewer({
                       <td className="py-3 pr-4 font-medium text-(--tl-navy)">
                         {getCategoryLabel(item)}
                       </td>
-                      <td className="py-3 pr-4 text-(--text)">{item.description || "—"}</td>
+                      <td className="py-3 pr-4 text-(--text)">
+                        <p>{item.description || "-"}</p>
+                        {item.photos && item.photos.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {item.photos
+                              .filter((photo) => photo.s3_url)
+                              .map((photo) => (
+                                <a
+                                  key={photo.id}
+                                  href={photo.s3_url || "#"}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="block h-16 w-20 overflow-hidden rounded-md border border-(--border) bg-(--bg)"
+                                >
+                                  <img
+                                    src={photo.s3_url || ""}
+                                    alt={photo.caption || photo.filename}
+                                    className="h-full w-full object-cover"
+                                  />
+                                </a>
+                              ))}
+                          </div>
+                        )}
+                      </td>
                       <td className="py-3 pr-4 text-right text-(--text)">{item.quantity}</td>
                       {!hideLineItemPricing && (
                         <>
@@ -276,6 +299,15 @@ export default function EstimateViewer({
           </div>
         )}
       </div>
+
+      {organization.invoice_footer.trim() && (
+        <div className="tl-card p-6">
+          <h2 className="mb-3 text-lg font-semibold text-(--tl-navy)">Invoice Footer</h2>
+          <p className="whitespace-pre-wrap text-sm leading-6 text-(--text)/80">
+            {organization.invoice_footer}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

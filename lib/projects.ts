@@ -5,6 +5,7 @@ import {
   type EstimateSettingsInput,
   parseInstallmentSchedule,
 } from "./estimate";
+import { getEntityPhotos, type EntityPhoto } from "./entity-photos";
 
 export interface Project {
   id: string;
@@ -840,6 +841,7 @@ export interface EstimateLineItem {
   sort_order: number;
   created_at: string;
   updated_at: string;
+  photos?: EntityPhoto[];
 }
 
 function mapRowToEstimateLineItem(row: Record<string, unknown>): EstimateLineItem {
@@ -863,7 +865,15 @@ export async function getEstimateLineItems(projectId: string): Promise<EstimateL
     sql: `SELECT * FROM estimate_line_items WHERE project_id = ? ORDER BY sort_order ASC, created_at ASC`,
     args: [projectId],
   });
-  return result.rows.map(mapRowToEstimateLineItem);
+  const items = result.rows.map(mapRowToEstimateLineItem);
+  const photosByItem = await Promise.all(
+    items.map(async (item) => ({
+      itemId: item.id,
+      photos: await getEntityPhotos("estimate_line_item", item.id),
+    }))
+  );
+  const photosLookup = new Map(photosByItem.map((entry) => [entry.itemId, entry.photos]));
+  return items.map((item) => ({ ...item, photos: photosLookup.get(item.id) || [] }));
 }
 
 export async function createEstimateLineItem(data: {

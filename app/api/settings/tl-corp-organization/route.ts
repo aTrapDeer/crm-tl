@@ -26,6 +26,7 @@ function normalizeInput(body: Record<string, unknown>): TlCorpOrganizationInput 
     city_state: str("city_state"),
     postal_code: str("postal_code"),
     website: str("website"),
+    invoice_footer: str("invoice_footer"),
   };
 
   if (!input.business_name) return null;

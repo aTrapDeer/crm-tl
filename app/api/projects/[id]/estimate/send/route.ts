@@ -159,6 +159,7 @@ export async function POST(
         cityState: organization.city_state,
         postalCode: organization.postal_code,
         website: organization.website,
+        invoiceFooter: organization.invoice_footer,
       },
       grandTotal: breakdown.total,
       subtotal,

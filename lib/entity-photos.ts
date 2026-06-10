@@ -1,6 +1,6 @@
 import { turso } from "./turso";
 
-export type EntityPhotoType = "work_order" | "incident_report";
+export type EntityPhotoType = "work_order" | "incident_report" | "estimate_line_item";
 export type EntityPhotoRole = "before" | "after" | "general";
 
 export interface EntityPhoto {
@@ -46,10 +46,43 @@ async function ensureEntityPhotosTable(): Promise<void> {
   }
 
   entityPhotosReadyPromise = (async () => {
+    const existing = await turso.execute({
+      sql: "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'entity_photos'",
+    });
+    const existingSql = existing.rows[0]?.sql as string | undefined;
+    if (existingSql && !existingSql.includes("estimate_line_item")) {
+      await turso.execute("ALTER TABLE entity_photos RENAME TO entity_photos_old");
+      await turso.execute(`
+        CREATE TABLE entity_photos (
+          id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+          entity_type TEXT NOT NULL CHECK (entity_type IN ('work_order', 'incident_report', 'estimate_line_item')),
+          entity_id TEXT NOT NULL,
+          photo_role TEXT NOT NULL DEFAULT 'general' CHECK (photo_role IN ('before', 'after', 'general')),
+          filename TEXT NOT NULL,
+          s3_key TEXT,
+          s3_url TEXT,
+          caption TEXT,
+          captured_at TEXT NOT NULL DEFAULT (datetime('now')),
+          uploaded_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `);
+      await turso.execute(`
+        INSERT INTO entity_photos (
+          id, entity_type, entity_id, photo_role, filename, s3_key, s3_url,
+          caption, captured_at, uploaded_by, created_at
+        )
+        SELECT id, entity_type, entity_id, photo_role, filename, s3_key, s3_url,
+          caption, captured_at, uploaded_by, created_at
+        FROM entity_photos_old
+      `);
+      await turso.execute("DROP TABLE entity_photos_old");
+    }
+
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS entity_photos (
         id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-        entity_type TEXT NOT NULL CHECK (entity_type IN ('work_order', 'incident_report')),
+        entity_type TEXT NOT NULL CHECK (entity_type IN ('work_order', 'incident_report', 'estimate_line_item')),
         entity_id TEXT NOT NULL,
         photo_role TEXT NOT NULL DEFAULT 'general' CHECK (photo_role IN ('before', 'after', 'general')),
         filename TEXT NOT NULL,
@@ -159,7 +192,7 @@ export async function addEntityPhoto(data: {
   return mapRowToEntityPhoto(result.rows[0]);
 }
 
-export async function deleteEntityPhoto(photoId: string): Promise<EntityPhoto | null> {
+export async function getEntityPhotoById(photoId: string): Promise<EntityPhoto | null> {
   await ensureEntityPhotosTable();
   const result = await turso.execute({
     sql: `SELECT ep.*, u.first_name || ' ' || u.last_name AS uploader_name
@@ -169,8 +202,13 @@ export async function deleteEntityPhoto(photoId: string): Promise<EntityPhoto | 
     args: [photoId],
   });
 
-  if (result.rows.length === 0) return null;
-  const photo = mapRowToEntityPhoto(result.rows[0]);
+  return result.rows.length > 0 ? mapRowToEntityPhoto(result.rows[0]) : null;
+}
+
+export async function deleteEntityPhoto(photoId: string): Promise<EntityPhoto | null> {
+  await ensureEntityPhotosTable();
+  const photo = await getEntityPhotoById(photoId);
+  if (!photo) return null;
 
   await turso.execute({
     sql: `DELETE FROM entity_photos WHERE id = ?`,

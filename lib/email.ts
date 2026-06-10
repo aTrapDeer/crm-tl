@@ -1268,6 +1268,7 @@ export async function sendProjectEstimateEmail(data: {
     cityState: string;
     postalCode: string;
     website?: string | null;
+    invoiceFooter?: string | null;
   };
   grandTotal: number;
   subtotal: number;
@@ -1310,10 +1311,27 @@ export async function sendProjectEstimateEmail(data: {
   const billingAddress = data.billingAddress || "No billing address provided";
   const tlCorpCityLine = `${tlCorp.cityState} ${tlCorp.postalCode}`.trim();
   const clientPhone = data.clientPhone || "Not on file";
+  const invoiceFooter = data.organization?.invoiceFooter?.trim() || "";
 
   const lineItemsHtml = data.lineItems
     .map(
-      (item) => `
+      (item) => {
+        const photos = (item.photos || []).filter((photo) => photo.s3_url).slice(0, 4);
+        const photoColspan = hideLineItemPricing ? 3 : 5;
+        const photosHtml =
+          photos.length > 0
+            ? `<tr>
+        <td colspan="${photoColspan}" style="padding: 0 8px 12px; border-bottom: 1px solid #e8edf4;">
+          <p style="margin: 0 0 6px; color: #6b7280; font-size: 11px; font-weight: 700; text-transform: uppercase;">Line item photos</p>
+          ${photos
+            .map(
+              (photo) => `<img src="${photo.s3_url}" alt="${photo.caption || photo.filename}" width="96" height="72" style="display:inline-block;width:96px;height:72px;object-fit:cover;border:1px solid #d1d5db;margin:0 6px 6px 0;" />`
+            )
+            .join("")}
+        </td>
+      </tr>`
+            : "";
+        return `
       <tr>
         <td style="padding: 10px 8px; border-bottom: 1px solid #e8edf4; color: #01224f; font-size: 13px; font-weight: 600;">
           ${getCategoryLabel(item)}
@@ -1334,7 +1352,8 @@ export async function sendProjectEstimateEmail(data: {
           ${formatCurrency(item.total)}
         </td>`
         }
-      </tr>`
+      </tr>${photosHtml}`;
+      }
     )
     .join("");
 
@@ -1437,6 +1456,10 @@ export async function sendProjectEstimateEmail(data: {
       </tr>
     </table>
 
+    <div style="margin: 0 0 10px; padding: 10px 12px; border: 1px solid #cbd5e1; background-color: #f8fafc;">
+      <p style="margin: 0; color: #111827; font-size: 13px; font-weight: 700;">Project: ${data.projectName}</p>
+    </div>
+
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 20px; border: 1px solid #cbd5e1; border-collapse: collapse;">
       <thead>
         <tr style="background-color: #2f668c;">
@@ -1478,6 +1501,13 @@ export async function sendProjectEstimateEmail(data: {
         : `<p style="margin: 0 0 16px; color: #7ba8b3; font-size: 13px; line-height: 1.6; text-align: center;">
              Already have an account? <a href="${portalEstimateUrl}" style="color: #01224f;">View in Portal</a>
            </p>`
+    }
+    ${
+      invoiceFooter
+        ? `<div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+             <p style="margin: 0; color: #4b5563; font-size: 12px; line-height: 1.55; white-space: pre-wrap;">${invoiceFooter}</p>
+           </div>`
+        : ""
     }
   `;
 

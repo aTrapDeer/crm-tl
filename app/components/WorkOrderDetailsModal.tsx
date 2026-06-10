@@ -6,7 +6,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { buildTapSignatureImage, getTapSignedAtLabel } from "@/app/components/tap-signature";
 import { ModalLayer } from "@/app/components/ModalLayer";
-import ContactImportButton from "@/app/components/ContactImportButton";
 import { formatUsCentralDateTime, formatWallClockTime12Hour } from "@/lib/us-central-time";
 
 interface WorkOrder {
@@ -1116,17 +1115,6 @@ export default function WorkOrderDetailsModal({
               Add a customer contact to receive updates about this work order.
             </p>
             <form onSubmit={handleInviteCustomer} className="space-y-4">
-              <div className="flex justify-end">
-                <ContactImportButton
-                  onImport={(contact) =>
-                    setInviteForm((prev) => ({
-                      ...prev,
-                      customer_name: contact.fullName || prev.customer_name,
-                      email: contact.email || prev.email,
-                    }))
-                  }
-                />
-              </div>
               <div>
                 <label className="block text-sm font-medium text-(--text) mb-1">Customer Name *</label>
                 <input

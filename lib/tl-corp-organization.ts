@@ -24,17 +24,23 @@ function mapRow(row: Record<string, unknown>): TlCorpOrganization {
     city_state: (row.city_state as string) || DEFAULT_TL_CORP_ORGANIZATION.city_state,
     postal_code: (row.postal_code as string) || DEFAULT_TL_CORP_ORGANIZATION.postal_code,
     website: (row.website as string) || DEFAULT_TL_CORP_ORGANIZATION.website,
+    invoice_footer: (row.invoice_footer as string) || DEFAULT_TL_CORP_ORGANIZATION.invoice_footer,
     updated_at: row.updated_at as string,
   };
 }
 
+async function ensureInvoiceFooterColumn(): Promise<void> {
+  await turso.execute("ALTER TABLE tl_corp_organization ADD COLUMN invoice_footer TEXT NOT NULL DEFAULT ''").catch(() => {});
+}
+
 async function seedDefaultOrganization(): Promise<TlCorpOrganization> {
   const defaults = DEFAULT_TL_CORP_ORGANIZATION;
+  await ensureInvoiceFooterColumn();
   await turso.execute({
     sql: `INSERT INTO tl_corp_organization (
       id, registration_label, business_name, phone, email,
-      address_line1, city_state, postal_code, website
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      address_line1, city_state, postal_code, website, invoice_footer
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       SINGLETON_ID,
       defaults.registration_label,
@@ -45,6 +51,7 @@ async function seedDefaultOrganization(): Promise<TlCorpOrganization> {
       defaults.city_state,
       defaults.postal_code,
       defaults.website,
+      defaults.invoice_footer,
     ],
   });
 
@@ -56,6 +63,7 @@ async function seedDefaultOrganization(): Promise<TlCorpOrganization> {
 }
 
 export async function getTlCorpOrganization(): Promise<TlCorpOrganization> {
+  await ensureInvoiceFooterColumn();
   const result = await turso.execute({
     sql: "SELECT * FROM tl_corp_organization WHERE id = ?",
     args: [SINGLETON_ID],
@@ -83,6 +91,7 @@ export async function updateTlCorpOrganization(
       city_state = ?,
       postal_code = ?,
       website = ?,
+      invoice_footer = ?,
       updated_at = datetime('now')
     WHERE id = ?`,
     args: [
@@ -94,6 +103,7 @@ export async function updateTlCorpOrganization(
       input.city_state.trim(),
       input.postal_code.trim(),
       input.website.trim(),
+      input.invoice_footer.trim(),
       SINGLETON_ID,
     ],
   });
