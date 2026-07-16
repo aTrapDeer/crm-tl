@@ -6,6 +6,12 @@ import {
   DEFAULT_TL_CORP_ORGANIZATION,
   type TlCorpOrganizationInput,
 } from "@/lib/tl-corp-organization-shared";
+import { AdminBackupPanel } from "@/components/admin-backup-panel";
+import {
+  canManageBackups,
+  formatCentral,
+  getNextScheduledBackup,
+} from "@/lib/backup/schedule";
 
 interface SessionUser {
   id: string;
@@ -495,6 +501,10 @@ export default function SettingsPage() {
             </button>
           </form>
         </section>
+      )}
+
+      {user.role === "admin" && canManageBackups(user.email || "") && (
+        <AdminBackupPanel nextBackupLabel={formatCentral(getNextScheduledBackup())} />
       )}
     </div>
   );
